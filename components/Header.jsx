@@ -7,8 +7,8 @@ export default function Header() {
     
       {/* Logo + Brand Name */}
       <div className="flex items-center gap-0">
-        <img src="/niesty_header.png" alt="Niesty Logo" className="h-[50px] w-auto" />
-        <span className="text-white font-semibold text-[22px]">Niesty.com</span>
+        <img src="/niesty_header.png" alt="Niesty Logo" className="h-[60px] w-auto" />
+        <span className="text-white font-semibold text-[30px]">Niesty.com</span>
       </div>
 
       {/* Auth Buttons */}

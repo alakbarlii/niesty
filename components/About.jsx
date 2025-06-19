@@ -8,7 +8,7 @@ const About = () => {
       <div className="relative w-[300px] md:w-[300px] lg:w-[420px] ml-4 md:ml-12 lg:ml-20">
 
         {/* Glow like CTA button */}
-        <span className="absolute inset-0 rounded-md bg-white blur-2xl opacity-30 scale-125 z-[-1]"></span>
+        <span className="absolute inset-0 rounded-md bg-white blur-2xl  opacity-30 scale-125 z-[-1]"></span>
         
         {/* Image */}
         <img
@@ -19,7 +19,7 @@ const About = () => {
 
         {/* Founder Badge */}
         <div className="flex justify-center mt-4">
-          <div className="inline-flex items-center gap-2 bg-white text-black text-base md:text-lg font-semibold px-5 py-2 rounded-full shadow-md border border-gray-200">
+          <div className="inline-flex items-center gap-2 opacity-93 bg-white text-black text-base md:text-lg font-semibold px-5 py-2 rounded-full shadow-md border border-gray-200">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5 text-yellow-500"
@@ -41,16 +41,20 @@ const About = () => {
         </p>
         <p>
           Everyone’s here for{' '}
-          <span className="relative inline-block font-extrabold text-white text-[1.6rem] md:text-[2rem] leading-tight pb-2">
+          <span className="relative inline-block font-extrabold text-white text-[1.6rem] md:text-[2rem] leading-none">
   one reason:
-  {/* Yellow underline with visible glow */}
-  <span
-    className="absolute left-0 bottom-0 w-full h-[6px] bg-yellow-400 rounded-full z-0"
-    style={{
-      boxShadow: '0 0 30px 8px rgba(255, 255, 255, 0.3)',
-    }}
-  ></span>
+
+  {/* Underline glow effect like JOIN THE WAITLIST button */}
+  <div className="absolute left-0 bottom-[-4px] w-full h-[6px] z-0 pointer-events-none">
+    <div className="absolute inset-0 z-0 blur-md bg-white opacity-70 rounded-lg"></div>
+    <div className="absolute inset-0 z-10 bg-yellow-400 rounded-lg"></div>
+  </div>
 </span>
+
+
+
+
+
 
 
         </p>

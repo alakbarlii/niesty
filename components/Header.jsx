@@ -5,7 +5,7 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <header className="w-full bg-[#081421] py-5 px-5 sm:px-6 md:px-12 flex justify-between items-center relative">
+    <header className="w-full bg-[#000322] py-5 px-5 sm:px-6 md:px-12 flex justify-between items-center relative">
       {/* Logo + Brand Name */}
       <div className="flex items-center">
   <img src="/niesty_header.png" alt="Niesty Logo" className="h-[70px] w-auto m-0 p-0 -translate-y-1" />

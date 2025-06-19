@@ -6,7 +6,7 @@ const FlowCTA = () => {
       
       {/* Heading */}
       <section className="w-full text-center mt-16 px-4 sm:px-6 md:px-12 lg:px-20">
-  <h2 className="font-inter font-inter text-[40px] sm:text-[55px] md:text-[64.8px] font-bold mb-12 text-white leading-tight tracking-tight">
+  <h2 className="font-inter font-inter text-[40px] sm:text-[55px] md:text-[64.8px] font-bold mb-20 text-white leading-tight tracking-tight">
     MADE SIMPLE.
   </h2>
 </section>

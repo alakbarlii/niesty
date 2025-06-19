@@ -5,7 +5,7 @@ const About = () => {
     <section className="flex flex-col md:flex-row items-center justify-between gap-16 px-6 md:px-32 py-24 bg-black text-white">
       
       {/* Left: Founder Image with soft glow */}
-      <div className="relative w-[300px] md:w-[300px] lg:w-[420px] ml-4 md:ml-12 lg:ml-20">
+      <div className="relative w-[300px] md:w-[300px] lg:w-[420px] ml-0 md:ml-4 lg:ml-6">
 
         {/* Glow like CTA button */}
         <span className="absolute inset-0 rounded-md bg-white blur-2xl  opacity-30 scale-125 z-[-1]"></span>

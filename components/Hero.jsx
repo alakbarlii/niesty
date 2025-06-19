@@ -3,7 +3,7 @@ import Image from 'next/image';
 export default function Hero() {
   return (
     <section className="bg-black text-white py-16 px-4 sm:px-6 md:px-12 mt-[60px] lg:px-20 text-center font-normal">
- <h1 className="font-inter text-[35px] sm:text-[40px] md:text-[64.8px] font-bold leading-tight">
+ <h1 className="font-inter text-[45px] sm:text-[55px] md:text-[64.8px] font-bold leading-tight">
   SKIP THE GUESSWORK!
 </h1>
 

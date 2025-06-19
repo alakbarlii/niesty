@@ -28,7 +28,7 @@ const FlowCTA = () => {
         >
           JOIN THE WAITLIST
         </button>
-        <div className="absolute inset-0 z-0 blur-2xl bg-white opacity-50 rounded-lg pointer-events-none"></div>
+        <div className="absolute inset-0 z-0 blur-sm bg-white opacity-50 rounded-lg pointer-events-none"></div>
       </div>
 
       <p className=" text-[14px] mt-[4px] font-normal opacity-70">

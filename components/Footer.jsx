@@ -26,7 +26,7 @@ const Footer = () => {
       {/* Links */}
       <div className="flex flex-wrap justify-center gap-6 text-yellow-300 text-sm font-medium  mb-6 sm:mb-8 mt-7 sm:mt-10">
         <a href="#" className="hover:underline transition duration-150">Privacy Policy</a>
-        <a href="#" className="hover:underline transition duration-150">Cookie Policy</a>
+        <a href="#" className="hover:underline transition duration-150">Cookies Policy</a>
         <a href="#" className="hover:underline transition duration-150">Terms and Conditions</a>
         <a href="#" className="hover:underline transition duration-150">Contact Us</a>
         <a href="#" className="hover:underline transition duration-150">About Ibrahim Alakbarli</a>

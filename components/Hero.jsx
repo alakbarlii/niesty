@@ -12,19 +12,20 @@ export default function Hero() {
         We match brands/businesses with perfect-fit creators.
       </p>
 
-      <div className="relative inline-block mt-10">
-        <button
-          className="relative z-10 w-[230px] h-[47px] bg-yellow-400 text-black font-bold text-xl rounded-lg hover:opacity-100 hover:scale-105 transition-transform duration-200
-"
-        >
-          JOIN THE WAITLIST
-        </button>
-        <div className="absolute inset-0 z-0 blur-md bg-white opacity-50 rounded-lg pointer-events-none"></div>
-      </div>
+      <div className="mt-10 flex flex-col items-center justify-center space-y-2">
+  <div className="relative">
+    <button
+      className="relative z-10 w-[230px] h-[47px] bg-yellow-400 text-black font-bold text-xl rounded-lg hover:opacity-100 hover:scale-105 transition-transform duration-200"
+    >
+      JOIN THE WAITLIST
+    </button>
+    <div className="absolute inset-0 z-0 blur-md bg-white opacity-50 rounded-lg pointer-events-none"></div>
+  </div>
 
-      <p className=" text-[14px] mt-[4px] font-normal opacity-70">
-        Limited slots/week
-      </p>
+  <p className="text-[14px] font-normal opacity-70">
+    Limited slots/week
+  </p>
+</div>
     </section>
   );
 }

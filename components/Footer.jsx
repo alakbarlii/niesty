@@ -16,7 +16,7 @@ const Footer = () => {
 
         {/* Right: Logo and Log in */}
         <div className="flex flex-col items-center justify-center space-y-0">
-          <img src="/niesty_header.png" alt="Niesty Logo" className="h-[60px] w-auto" />
+          <img src="/niesty_header.png" alt="Niesty Logo" className="h-[75px] w-auto" />
           <button className="text-yellow-300 hover:underline transition duration-150 mb-2">
             Login
           </button>

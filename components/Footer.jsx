@@ -16,14 +16,13 @@ const Footer = () => {
         <div className="text-white text-2xl font-bold" >NIESTY.COM</div>
 
         {/* Right: Logo and Log in */}
-        <div className="flex flex-col items-center gap-2">
-          <img
-            src="/niesty_header.png"  
-            className="w-30 h-30 object-contain"
-          />
-          <div className="text-yellow-300 font-medium text-sm">Log in</div>
-        </div>
-      </div>
+        <div className="flex flex-col items-center justify-center space-y-0">
+  <img src="/niesty_header.png" alt="Niesty Logo" className="h-[80px] w-auto" />
+  <button className=" text-yellow-300 hover:underline transition duration-150">
+  Login
+</button>
+</div>
+</div>
 
       {/* Links */}
       <div className="flex flex-wrap justify-center gap-6 text-yellow-300 text-sm font-medium mb-8">

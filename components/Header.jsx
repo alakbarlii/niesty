@@ -36,7 +36,7 @@ export default function Header() {
 
       {/* Mobile Dropdown */}
       {menuOpen && (
-        <div className="absolute right-0 top-full mt-2 bg-[#081421] flex flex-col items-stretch px-6 py-3 gap-3 md:hidden border-t border-white/10 z-50 rounded-lg w-48">
+        <div className="absolute right-0 top-full mt-2 bg-[#081421] flex flex-col items-stretch px-6 py-3 gap-3 border-t border-white/10 z-50 rounded-lg w-48 shadow-lg">
           <button className="w-full h-[45px] border-[1px] border-[#FFD700] text-[#FFD700] text-1xl rounded-md hover:bg-[#FFD700] hover:text-black transition text-left px-4">
             Login
           </button>

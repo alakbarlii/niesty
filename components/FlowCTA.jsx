@@ -5,23 +5,22 @@ const FlowCTA = () => {
     <section className="w-full bg-black text-white flex flex-col font-mono items-center text-center px-4 md:px-12 py-32">
       
       {/* Heading */}
-      <h2 className="relative text-[44px] sm:text-[52px] md:text-[60px] pb-6 font-semibold tracking-wider mb-15 leading-tight">
+      <h2 className="relative text-[30px] sm:text-[40px] md:text-[64.8px] pb-6 font-semibold tracking-wider mb-15 leading-tight">
   <span className="absolute inset-0 blur-2xl opacity-30 font-extralight font-mono text-white z-[-1]">MADE SIMPLE.</span>
   MADE SIMPLE.
 </h2>
 
 
-
       {/* Subtext Flow */}
-      <p className="text-base sm:text-lg md:text-2xl font-light flex flex-wrap justify-center items-center gap-x-2 gap-y-2 mb-16 leading-snug">
+      <p className="text-sm sm:text-base md:text-xl font-light flex flex-nowrap justify-center items-center gap-x-1 gap-y-1 mb-12 leading-snug px-2">
   <span>Search</span>
-  <span className="text-2xl md:text-3xl font-black relative px-2">
-    <span className="absolute inset-0 w-full h-full blur-[4px] opacity-30 bg-white rounded-full -z-10"></span>
+  <span className="text-lg sm:text-xl md:text-2xl font-black relative px-1">
+    <span className="absolute inset-0 w-full h-full blur-[3px] opacity-30 bg-white rounded-full -z-10"></span>
     →
   </span>
   <span>pick a <span className="font-bold">fit</span> you like</span>
-  <span className="text-2xl md:text-3xl font-black relative px-2">
-    <span className="absolute inset-0 w-full h-full blur-[4px] opacity-30 bg-white rounded-full -z-10"></span>
+  <span className="text-lg sm:text-xl md:text-2xl font-black relative px-1">
+    <span className="absolute inset-0 w-full h-full blur-[3px] opacity-30 bg-white rounded-full -z-10"></span>
     →
   </span>
   <span>Close the <span className="font-bold">DEAL</span></span>

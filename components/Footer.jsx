@@ -17,14 +17,14 @@ const Footer = () => {
         {/* Right: Logo and Log in */}
         <div className="flex flex-col items-center justify-center space-y-0">
           <img src="/niesty_header.png" alt="Niesty Logo" className="h-[60px] w-auto" />
-          <button className="text-yellow-300 hover:underline transition duration-150">
+          <button className="text-yellow-300 hover:underline transition duration-150 mb-2">
             Login
           </button>
         </div>
       </div>
 
       {/* Links */}
-      <div className="flex flex-wrap justify-center gap-6 text-yellow-300 text-sm font-medium mb-4 sm:mb-8">
+      <div className="flex flex-wrap justify-center gap-6 text-yellow-300 text-sm font-medium  mb-6 sm:mb-8 mt-7 sm:mt-10">
         <a href="#" className="hover:underline transition duration-150">Privacy Policy</a>
         <a href="#" className="hover:underline transition duration-150">Cookie Policy</a>
         <a href="#" className="hover:underline transition duration-150">Terms and Conditions</a>

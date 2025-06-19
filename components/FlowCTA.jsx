@@ -5,8 +5,8 @@ const FlowCTA = () => {
     <section className="w-full bg-black text-white flex flex-col font-mono items-center text-center px-4 md:px-12 py-32">
       
       {/* Heading */}
-      <section className="w-full text-center mt-16 px-4 sm:px-6 md:px-12 lg:px-20">
-  <h2 className="font-inter font-inter text-[40px] sm:text-[55px] md:text-[64.8px] font-bold mb-20 text-white leading-tight tracking-tight">
+      <section className="w-full text-center mt-4 sm:mt-6 md:mt-8 px-4 sm:px-6 md:px-12 lg:px-20">
+  <h2 className="font-inter font-inter text-[34px] sm:text-[50px] md:text-[64.8px] font-bold mb-20 text-white leading-tight tracking-tight">
     MADE SIMPLE.
   </h2>
 </section>

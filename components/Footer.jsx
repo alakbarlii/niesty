@@ -5,7 +5,7 @@ const Footer = () => {
     <footer className="w-full bg-[#000322] text-white px-6 md:px-16 py-10 text-center md:text-left">
 
       {/* Top Message */}
-      <div className="text-center text-gray-300 italic text-sm mb-2">
+      <div className="text-center text-gray-300 italic text-sm mb-2 mt-2">
         Built with love for the creator economy.
       </div>
 

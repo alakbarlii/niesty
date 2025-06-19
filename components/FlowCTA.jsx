@@ -6,7 +6,7 @@ const FlowCTA = () => {
       
       {/* Heading */}
       <section className="w-full text-center mt-16 px-4 sm:px-6 md:px-12 lg:px-20">
-  <h2 className="font-inter text-[20px] sm:text-[24px] md:text-[32px] font-semibold text-white leading-tight tracking-tight">
+  <h2 className="font-inter font-inter text-[35px] sm:text-[40px] md:text-[64.8px] font-bold mb-12 text-white leading-tight tracking-tight">
     MADE SIMPLE.
   </h2>
 </section>
@@ -20,12 +20,12 @@ const FlowCTA = () => {
     <span className="absolute inset-0 w-full h-full blur-[3px] opacity-30 bg-white rounded-full -z-10"></span>
     →
   </span>
-  <span>pick a <span className="font-bold">fit</span> you like</span>
+  <span>pick a <span className="font-semibold">fit</span> you like</span>
   <span className="text-lg sm:text-xl md:text-2xl font-black relative px-1">
     <span className="absolute inset-0 w-full h-full blur-[3px] opacity-30 bg-white rounded-full -z-10"></span>
     →
   </span>
-  <span>Close the <span className="font-bold">DEAL</span></span>
+  <span>Close the <span className="font-semibold">DEAL</span></span>
 </p>
 
 

@@ -5,10 +5,12 @@ const FlowCTA = () => {
     <section className="w-full bg-black text-white flex flex-col font-mono items-center text-center px-4 md:px-12 py-32">
       
       {/* Heading */}
-      <h2 className="relative text-[20px] sm:text-[40px] md:text-[64.8px] pb-6 font-semibold tracking-wider mb-15 leading-tight">
-  <span className="absolute inset-0 blur-xl opacity-30 font-extralight font-mono text-white z-[-1]">MADE SIMPLE.</span>
-  
-</h2>
+      <section className="w-full text-center mt-16 px-4 sm:px-6 md:px-12 lg:px-20">
+  <h2 className="font-inter text-[20px] sm:text-[24px] md:text-[32px] font-semibold text-white leading-tight tracking-tight">
+    MADE SIMPLE.
+  </h2>
+</section>
+
 
 
       {/* Subtext Flow */}
@@ -35,7 +37,7 @@ const FlowCTA = () => {
         >
           JOIN THE WAITLIST
         </button>
-        <div className="absolute inset-0 z-0 blur-lg bg-white opacity-50 rounded-lg pointer-events-none"></div>
+        <div className="absolute inset-0 z-0 blur-md bg-white opacity-50 rounded-lg pointer-events-none"></div>
       </div>
 
       <p className=" text-[14px] mt-[4px] font-normal opacity-70">

@@ -13,22 +13,32 @@ const FlowCTA = () => {
 
 
       {/* Subtext Flow */}
-      <p className="text-lg sm:text-xl md:text-4xl font-light flex flex-wrap justify-center items-center gap-x-3 gap-y-4 mb-16">
-        <span>Search</span>
-        <span className="text-2xl" font-black>→</span>
-        <span>pick a <span className="font-bold">fit</span> you like</span>
-        <span className="text-2xl" font-black>→</span>
-        <span>Close the <span className="font-bold">DEAL</span></span>
-      </p>
+      <p className="text-base sm:text-lg md:text-2xl lg:text-3xl font-light flex flex-wrap justify-center items-center gap-x-3 gap-y-4 mb-16 text-center">
+  <span>Search</span>
+
+  <span className="relative">
+    <span className="absolute inset-0 blur-sm bg-white opacity-40 rounded-full pointer-events-none"></span>
+    <span className="relative text-xl sm:text-2xl font-black z-10">→</span>
+  </span>
+
+  <span>pick a <span className="font-bold">fit</span> you like</span>
+
+  <span className="relative">
+    <span className="absolute inset-0 blur-sm bg-white opacity-40 rounded-full pointer-events-none"></span>
+    <span className="relative text-xl sm:text-2xl font-black z-10">→</span>
+  </span>
+
+  <span>Close the <span className="font-bold">DEAL</span></span>
+</p>
 
       {/* Button with glow */}
       <div className="relative inline-block mt-3">
         <button
-          className="relative z-10 w-[230px] h-[47px] bg-[#FFD700] text-black font-bold text-xl rounded-lg hover:opacity-100 transition"
+          className="relative z-10 w-[230px] h-[47px] bg-yellow-400 text-black font-bold text-xl rounded-lg hover:opacity-100 transition"
         >
           JOIN THE WAITLIST
         </button>
-        <div className="absolute inset-0 z-0 blur-sm bg-white opacity-50 rounded-lg pointer-events-none"></div>
+        <div className="absolute inset-0 z-0 blur-2x1 bg-white opacity-50 rounded-lg pointer-events-none"></div>
       </div>
 
       <p className=" text-[14px] mt-[4px] font-normal opacity-70">

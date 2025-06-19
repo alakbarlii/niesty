@@ -16,13 +16,13 @@ const FlowCTA = () => {
       {/* Subtext Flow */}
       <p className="text-sm sm:text-base md:text-xl font-light flex flex-nowrap justify-center items-center gap-x-1 gap-y-1 mb-12 leading-snug px-2">
   <span>Search</span>
-  <span className="text-lg sm:text-xl md:text-2xl font-black relative px-1">
-    <span className="absolute inset-0 w-full h-full blur-[3px] opacity-30 bg-white rounded-full -z-10"></span>
+  <span className="text-lg sm:text-xl md:text-3xl font-black relative px-1 tracking-wide">
+    <span className="absolute inset-0 w-full h-full opacity-30 bg-white rounded-full -z-10"></span>
     →
   </span>
   <span>pick a <span className="font-semibold">fit</span> you like</span>
-  <span className="text-lg sm:text-xl md:text-2xl font-black relative px-1">
-    <span className="absolute inset-0 w-full h-full blur-[3px] opacity-30 bg-white rounded-full -z-10"></span>
+  <span className="text-lg sm:text-xl md:text-3xl  font-black relative px-1 tracking-wide">
+    <span className="absolute inset-0 w-full h-full opacity-30 bg-white rounded-full -z-10"></span>
     →
   </span>
   <span>Close the <span className="font-semibold">DEAL</span></span>

@@ -45,7 +45,7 @@ const About = () => {
   one reason:
 
   {/* Underline glow effect like JOIN THE WAITLIST button */}
-  <div className="absolute left-0 bottom-[-4px] w-full h-[6px] z-0 pointer-events-none">
+  <div className="absolute left-0 bottom-[-4px] w-full h-[4px] z-0 pointer-events-none">
     <div className="absolute inset-0 z-0 blur-md bg-white opacity-70 rounded-lg"></div>
     <div className="absolute inset-0 z-10 bg-yellow-400 rounded-lg"></div>
   </div>

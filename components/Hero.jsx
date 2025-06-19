@@ -9,7 +9,7 @@ export default function Hero() {
 
 
 
-      <p className="text-[20px] font-semibold mt-[14.5px] opacity-70">
+      <p className="text-[20px] font-semibold mt-[8px] opacity-70">
         We match brands/businesses with perfect-fit creators.
       </p>
 

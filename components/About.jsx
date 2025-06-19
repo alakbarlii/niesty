@@ -41,10 +41,18 @@ const About = () => {
         </p>
         <p>
           Everyone’s here for{' '}
-          <span className="font-bold text-white relative inline-block">
-            one reason:
-            <span className="absolute left-0 bottom-0 w-full h-[2px] bg-yellow-400"></span>
-          </span>
+          <span className="relative inline-block font-extrabold text-white text-[1.6rem] md:text-[2rem] leading-tight pb-2">
+  one reason:
+  {/* Yellow underline with visible glow */}
+  <span
+    className="absolute left-0 bottom-0 w-full h-[6px] bg-yellow-400 rounded-full z-0"
+    style={{
+      boxShadow: '0 0 30px 8px rgba(255, 255, 255, 0.3)',
+    }}
+  ></span>
+</span>
+
+
         </p>
         <p>
           to find and secure the <strong className="text-white">right</strong> partnership.

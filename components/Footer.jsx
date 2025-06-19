@@ -5,15 +5,15 @@ const Footer = () => {
     <footer className="w-full bg-[#030B1A] text-white px-6 md:px-16 py-12 text-center md:text-left">
 
       {/* Top Message */}
-      <div className="text-center text-gray-300 italic text-sm mb-10">
-        built with love for the creator economy.
+      <div className="text-center text-gray-300 italic text-sm mb-1">
+        Built with love for the creator economy.
       </div>
 
       {/* Main Row */}
       <div className="flex flex-col md:flex-row items-center justify-between mb-10 gap-10 md:gap-0">
         
         {/* Left: Site Name */}
-        <div className="text-white text-2xl font-bold">NIESTY.COM</div>
+        <div className="text-white text-2xl font-bold" >NIESTY.COM</div>
 
         {/* Right: Logo and Log in */}
         <div className="flex flex-col items-center gap-2">

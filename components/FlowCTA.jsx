@@ -5,10 +5,11 @@ const FlowCTA = () => {
     <section className="w-full bg-black text-white flex flex-col items-center text-center px-4 md:px-12 py-32">
       
       {/* Heading */}
-      <h2 className="relative text-[44px] sm:text-[52px] md:text-[60px] pb-6 font-semibold tracking-wider mb-10 leading-tight">
+      <h2 className="relative text-[44px] sm:text-[52px] md:text-[60px] pb-6 font-semibold tracking-wider mb-15 leading-tight">
   <span className="absolute inset-0 blur-2xl opacity-30 font-extralight text-white z-[-1]">MADE SIMPLE.</span>
   MADE SIMPLE.
 </h2>
+
 
 
       {/* Subtext Flow */}
@@ -23,7 +24,7 @@ const FlowCTA = () => {
       {/* Button with glow */}
       <div className="relative inline-block mt-3">
         <button
-          className="relative z-10 w-[230px] h-[50px] bg-[#FFD700] text-black font-bold text-xl rounded-lg hover:opacity-100 transition"
+          className="relative z-10 w-[230px] h-[47px] bg-[#FFD700] text-black font-bold text-xl rounded-lg hover:opacity-100 transition"
         >
           JOIN THE WAITLIST
         </button>

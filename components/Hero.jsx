@@ -13,7 +13,7 @@ export default function Hero() {
 
       <div className="relative inline-block mt-10">
         <button
-          className="relative z-10 w-[230px] h-[50px] bg-[#FFD700] text-black font-bold text-xl rounded-lg hover:opacity-100 transition"
+          className="relative z-10 w-[230px] h-[47px] bg-[#FFD700] text-black font-bold text-xl rounded-lg hover:opacity-100 transition"
         >
           JOIN THE WAITLIST
         </button>

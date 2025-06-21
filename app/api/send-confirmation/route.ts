@@ -26,9 +26,9 @@ export async function POST(req: Request) {
     });
 
     return new Response(JSON.stringify({ success: true }));
-  } catch {
+  } catch (err) {
+    console.error('Email failed:', err); // ⬅ logs the real reason
     return new Response(JSON.stringify({ error: 'Email failed' }), { status: 500 });
   }
-  
   }
 

@@ -1,5 +1,7 @@
 'use client'
 import { useState } from 'react'
+import Link from 'next/link';
+
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -18,9 +20,11 @@ export default function Header() {
         <button className="w-[80px] h-[45px] border-[1px] border-[#FFD700] text-[#FFD700] text-1xl rounded-lg hover:bg-[#FFD700] hover:text-black transition">
           Login
         </button>
+        <Link href="/waitlist">
         <button className="bg-yellow-400 text-black font-bold py-2 px-4 rounded-lg text-l.3xl hover:bg-yellow-300 transition">
           Join Now
         </button>
+        </Link>
       </div>
 
       {/* Hamburger */}
@@ -40,9 +44,11 @@ export default function Header() {
           <button className="w-full h-[45px] border-[1px] border-[#FFD700] text-[#FFD700] text-1xl rounded-md hover:bg-[#FFD700] hover:text-black transition text-left px-4">
             Login
           </button>
+          <Link href="/waitlist">
           <button className="w-full bg-yellow-400 text-black font-bold py-2 px-4 rounded-md text-left hover:bg-yellow-300 transition">
             Join Now
           </button>
+          </Link>
         </div>
       )}
     </header>

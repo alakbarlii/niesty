@@ -1,4 +1,5 @@
-import Image from 'next/image';
+
+import Link from 'next/link';
 
 export default function Hero() {
   return (
@@ -14,11 +15,13 @@ export default function Hero() {
 
       <div className="mt-10 flex flex-col items-center justify-center space-y-2">
   <div className="relative">
+  <Link href="/waitlist">
     <button
       className="relative z-10 w-[230px] h-[47px] bg-yellow-400 text-black font-bold text-xl rounded-lg hover:opacity-100 hover:scale-105 transition-transform duration-200"
     >
       JOIN THE WAITLIST
     </button>
+    </Link>
     <div className="absolute inset-0 z-0 blur-md bg-white opacity-50 rounded-lg pointer-events-none"></div>
   </div>
 

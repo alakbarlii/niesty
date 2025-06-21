@@ -11,8 +11,6 @@ const FlowCTA = () => {
   </h2>
 </section>
 
-
-
       {/* Subtext Flow */}
       <p className="text-sm sm:text-base md:text-xl font-light flex flex-nowrap justify-center items-center gap-x-1 gap-y-1 mb-6 leading-snug px-2">
   <span>Search</span>

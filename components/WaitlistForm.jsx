@@ -32,9 +32,13 @@ export default function WaitlistForm() {
     }
 
     // Insert new entry
+    console.log('Attempting to insert:', { email, fullName, role });
+
     const { error: insertError } = await supabase
       .from('waitlist')
       .insert([{ email, full_name: fullName, role }]);
+    
+    console.log('Insert error:', insertError);
 
     if (insertError) {
       setError('Something went wrong. Please try again.');

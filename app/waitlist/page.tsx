@@ -26,7 +26,7 @@ export default function WaitlistPage() {
 
         <div className="text-center mt-4">
           <Link href="/" className="text-yellow-400 hover:underline text-sm">
-            ← Back to homepage
+            ← Back
           </Link>
         </div>
       </div>

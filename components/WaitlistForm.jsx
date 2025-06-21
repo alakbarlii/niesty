@@ -39,11 +39,25 @@ export default function WaitlistForm() {
     if (insertError) {
       setError('Something went wrong. Please try again.');
     } else {
-      setStatus('🎉 You’re on the waitlist! We’ll notify you when it opens.');
-      setEmail('');
-      setFullName('');
-      setRole(null);
-    }
+      // Send confirmation email
+  try {
+    await fetch('/api/send-confirmation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ fullName, email }),
+    });
+  } catch (e) {
+    console.error('Email failed to send:', e);
+  }
+
+  // Show success message and clear form
+  setStatus('🎉 You’re on the waitlist! We’ll notify you when it opens.');
+  setEmail('');
+  setFullName('');
+  setRole(null);
+}
   };
 
   return (

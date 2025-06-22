@@ -21,20 +21,32 @@ export default function WaitlistForm() {
     }
   
     // Check if email already exists
-    const { data: existing } = await supabase
+    const { data: existing, error: checkError } = await supabase
       .from('waitlist')
       .select('id')
       .eq('email', email);
+  
+    if (checkError) {
+      setError('Something went wrong. Please try again.');
+      console.error('Check error:', checkError);
+      return;
+    }
   
     if (existing && existing.length > 0) {
       setError('This email is already registered.');
       return;
     }
   
-    // ✅ Correct insert query
+    // ✅ Insert new user into waitlist
     const { error: insertError } = await supabase
       .from('waitlist')
-      .insert([{ email, full_name: fullName, role }]);
+      .insert([
+        {
+          email: email,
+          full_name: fullName,
+          role: role,
+        }
+      ]);
   
     if (insertError) {
       console.error('Insert error:', insertError);
@@ -42,7 +54,7 @@ export default function WaitlistForm() {
       return;
     }
   
-    // 🎯 Attempt to send email — fail silently if needed
+    // 🎯 Attempt to send email — fail silently
     try {
       await fetch('/api/send-confirmation', {
         method: 'POST',
@@ -55,12 +67,13 @@ export default function WaitlistForm() {
       console.error('⚠️ Email failed to send:', e);
     }
   
-    // ✅ Clear form and show success message
+    // ✅ All good — success message
     setStatus('🎉 You’re on the waitlist! We’ll notify you soon.');
     setEmail('');
     setFullName('');
     setRole(null);
   };
+  
   
 
   return (

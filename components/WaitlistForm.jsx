@@ -131,7 +131,7 @@ export default function WaitlistForm() {
             <div className="text-5xl mb-4">🎉</div>
             <h2 className="text-2xl font-bold mb-2">You’re on the waitlist!</h2>
             <p className="text-base opacity-80">
-              We’ll notify you when early access opens. Thank you for joining Niesty!.
+              We’ll notify you when early access opens. Thank you for joining Niesty!
             </p>
           </div>
         </div>

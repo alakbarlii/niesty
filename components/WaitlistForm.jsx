@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 export default function WaitlistForm() {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState(null); // null until selected
+  const [role, setRole] = useState(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
 
@@ -31,61 +31,37 @@ export default function WaitlistForm() {
       return;
     }
 
-    // Insert new entry
-    if (insertError) {
-        setError('Something went wrong. Please try again.');
-        return;
-      }
-      
-      // Waitlist insert successful — now try sending confirmation email
-      try {
-        await fetch('/api/send-confirmation', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ fullName, email }),
-        });
-      } catch (e) {
-        console.error('⚠️ Email failed to send:', e); // log only, don’t block user
-      }
-      
-      //  Show success message and clear form no matter what
-      setStatus('🎉 You’re on the waitlist! We’ll notify you when it opens.');
-      setEmail('');
-      setFullName('');
-      setRole(null);
-      
-    console.log('Insert error:', insertError);
+    // Insert into waitlist
+    const { error: insertError } = await supabase
+      .from('waitlist')
+      .insert([{ email, full_name: fullName, role }]);
 
     if (insertError) {
+      console.error('Insert error:', insertError);
       setError('Something went wrong. Please try again.');
-    } else {
-      // Send confirmation email
-  try {
-    await fetch('/api/send-confirmation', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ fullName, email }),
-    });
-  } catch (e) {
-    console.error('Email failed to send:', e);
-  }
+      return;
+    }
 
-  // Show success message and clear form
-  setStatus('🎉 You’re on the waitlist! We’ll notify you when it opens.');
-  setEmail('');
-  setFullName('');
-  setRole(null);
-}
+    // Fire confirmation email, but don't block waitlist
+    try {
+      await fetch('/api/send-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName, email }),
+      });
+    } catch (e) {
+      console.error('⚠️ Email failed to send:', e);
+    }
+
+    // Success message
+    setStatus('🎉 You’re on the waitlist! We’ll notify you soon...');
+    setEmail('');
+    setFullName('');
+    setRole(null);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 w-full text-white">
-
-      {/* Full Name */}
       <input
         type="text"
         placeholder="Full Name"
@@ -94,8 +70,6 @@ export default function WaitlistForm() {
         required
         className="w-full p-3 rounded border border-white/20 bg-transparent text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-yellow-400"
       />
-
-      {/* Email */}
       <input
         type="email"
         placeholder="Email Address"
@@ -105,11 +79,8 @@ export default function WaitlistForm() {
         className="w-full p-3 rounded border border-white/20 bg-transparent text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-yellow-400"
       />
 
-      {/* Role Selector */}
       <div className="space-y-3">
         <h2 className="text-xl font-bold text-center">Who are you here as?</h2>
-        
-
         <div className="flex justify-center gap-4">
           <button
             type="button"
@@ -134,13 +105,11 @@ export default function WaitlistForm() {
             Content Creator
           </button>
         </div>
-
         <p className="text-sm text-center opacity-70">
           Choose the role that describes you best. We'll tailor Niesty to fit your needs.
         </p>
       </div>
 
-      {/* Submit */}
       <button
         type="submit"
         className="w-full py-3 bg-yellow-400 text-black font-bold rounded-lg hover:bg-yellow-300 transition"
@@ -148,7 +117,6 @@ export default function WaitlistForm() {
         Join the Waitlist
       </button>
 
-      {/* Status Messages */}
       {status && <p className="text-green-400 text-sm text-center">{status}</p>}
       {error && <p className="text-red-500 text-sm text-center">{error}</p>}
     </form>

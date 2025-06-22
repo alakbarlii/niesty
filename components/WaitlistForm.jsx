@@ -32,12 +32,30 @@ export default function WaitlistForm() {
     }
 
     // Insert new entry
-    console.log('Attempting to insert:', { email, fullName, role });
-
-    const { error: insertError } = await supabase
-      .from('waitlist')
-      .insert([{ email, full_name: fullName, role }]);
-    
+    if (insertError) {
+        setError('Something went wrong. Please try again.');
+        return;
+      }
+      
+      // Waitlist insert successful — now try sending confirmation email
+      try {
+        await fetch('/api/send-confirmation', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ fullName, email }),
+        });
+      } catch (e) {
+        console.error('⚠️ Email failed to send:', e); // log only, don’t block user
+      }
+      
+      //  Show success message and clear form no matter what
+      setStatus('🎉 You’re on the waitlist! We’ll notify you when it opens.');
+      setEmail('');
+      setFullName('');
+      setRole(null);
+      
     console.log('Insert error:', insertError);
 
     if (insertError) {

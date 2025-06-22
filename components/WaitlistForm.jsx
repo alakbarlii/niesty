@@ -39,14 +39,12 @@ export default function WaitlistForm() {
   
     // ✅ Insert new user into waitlist
     const { error: insertError } = await supabase
-      .from('waitlist')
-      .insert([
-        {
-          email: email,
-          full_name: fullName,
-          role: role,
-        }
-      ]);
+    .from('waitlist')
+    .insert([{ 
+      email, 
+      full_name: [fullName],  // wrap it in array!
+      role 
+    }]);
   
     if (insertError) {
       console.error('Insert error:', insertError);
@@ -67,8 +65,8 @@ export default function WaitlistForm() {
       console.error('⚠️ Email failed to send:', e);
     }
   
-    // ✅ All good — success message
-    setStatus('🎉 You’re on the waitlist! We’ll notify you soon.');
+    //  success message
+    setStatus('🎉 You’re on the waitlist! We’ll notify you .');
     setEmail('');
     setFullName('');
     setRole(null);

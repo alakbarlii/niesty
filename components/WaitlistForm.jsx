@@ -14,51 +14,54 @@ export default function WaitlistForm() {
     e.preventDefault();
     setError('');
     setStatus('');
-
+  
     if (!role) {
       setError('Please select a role: Brand or Creator.');
       return;
     }
-
+  
     // Check if email already exists
     const { data: existing } = await supabase
       .from('waitlist')
       .select('id')
       .eq('email', email);
-
+  
     if (existing && existing.length > 0) {
       setError('This email is already registered.');
       return;
     }
-
-    // ✅ Insert new entry
+  
+    // ✅ Correct insert query
     const { error: insertError } = await supabase
       .from('waitlist')
       .insert([{ email, full_name: fullName, role }]);
-
+  
     if (insertError) {
       console.error('Insert error:', insertError);
       setError('Something went wrong. Please try again.');
       return;
     }
-
-    // ✅ Fire confirmation email (won’t block)
+  
+    // 🎯 Attempt to send email — fail silently if needed
     try {
       await fetch('/api/send-confirmation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ fullName, email }),
       });
     } catch (e) {
       console.error('⚠️ Email failed to send:', e);
     }
-
-    // ✅ Show success
-    setStatus('🎉 You’re on the waitlist! We’ll notify you when it opens.');
+  
+    // ✅ Clear form and show success message
+    setStatus('🎉 You’re on the waitlist! We’ll notify you soon.');
     setEmail('');
     setFullName('');
     setRole(null);
   };
+  
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 w-full text-white">

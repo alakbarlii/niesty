@@ -15,7 +15,9 @@ export async function POST(req: Request) {
         <div style="font-family: sans-serif; padding: 24px;">
           <h2>Hey ${fullName},</h2>
           <br/>
-          <p>Thanks for joining the Niesty waitlist.</p>
+         <p style="font-size: 16px; line-height: 1.5;">
+      You’re officially on the Niesty waitlist. We’re building a platform that makes sponsorships effortless and powerful — whether you're a creator or a brand.
+    </p>
           <br/>
           You’ll be notified as soon as access becomes available.
           <br/>

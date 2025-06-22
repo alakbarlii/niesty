@@ -39,7 +39,7 @@ export default function WaitlistForm() {
 
     const { error: insertError } = await supabase
       .from('waitlist')
-      .insert([{ email, full_name: [fullName], role }]);
+      .insert([{ email, full_name: fullName, role }]);
 
     if (insertError) {
       console.error('Insert error:', insertError);
@@ -60,7 +60,7 @@ export default function WaitlistForm() {
     setEmail('');
     setFullName('');
     setRole(null);
-    setShowSuccess(true); // ✅ show success overlay
+    setShowSuccess(true); //  show success overlay
   };
 
   return (

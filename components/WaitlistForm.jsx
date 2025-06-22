@@ -31,7 +31,7 @@ export default function WaitlistForm() {
       return;
     }
 
-    // Insert into waitlist
+    // ✅ Insert new entry
     const { error: insertError } = await supabase
       .from('waitlist')
       .insert([{ email, full_name: fullName, role }]);
@@ -42,7 +42,7 @@ export default function WaitlistForm() {
       return;
     }
 
-    // Fire confirmation email, but don't block waitlist
+    // ✅ Fire confirmation email (won’t block)
     try {
       await fetch('/api/send-confirmation', {
         method: 'POST',
@@ -53,8 +53,8 @@ export default function WaitlistForm() {
       console.error('⚠️ Email failed to send:', e);
     }
 
-    // Success message
-    setStatus('🎉 You’re on the waitlist! We’ll notify you soon...');
+    // ✅ Show success
+    setStatus('🎉 You’re on the waitlist! We’ll notify you when it opens.');
     setEmail('');
     setFullName('');
     setRole(null);

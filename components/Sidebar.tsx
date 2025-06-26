@@ -8,7 +8,7 @@ import NotificationIcon from '@/components/NotificationIcon';
 
 
 const navItems = [
-    { href: '/dashboard/notifications', label: 'Notifications', icon: <NotificationIcon /> },
+    { href: '/dashboard/notifications', label: 'Notifications', icon: <NotificationIcon hasUnseen={false} /> },
     { href: '/dashboard/search', label: 'Search', icon: <Search /> },
     { href: '/dashboard/deals', label: 'Deals', icon: <FileText /> },
     { href: '/dashboard/profile', label: 'Profile', icon: <User /> },

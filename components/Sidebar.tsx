@@ -2,17 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Search, FileText, User, Settings, BarChart2 } from 'lucide-react';
+import { Search, FileText, User, Settings, BarChart2 } from 'lucide-react';
 import Image from 'next/image';
+import NotificationIcon from '@/components/NotificationIcon';
 
 
 const navItems = [
-  { href: '/dashboard/notifications', label: 'Notifications', icon: <Bell /> },
-  { href: '/dashboard/search', label: 'Search', icon: <Search /> },
-  { href: '/dashboard/deals', label: 'Deals', icon: <FileText /> },
-  { href: '/dashboard/profile', label: 'Profile', icon: <User /> },
-  { href: '/dashboard/earnings', label: 'Earnings', icon: <BarChart2 /> },
-];
+    { href: '/dashboard/notifications', label: 'Notifications', icon: <NotificationIcon /> },
+    { href: '/dashboard/search', label: 'Search', icon: <Search /> },
+    { href: '/dashboard/deals', label: 'Deals', icon: <FileText /> },
+    { href: '/dashboard/profile', label: 'Profile', icon: <User /> },
+    { href: '/dashboard/earnings', label: 'Earnings', icon: <BarChart2 /> },
+  ];
+  
 
 const bottomItems = [
   { href: '/dashboard/settings', label: 'Settings', icon: <Settings /> },

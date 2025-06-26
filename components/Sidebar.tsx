@@ -22,7 +22,7 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-[80px] lg:w-[250px] bg-[#010718] border-r border-white/5 py-6 flex flex-col justify-between min-h-screen transition-all duration-200">
+    <aside className="w-[80px] lg:w-[250px] bg-[#010718] border-r border-white/5 py-6 flex flex-col justify-between min-h-screen transition-all duration-200 ">
       {/* Top: Logo */}
       <div className="flex items-center justify-center lg:justify-start px-2 lg:px-4">
       <Image
@@ -30,7 +30,7 @@ export default function Sidebar() {
   alt="Niesty Logo"
   width={70}
   height={70}
-  className="h-[70px] w-auto m-0 p-0 -translate-y-1" 
+  className="h-[70px] w-auto m-1 p-0 -translate-y-1" 
   priority
 />
 

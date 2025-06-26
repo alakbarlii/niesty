@@ -37,7 +37,7 @@ export default function LoginPage() {
             height={160}
             className="mb-5"
           />
-          <h1 className="text-4xl font-extrabold text-white text-center mb-2 tracking-tight">Login to your Niesty</h1>
+          <h1 className="text-4xl font-extrabold text-white text-center mb-4.5 tracking-tight">Login to your Niesty! </h1>
           <p className="text-white/60 text-sm text-center leading-relaxed">
             Where creators and sponsors rise together. Every day with new sponsorship deals.
           </p>
@@ -58,7 +58,7 @@ export default function LoginPage() {
               className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
             />
             <button
-              type="submit"
+              type="submit" 
               disabled={loading}
               className="w-full py-4 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 active:scale-95 transition-all duration-200"
             >

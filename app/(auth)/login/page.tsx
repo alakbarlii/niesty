@@ -15,23 +15,7 @@ export default function LoginPage() {
 
     const supabase = createClient();
 
-    //  STEP 1: Check if user exists in waitlist
-    const { data: userCheck, error: checkError } = await supabase
-      .from('waitlist')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-
-    if (checkError) {
-      console.error('Check error:', checkError);
-      setLoading(false);
-      return alert('Something went wrong. Please try again.');
-    }
-
-    if (!userCheck) {
-      setLoading(false);
-      return alert('This email is not registered yet. Please join the waitlist first.');
-    }
+    
 
     //  STEP 2: Send login link
     const { error } = await supabase.auth.signInWithOtp({

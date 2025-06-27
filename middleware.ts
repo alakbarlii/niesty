@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import type { CookieOptions } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
@@ -26,25 +25,26 @@ export async function middleware(req: NextRequest) {
 
   const {
     data: { session },
-    error,
+    error: sessionError,
   } = await supabase.auth.getSession();
 
-  // If not logged in, redirect to login
-  if (!session?.user || error) {
+  // 🚫 If not logged in, force redirect to /login
+  if (!session || sessionError) {
     const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname); // Optional
+    loginUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // If logged in, check if user is in waitlist
-  const { data: waitlistUser, error: waitlistError } = await supabase
+  // ✅ Logged in. Now check if they're on the waitlist
+  const { data: user, error: waitlistError } = await supabase
     .from('waitlist')
-    .select('email')
+    .select('id')
     .eq('email', session.user.email)
     .single();
 
-  if (waitlistError || !waitlistUser) {
-    return NextResponse.redirect(new URL('/waitlist', req.url));
+  if (waitlistError || !user) {
+    const waitlistUrl = new URL('/waitlist', req.url);
+    return NextResponse.redirect(waitlistUrl);
   }
 
   return res;

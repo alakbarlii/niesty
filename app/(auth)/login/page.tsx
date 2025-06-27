@@ -60,7 +60,7 @@ export default function LoginPage() {
             height={160}
             className="mb-5"
           />
-          <h1 className="text-4xl font-extrabold text-white text-center mb-2 tracking-tight">Login to your Niesty!</h1>
+          <h1 className="text-4xl font-extrabold text-white text-center mb-4.5 tracking-tight">Login to your Niesty!</h1>
           <p className="text-white/60 text-sm text-center leading-relaxed">
             Where creators and sponsors rise together.<br />
             Every day with new sponsorship deals.

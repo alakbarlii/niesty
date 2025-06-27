@@ -28,15 +28,38 @@ export async function middleware(req: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (!session && req.nextUrl.pathname.startsWith('/dashboard')) {
-    const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+  //  Protect these routes
+  const protectedRoutes = [
+    '/dashboard',
+    '/deals',
+    '/earnings',
+    '/notifications',
+    '/profile',
+    '/report',
+    '/search',
+    '/settings',
+  ];
+
+  const isProtected = protectedRoutes.some((path) =>
+    req.nextUrl.pathname.startsWith(path)
+  );
+
+  if (!session && isProtected) {
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
   return res;
 }
-
-export const config = {
-  matcher: ['/dashboard/:path*'],
-};
+   export const config = {
+    matcher: [
+      '/dashboard/:path*',
+      '/deals/:path*',
+      '/earnings/:path*',
+      '/notifications/:path*',
+      '/profile/:path*',
+      '/report/:path*',
+      '/search/:path*',
+      '/settings/:path*',
+    ],
+  };
+  

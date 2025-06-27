@@ -8,6 +8,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,11 +18,11 @@ export default function LoginPage() {
 
     
 
-    //  STEP 2: Send login link
+    //  send login link
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${location.origin}/dashboard`,
+        emailRedirectTo: `${location.origin}/auth/callback`,
       },
     });
 

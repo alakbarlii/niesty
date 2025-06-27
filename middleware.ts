@@ -26,11 +26,25 @@ export async function middleware(req: NextRequest) {
 
   const {
     data: { session },
+    error,
   } = await supabase.auth.getSession();
 
-  if (!session && req.nextUrl.pathname.startsWith('/dashboard')) {
+  // If not logged in, redirect to login
+  if (!session?.user || error) {
     const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname); // Optional
     return NextResponse.redirect(loginUrl);
+  }
+
+  // If logged in, check if user is in waitlist
+  const { data: waitlistUser, error: waitlistError } = await supabase
+    .from('waitlist')
+    .select('email')
+    .eq('email', session.user.email)
+    .single();
+
+  if (waitlistError || !waitlistUser) {
+    return NextResponse.redirect(new URL('/waitlist', req.url));
   }
 
   return res;

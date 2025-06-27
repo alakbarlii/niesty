@@ -22,51 +22,69 @@ export default function WaitlistForm() {
       return;
     }
 
+    let existing = [];
+    let checkError = null;
+    
     try {
-      const { data: existing, error: selectError } = await supabase
+      const { data, error } = await supabase
         .from('waitlist')
         .select('id')
         .eq('email', email);
-
-      if (selectError) {
-        console.error('Select error:', selectError);
-        setError('Server error. Try again.');
-        return;
-      }
-
-      if (existing.length > 0) {
-        setError('This email is already registered.');
-        return;
-      }
-
-      const { error: insertError } = await supabase
-        .from('waitlist')
-        .insert([{ email, full_name: fullName, role }]);
-
-      if (insertError) {
-        console.error('Insert error:', insertError);
-        setError('Server error. Try again.');
-        return;
-      }
-
-      try {
-        await fetch('/api/send-confirmation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fullName, email }),
-        });
-      } catch (emailError) {
-        console.error('Email send failed:', emailError);
-      }
-
-      setEmail('');
-      setFullName('');
-      setRole(null);
-      setShowSuccess(true);
+    
+      existing = data ?? [];
+      checkError = error;
     } catch (err) {
-      console.error('Unexpected error:', err);
-      setError('Unexpected error. Please try again.');
+      console.error('Error checking existing email:', err);
+      setError('Something went wrong. Please try again.');
+      return;
     }
+    
+    if (checkError) {
+      console.error('Supabase error:', checkError);
+      setError('Something went wrong. Please try again.');
+      return;
+    }
+    
+    if (existing.length > 0) {
+      setError('This email is already registered.');
+      return;
+    }
+    
+    if (checkError) {
+      setError('Something went wrong. Please try again.');
+      console.error('Check error:', checkError);
+      return;
+    }
+
+    if (existing && existing.length > 0) {
+      setError('This email is already registered.');
+      return;
+    }
+
+    const { error: insertError } = await supabase
+      .from('waitlist')
+      .insert([{ email, full_name: fullName, role }]);
+
+    if (insertError) {
+      console.error('Insert error:', insertError);
+      setError('Something went wrong. Please try again.');
+      return;
+    }
+
+    try {
+      await fetch('/api/send-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName, email }),
+      });
+    } catch (e) {
+      console.error('⚠️ Email failed to send:', e);
+    }
+
+    setEmail('');
+    setFullName('');
+    setRole(null);
+    setShowSuccess(true);
   };
 
   return (

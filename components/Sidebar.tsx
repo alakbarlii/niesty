@@ -11,13 +11,14 @@ import { createClient } from '@/lib/supabase/client';
 const ProfileNavItem = () => {
   const pathname = usePathname();
   const [profileHref, setProfileHref] = useState<string | null>(null);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
     const fetchRole = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
-      if (!userId) return;
+      if (!userId) return setSessionLoaded(true);
 
       const { data } = await supabase
         .from('profiles')
@@ -32,16 +33,20 @@ const ProfileNavItem = () => {
       } else {
         setProfileHref('/dashboard/profile');
       }
+
+      setSessionLoaded(true);
     };
 
     fetchRole();
   }, [supabase]);
 
-  if (!profileHref) {
+  if (!sessionLoaded) {
     return (
-      <div className="w-full animate-pulse bg-white/10 rounded-lg h-10"></div>
+      <div className="w-full animate-pulse bg-white/10 rounded-lg h-10" />
     );
   }
+
+  if (!profileHref) return null;
 
   const isActive = pathname === profileHref;
 

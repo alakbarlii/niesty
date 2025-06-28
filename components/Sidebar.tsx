@@ -11,7 +11,7 @@ const navItems = [
     { href: '/dashboard/notifications', label: 'Notifications', icon: <NotificationIcon hasUnseen={false} /> },
     { href: '/dashboard/search', label: 'Search', icon: <Search /> },
     { href: '/dashboard/deals', label: 'Deals', icon: <FileText /> },
-    { href: '/dashboard/profile/creator/view', label: 'Profile', icon: <User /> },
+    { href: '/dashboard/profile/business/view', label: 'Profile', icon: <User /> },
     { href: '/dashboard/earnings', label: 'Earnings', icon: <BarChart2 /> },
   ];
   

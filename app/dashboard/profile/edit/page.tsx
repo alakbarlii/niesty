@@ -54,92 +54,112 @@ export default function Page() {
     fetchProfile();
   }, [supabase]);
 
+  const handlePlatformChange = (index: number, field: 'name' | 'url', value: string) => {
+    const updated = [...platforms];
+    updated[index][field] = value;
+    setPlatforms(updated);
+  };
+
+  const addPlatform = () => {
+    if (platforms.length < 10) {
+      setPlatforms([...platforms, { name: '', url: '' }]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !platforms[0].name.trim() || !platforms[0].url.trim()) {
-      alert('Name and at least one platform with a valid name & link are required.');
-      return;
-    }
+    setLoading(true);
 
     const {
       data: { session },
     } = await supabase.auth.getSession();
+
     const userId = session?.user?.id;
+    if (!userId) return;
 
-    const { error } = await supabase.from('profiles').upsert({
-      id: userId,
-      name,
-      bio,
-      social_links: JSON.stringify(platforms),
-    });
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({
+        id: userId,
+        name,
+        bio,
+        social_links: JSON.stringify(platforms),
+        profile_picture: profilePic ? profilePic.name : null,
+      });
 
-    if (error) {
-      alert('Failed to save profile.');
-      console.error(error);
-    } else {
-      alert('Profile saved successfully.');
+    if (error) console.error('Profile update error:', error);
+
+    setLoading(false);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setProfilePic(e.target.files[0]);
     }
   };
 
   return (
-    <div className="text-white p-6">
+    <div className="text-white p-6 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Edit Profile</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="block mb-1 font-medium">Name</label>
+          <label className="block mb-1">Name</label>
           <input
+            type="text"
+            className="w-full p-2 rounded bg-white/10 border border-white/20"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            className="w-full p-3 rounded bg-white/10 border border-white/20 text-white"
           />
         </div>
 
         <div>
-          <label className="block mb-1 font-medium">Bio (optional)</label>
+          <label className="block mb-1">Bio (optional)</label>
           <textarea
+            className="w-full p-2 rounded bg-white/10 border border-white/20"
             value={bio}
             onChange={(e) => setBio(e.target.value)}
-            className="w-full p-3 rounded bg-white/10 border border-white/20 text-white"
-            rows={3}
+            rows={4}
           />
         </div>
 
         <div>
-          <label className="block mb-2 font-medium">Main Platform + Links</label>
-          {platforms.map((p, i) => (
-            <div key={i} className="flex gap-2 mb-2">
+          <label className="block mb-1">Profile Picture (optional)</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="block w-full text-sm text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-400 file:text-black hover:file:bg-yellow-300"
+          />
+        </div>
+
+        <div>
+          <label className="block mb-1">Social Links</label>
+          {platforms.map((platform, index) => (
+            <div key={index} className="flex gap-2 mb-2">
               <input
                 type="text"
-                placeholder="Platform (e.g. Instagram)"
-                value={p.name}
-                onChange={(e) => {
-                  const updated = [...platforms];
-                  updated[i].name = e.target.value;
-                  setPlatforms(updated);
-                }}
-                className="flex-1 p-2 rounded bg-white/10 border border-white/20 text-white"
-                required={i === 0}
+                className="flex-1 p-2 rounded bg-white/10 border border-white/20"
+                placeholder="Platform (e.g. YouTube)"
+                value={platform.name}
+                onChange={(e) => handlePlatformChange(index, 'name', e.target.value)}
+                required={index === 0}
               />
               <input
                 type="url"
-                placeholder="Link (e.g. https://instagram.com/yourname)"
-                value={p.url}
-                onChange={(e) => {
-                  const updated = [...platforms];
-                  updated[i].url = e.target.value;
-                  setPlatforms(updated);
-                }}
-                className="flex-1 p-2 rounded bg-white/10 border border-white/20 text-white"
-                required={i === 0}
+                className="flex-1 p-2 rounded bg-white/10 border border-white/20"
+                placeholder="Link (e.g. https://youtube.com/@channel)"
+                value={platform.url}
+                onChange={(e) => handlePlatformChange(index, 'url', e.target.value)}
+                required={index === 0}
               />
             </div>
           ))}
           {platforms.length < 10 && (
             <button
               type="button"
-              onClick={() => setPlatforms([...platforms, { name: '', url: '' }])}
-              className="text-yellow-400 mt-1 hover:underline"
+              onClick={addPlatform}
+              className="text-sm text-yellow-400 hover:underline"
             >
               + Add another platform
             </button>
@@ -148,9 +168,10 @@ export default function Page() {
 
         <button
           type="submit"
-          className="w-full py-3 bg-yellow-400 text-black font-bold rounded hover:bg-yellow-300"
+          disabled={loading}
+          className="w-full py-3 bg-yellow-400 text-black font-semibold rounded hover:bg-yellow-300"
         >
-          Save Profile
+          {loading ? 'Saving...' : 'Save Profile'}
         </button>
       </form>
     </div>

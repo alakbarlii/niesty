@@ -54,7 +54,7 @@ const ProfileNavItem = () => {
       ? '/dashboard/profile/creator/view'
       : '/dashboard/profile/business/view';
 
-  const isActive = pathname === profileHref;
+  const isActive = pathname.startsWith('/dashboard/profile');
 
   return (
     <Link href={profileHref} className="w-full">
@@ -100,7 +100,7 @@ export default function Sidebar() {
 
           const isActive = pathname === item.href;
           return (
-            <Link key={item.href} href={item.href} className="w-full">
+            <Link key={item.href!} href={item.href!} className="w-full">
               <div
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
                   isActive ? 'bg-yellow-400 text-black font-bold scale-105' : 'text-white opacity-70 hover:opacity-100'

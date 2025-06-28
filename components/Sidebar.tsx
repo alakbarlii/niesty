@@ -8,14 +8,6 @@ import NotificationIcon from '@/components/NotificationIcon';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-const navItems = [
-  { href: '/dashboard/notifications', label: 'Notifications', icon: <NotificationIcon hasUnseen={false} /> },
-  { href: '/dashboard/search', label: 'Search', icon: <Search /> },
-  { href: '/dashboard/deals', label: 'Deals', icon: <FileText /> },
-  { label: 'Profile' }, // Placeholder, will handle dynamically
-  { href: '/dashboard/earnings', label: 'Earnings', icon: <BarChart2 /> },
-];
-
 const bottomItems = [
   { href: '/dashboard/settings', label: 'Settings', icon: <Settings /> },
 ];
@@ -73,6 +65,14 @@ const ProfileNavItem = () => {
 export default function Sidebar() {
   const pathname = usePathname();
 
+  const navItems = [
+    { href: '/dashboard/notifications', label: 'Notifications', icon: <NotificationIcon hasUnseen={false} /> },
+    { href: '/dashboard/search', label: 'Search', icon: <Search /> },
+    { href: '/dashboard/deals', label: 'Deals', icon: <FileText /> },
+    { label: 'Profile' },
+    { href: '/dashboard/earnings', label: 'Earnings', icon: <BarChart2 /> },
+  ];
+
   return (
     <aside className="w-[80px] lg:w-[250px] bg-[#010718] border-r border-white/5 py-6 flex flex-col justify-between min-h-screen transition-all duration-200 ">
       {/* Top: Logo */}
@@ -100,7 +100,7 @@ export default function Sidebar() {
 
           const isActive = pathname === item.href;
           return (
-            <Link key={item.href!} href={item.href!} className="w-full">
+            <Link key={item.href} href={item.href} className="w-full">
               <div
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
                   isActive ? 'bg-yellow-400 text-black font-bold scale-105' : 'text-white opacity-70 hover:opacity-100'

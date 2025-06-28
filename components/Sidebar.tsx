@@ -29,13 +29,19 @@ const ProfileNavItem = () => {
         setProfileHref('/dashboard/profile/creator/view');
       } else if (data?.role === 'business') {
         setProfileHref('/dashboard/profile/business/view');
+      } else {
+        setProfileHref('/dashboard/profile');
       }
     };
 
     fetchRole();
   }, [supabase]);
 
-  if (!profileHref) return null;
+  if (!profileHref) {
+    return (
+      <div className="w-full animate-pulse bg-white/10 rounded-lg h-10"></div>
+    );
+  }
 
   const isActive = pathname === profileHref;
 

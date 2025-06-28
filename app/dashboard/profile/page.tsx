@@ -1,145 +1,99 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import Image from 'next/image';
+
+type SocialLink = {
+  platform: string;
+  url: string;
+};
 
 type Profile = {
-  name: string
-  role: string
-  bio: string
-  audience: string
-  social_links: string
-}
+  name: string;
+  bio?: string;
+  avatar_url?: string;
+  social_links: SocialLink[];
+};
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
-export default function ProfilePage() {
-  const [loading, setLoading] = useState(true)
-  const [profile, setProfile] = useState<Profile | null>(null)
-
-  const [name, setName] = useState('')
-  const [role, setRole] = useState('creator')
-  const [bio, setBio] = useState('')
-  const [audience, setAudience] = useState('')
-  const [socialLinks, setSocialLinks] = useState('')
+export default function Page() {
+  const supabase = createClient();
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
-      setLoading(true)
       const {
         data: { session },
-      } = await supabase.auth.getSession()
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        console.error('No session found');
+        return;
+      }
 
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', session?.user.id)
-        .single()
+        .eq('id', session.user.id)
+        .single();
 
-        if (error) {
-          console.error('Error fetching profile:', error)
+      if (error) {
+        console.error('Profile fetch error:', error);
+      } else {
+        try {
+          const parsedLinks = JSON.parse(data.social_links || '[]');
+          setProfile({ ...data, social_links: parsedLinks });
+        } catch (e) {
+          console.error('Failed to parse social_links', e);
         }
-        
-      if (data) {
-        setProfile(data)
-        setName(data.name)
-        setRole(data.role)
-        setBio(data.bio)
-        setAudience(data.audience)
-        setSocialLinks(data.social_links)
       }
+    };
 
-      setLoading(false)
-    }
+    fetchProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    fetchProfile()
-  }, [])
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-
-    e.preventDefault()
-    setLoading(true)
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    const userId = session?.user.id
-
-    const payload = {
-      id: userId,
-      name,
-      role,
-      bio,
-      audience,
-      social_links: socialLinks,
-    }
-
-    const { error } = profile
-      ? await supabase.from('profiles').update(payload).eq('id', userId)
-      : await supabase.from('profiles').insert(payload)
-
-    if (error) {
-      alert('Failed to save profile.')
-      console.error(error)
-    } else {
-      alert('Profile saved.')
-    }
-
-    setLoading(false)
+  if (!profile) {
+    return (
+      <div className="text-white text-center mt-10">
+        Loading profile...
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-xl mx-auto mt-10 px-4">
-      <h1 className="text-2xl font-bold mb-6">Your Profile</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="text"
-          required
-          placeholder="Full Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full p-2 border rounded"
+    <div className="max-w-xl mx-auto mt-10 px-4 text-white">
+      <h1 className="text-3xl font-bold mb-4">{profile.name}</h1>
+
+      {profile.avatar_url && (
+        <Image
+          src={`https://your-supabase-project-url.storage.supabase.ap-northeast-1.aws.dev/storage/v1/object/public/profile-pics/${profile.avatar_url}`}
+          alt="Profile Picture"
+          width={128}
+          height={128}
+          className="w-32 h-32 rounded-full object-cover mb-4"
         />
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          className="w-full p-2 border rounded"
-        >
-          <option value="creator">Creator</option>
-          <option value="brand">Brand</option>
-        </select>
-        <textarea
-          placeholder="Short Bio"
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-          className="w-full p-2 border rounded"
-        />
-        <input
-          type="text"
-          placeholder="Audience / Company Size"
-          value={audience}
-          onChange={(e) => setAudience(e.target.value)}
-          className="w-full p-2 border rounded"
-        />
-        <input
-          type="text"
-          placeholder="Social Links (IG, TikTok, Website)"
-          value={socialLinks}
-          onChange={(e) => setSocialLinks(e.target.value)}
-          className="w-full p-2 border rounded"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-black text-white py-2 px-4 rounded hover:opacity-90"
-        >
-          {loading ? 'Saving...' : 'Save Profile'}
-        </button>
-      </form>
+      )}
+
+      <p className="mb-4">{profile.bio || 'No bio provided'}</p>
+
+      <h2 className="font-semibold">Social Links:</h2>
+      <ul className="list-disc list-inside">
+        {profile.social_links?.map((link, index) => (
+          <li key={index}>
+            <strong>{link.platform}:</strong>{' '}
+            <a
+              href={link.url}
+              className="text-yellow-400 underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {link.url}
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
-  )
+  );
 }

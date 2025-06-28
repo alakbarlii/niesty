@@ -28,7 +28,6 @@ export async function middleware(req: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession();
 
-  //  Protect these routes
   const protectedRoutes = [
     '/dashboard',
     '/deals',
@@ -44,22 +43,45 @@ export async function middleware(req: NextRequest) {
     req.nextUrl.pathname.startsWith(path)
   );
 
+  //  If not logged in, redirect to /login
   if (!session && isProtected) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
+  // If logged in, verify the user is in the waitlist
+  if (session && isProtected) {
+    
+    const email = session.user.email;
+    const { data: waitlistMatch, error } = await supabase
+    .from('waitlist')
+    .select('email')
+    .eq('email', email)
+    .single();
+  
+  if (error) {
+    console.error('Error checking waitlist:', error);
+    return NextResponse.redirect(new URL('/dashboard/unauthorized', req.url));
+  }
+  
+  if (!waitlistMatch) {
+    console.warn('Blocked unauthorized email:', email);
+    return NextResponse.redirect(new URL('/dashboard/unauthorized', req.url));
+  }
+  
+  }
+
   return res;
 }
-   export const config = {
-    matcher: [
-      '/dashboard/:path*',
-      '/deals/:path*',
-      '/earnings/:path*',
-      '/notifications/:path*',
-      '/profile/:path*',
-      '/report/:path*',
-      '/search/:path*',
-      '/settings/:path*',
-    ],
-  };
-  
+
+export const config = {
+  matcher: [
+    '/dashboard/:path*',
+    '/deals/:path*',
+    '/earnings/:path*',
+    '/notifications/:path*',
+    '/profile/:path*',
+    '/report/:path*',
+    '/search/:path*',
+    '/settings/:path*',
+  ],
+};

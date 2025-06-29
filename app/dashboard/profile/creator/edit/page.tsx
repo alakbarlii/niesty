@@ -23,7 +23,7 @@ export default function Page() {
 
       if (sessionError || !session) {
         console.error('Session error or not found', sessionError);
-        setLoading(false);
+        window.location.href = '/login';
         return;
       }
 

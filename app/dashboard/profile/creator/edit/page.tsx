@@ -15,44 +15,90 @@ export default function Page() {
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
-
+  
       const {
         data: { session },
         error: sessionError,
       } = await supabase.auth.getSession();
-
+  
       if (sessionError || !session) {
         console.error('Session error or not found', sessionError);
-        window.location.href = '/login';
+        setLoading(false);
         return;
       }
-
+  
       const userId = session.user.id;
-
-      const { data, error } = await supabase
+      const userEmail = session.user.email;
+  
+      // 1. Check if user exists in profiles
+      const { data: existingProfile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
-
-      if (error) {
-        console.error('Profile fetch error:', error);
-      } else if (data) {
-        setName(data.name || '');
-        setBio(data.bio || '');
+  
+      // 2. If not found in profiles, create from waitlist
+      if (profileError || !existingProfile) {
+        const { data: waitlistData, error: waitlistError } = await supabase
+          .from('waitlist')
+          .select('role')
+          .eq('email', userEmail)
+          .single();
+  
+        if (waitlistError || !waitlistData) {
+          console.error('User not found in waitlist either.');
+          setLoading(false);
+          return;
+        }
+  
+        const { error: insertError } = await supabase.from('profiles').insert([
+          {
+            id: userId,
+            role: waitlistData.role,
+            name: '',
+            bio: '',
+            social_links: '[]',
+            profile_picture: null,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+  
+        if (insertError) {
+          console.error('Error inserting new profile:', insertError);
+          setLoading(false);
+          return;
+        }
+      }
+  
+      // 3. Now fetch full profile again
+      const { data: fullProfile, error: finalError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+  
+      if (finalError) {
+        console.error('Final fetch error:', finalError);
+      } else if (fullProfile) {
+        setName(fullProfile.name || '');
+        setBio(fullProfile.bio || '');
         try {
-          const parsedLinks = JSON.parse(data.social_links || '[]');
+          const parsedLinks = JSON.parse(fullProfile.social_links || '[]');
           setPlatforms(parsedLinks);
         } catch (e) {
           console.error('Error parsing social links:', e);
         }
       }
-
+  
       setLoading(false);
     };
-
+  
     fetchProfile();
   }, [supabase]);
+  
+
+
+
 
   const handlePlatformChange = (index: number, field: 'name' | 'url', value: string) => {
     const updated = [...platforms];

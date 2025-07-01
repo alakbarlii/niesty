@@ -50,24 +50,46 @@ export async function middleware(req: NextRequest) {
 
   // If logged in, verify the user is in the waitlist
   if (session && isProtected) {
-    
     const email = session.user.email;
+
     const { data: waitlistMatch, error } = await supabase
-    .from('waitlist')
-    .select('email')
-    .eq('email', email)
-    .single();
-  
-  if (error) {
-    console.error('Error checking waitlist:', error);
-    return NextResponse.redirect(new URL('/dashboard/unauthorized', req.url));
-  }
-  
-  if (!waitlistMatch) {
-    console.warn('Blocked unauthorized email:', email);
-    return NextResponse.redirect(new URL('/dashboard/unauthorized', req.url));
-  }
-  
+      .from('waitlist')
+      .select('email')
+      .eq('email', email)
+      .single();
+
+    if (error) {
+      console.error('Error checking waitlist:', error);
+      return NextResponse.redirect(new URL('/dashboard/unauthorized', req.url));
+    }
+
+    if (!waitlistMatch) {
+      console.warn('Blocked unauthorized email:', email);
+      return NextResponse.redirect(new URL('/dashboard/unauthorized', req.url));
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('user_id, name, social_links')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
+      return NextResponse.redirect(new URL('/dashboard/settings', req.url));
+    }
+
+    const isProfileMissing =
+      !profile ||
+      !profile.name ||
+      !profile.social_links ||
+      Object.keys(profile.social_links).length === 0;
+
+    const isNotOnSettingsPage = !req.nextUrl.pathname.startsWith('/dashboard/settings');
+
+    if (isProfileMissing && isNotOnSettingsPage) {
+      return NextResponse.redirect(new URL('/dashboard/settings', req.url));
+    }
   }
 
   return res;

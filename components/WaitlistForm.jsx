@@ -71,6 +71,17 @@ export default function WaitlistForm() {
       return;
     }
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+        await supabase.from('profiles').upsert([
+             {
+                 user_id: user.id,
+                  role: role
+                 }
+                 ]);
+    }
+    
+
     try {
       await fetch('/api/send-confirmation', {
         method: 'POST',

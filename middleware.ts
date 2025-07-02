@@ -43,7 +43,7 @@ export async function middleware(req: NextRequest) {
     req.nextUrl.pathname.startsWith(path)
   );
 
-  //  If not logged in, redirect to /login
+  // If not logged in, redirect to /login
   if (!session && isProtected) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
@@ -68,28 +68,6 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/unauthorized', req.url));
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('user_id, name, social_links')
-      .eq('user_id', session.user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error('Error fetching profile:', profileError);
-      return NextResponse.redirect(new URL('/dashboard/settings', req.url));
-    }
-
-    const isProfileMissing =
-      !profile ||
-      !profile.name ||
-      !profile.social_links ||
-      Object.keys(profile.social_links).length === 0;
-
-    const isNotOnSettingsPage = !req.nextUrl.pathname.startsWith('/dashboard/settings');
-
-    if (isProfileMissing && isNotOnSettingsPage) {
-      return NextResponse.redirect(new URL('/dashboard/settings', req.url));
-    }
   }
 
   return res;

@@ -1,11 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createBrowserClient } from '@supabase/ssr';
 import StatBadge from '@/components/StatBadge';
 import Image from 'next/image';
 
 export default function CreatorProfileView() {
-  const supabase = createClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -20,7 +23,10 @@ export default function CreatorProfileView() {
       } = await supabase.auth.getSession();
 
       const userId = session?.user?.id;
-      if (!userId) return;
+      if (!userId) {
+        console.warn('No user session found');
+        return;
+      }
 
       const { data, error } = await supabase
         .from('profiles')

@@ -6,7 +6,8 @@ import type { CookieOptions } from '@supabase/ssr';
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
 
-  const supabase = createServerClient(
+  //  This client is only kept here in case you use cookies later
+  createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -24,29 +25,7 @@ export async function middleware(req: NextRequest) {
     }
   );
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const protectedRoutes = [
-    '/dashboard',
-    '/deals',
-    '/earnings',
-    '/notifications',
-    '/profile',
-    '/report',
-    '/search',
-    '/settings',
-  ];
-
-  const isProtected = protectedRoutes.some((path) =>
-    req.nextUrl.pathname.startsWith(path)
-  );
-
-  if (!session && isProtected) {
-    return NextResponse.redirect(new URL('/login', req.url));
-  }
-
+  //  This is enough for now — don't redirect based on session
   return res;
 }
 

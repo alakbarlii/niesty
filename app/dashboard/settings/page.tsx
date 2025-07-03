@@ -35,11 +35,11 @@ export default function SettingsPage() {
         setUserEmail(email ?? null);
 
         const { data, error } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', userId)
-          .eq('user_id', userId)
-          .single();
+        .from('profiles')
+        .select('role')
+        .eq('user_id', userId)
+        .single();
+      
 
         if (error) {
           console.error('Role fetch error:', error);

@@ -15,46 +15,55 @@ export default function CreatorProfileView() {
   const [platforms, setPlatforms] = useState<{ name: string; url: string }[]>([]);
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      const userId = session?.user?.id;
-      if (!userId) {
-        console.warn('No user session found');
-        return;
-      }
+        const userId = session?.user?.id;
+        if (!userId) {
+          throw new Error('No user session found');
+        }
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
-      if (error) {
-        console.error('Error fetching creator profile:', error);
-      } else {
+        if (error || !data) {
+          throw new Error('Profile not found');
+        }
+
         setName(data.name || '');
         setBio(data.bio || '');
         setProfilePicUrl(data.profile_picture || null);
+
         try {
           const parsed = JSON.parse(data.social_links || '[]');
           setPlatforms(parsed);
         } catch {
           setPlatforms([]);
         }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Unknown error occurred';
+        console.error('Profile load error:', err);
+        setError(message);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     fetchProfile();
   }, [supabase]);
 
   if (loading) return <p className="text-white p-6">Loading...</p>;
+  if (error) return <p className="text-red-500 p-6">Error: {error}</p>;
 
   return (
     <div className="text-white p-6 max-w-3xl mx-auto bg-[#0b0b0b] rounded-2xl shadow-xl border border-white/10">

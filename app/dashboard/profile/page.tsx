@@ -33,7 +33,7 @@ export default function ProfileRedirectPage() {
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', userId)
+        .eq('user_id', userId)
         .single();
 
       if (error || !data?.role) {

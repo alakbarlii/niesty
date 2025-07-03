@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 export default function ProfileRedirectPage() {
   const supabase = createClient();
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const redirectUser = async () => {
@@ -15,8 +16,15 @@ export default function ProfileRedirectPage() {
         error: sessionError,
       } = await supabase.auth.getSession();
 
-      if (sessionError || !session) {
-        router.push('/login');
+      if (sessionError) {
+        console.error('Session error:', sessionError.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!session) {
+        // Wait a bit and try again
+        setTimeout(redirectUser, 300); // retry once after 300ms
         return;
       }
 
@@ -29,7 +37,8 @@ export default function ProfileRedirectPage() {
         .single();
 
       if (error || !data?.role) {
-        router.push('/login');
+        console.error('Profile fetch error:', error?.message);
+        setLoading(false);
         return;
       }
 
@@ -39,7 +48,7 @@ export default function ProfileRedirectPage() {
       } else if (role === 'business') {
         router.push('/dashboard/profile/business/view');
       } else {
-        router.push('/login');
+        setLoading(false);
       }
     };
 
@@ -48,7 +57,7 @@ export default function ProfileRedirectPage() {
 
   return (
     <div className="text-white p-6">
-      <h1>Redirecting to your profile...</h1>
+      {loading ? <p>Loading your profile...</p> : <p>Could not load profile.</p>}
     </div>
   );
 }

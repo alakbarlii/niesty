@@ -12,30 +12,51 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
+  
     const supabase = createClient();
-
+  
     // Check if the email exists in the waitlist first
     const { data: waitlistMatch, error: checkError } = await supabase
       .from('waitlist')
-      .select('email')
+      .select('*')
       .eq('email', email)
       .single();
-
+  
     if (!waitlistMatch || checkError) {
       setLoading(false);
       alert('This email is not registered in the waitlist.');
       return;
     }
-
-    // Email is valid -> Send magic link
+  
+    // Ensure a profile exists for the user if it doesn't already
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+  
+    if (!existingProfile) {
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          email: waitlistMatch.email,
+          name: waitlistMatch.name || '', // fallback to empty name
+          role: waitlistMatch.role,       // must be 'creator' or 'business'
+        });
+  
+      if (insertError) {
+        console.error('Failed to create profile:', insertError);
+      }
+    }
+  
+    // Proceed to send magic login link
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: `${location.origin}/auth/callback`,
       },
     });
-
+  
     setLoading(false);
     if (!error) setSent(true);
     else {
@@ -43,6 +64,7 @@ export default function LoginPage() {
       alert('Something went wrong. Please try again.');
     }
   };
+  
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-black via-[#0b0b0b] to-[#111] px-4">

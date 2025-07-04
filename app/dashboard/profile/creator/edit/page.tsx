@@ -1,3 +1,4 @@
+// Updated /dashboard/profile/creator/edit/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -9,96 +10,55 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
+  const [email, setEmail] = useState('');
   const [platforms, setPlatforms] = useState([{ name: '', url: '' }]);
   const [profilePic, setProfilePic] = useState<File | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
-  
+
       const {
         data: { session },
         error: sessionError,
       } = await supabase.auth.getSession();
-  
+
       if (sessionError || !session) {
         console.error('Session error or not found', sessionError);
         setLoading(false);
         return;
       }
-  
+
       const userId = session.user.id;
-      const userEmail = session.user.email;
-  
-      // 1. Check if user exists in profiles
-      const { data: existingProfile, error: profileError } = await supabase
+      setEmail(session.user.email || '');
+
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
-  
-      // 2. If not found in profiles, create from waitlist
-      if (profileError || !existingProfile) {
-        const { data: waitlistData, error: waitlistError } = await supabase
-          .from('waitlist')
-          .select('role')
-          .eq('email', userEmail)
-          .single();
-  
-        if (waitlistError || !waitlistData) {
-          console.error('User not found in waitlist either.');
-          setLoading(false);
-          return;
-        }
-  
-        const { error: insertError } = await supabase.from('profiles').insert([
-          {
-            id: userId,
-            role: waitlistData.role,
-            name: '',
-            bio: '',
-            social_links: '[]',
-            profile_picture: null,
-            created_at: new Date().toISOString(),
-          },
-        ]);
-  
-        if (insertError) {
-          console.error('Error inserting new profile:', insertError);
-          setLoading(false);
-          return;
-        }
+
+      if (error || !data) {
+        console.error('Profile fetch error:', error);
+        setLoading(false);
+        return;
       }
-  
-      // 3. Now fetch full profile again
-      const { data: fullProfile, error: finalError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-  
-      if (finalError) {
-        console.error('Final fetch error:', finalError);
-      } else if (fullProfile) {
-        setName(fullProfile.name || '');
-        setBio(fullProfile.bio || '');
-        try {
-          const parsedLinks = JSON.parse(fullProfile.social_links || '[]');
-          setPlatforms(parsedLinks);
-        } catch (e) {
-          console.error('Error parsing social links:', e);
-        }
+
+      setName(data.name || '');
+      setBio(data.bio || '');
+
+      try {
+        const parsedLinks = JSON.parse(data.social_links || '[]');
+        setPlatforms(parsedLinks);
+      } catch (e) {
+        console.error('Error parsing social links:', e);
       }
-  
+
       setLoading(false);
     };
-  
+
     fetchProfile();
   }, [supabase]);
-  
-
-
-
 
   const handlePlatformChange = (index: number, field: 'name' | 'url', value: string) => {
     const updated = [...platforms];
@@ -123,15 +83,14 @@ export default function Page() {
     const userId = session?.user?.id;
     if (!userId) return;
 
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({
-        id: userId,
-        name,
-        bio,
-        social_links: JSON.stringify(platforms),
-        profile_picture: profilePic ? profilePic.name : null,
-      });
+    const { error } = await supabase.from('profiles').upsert({
+      id: userId,
+      name,
+      bio,
+      email,
+      social_links: JSON.stringify(platforms),
+      profile_picture: profilePic ? profilePic.name : null,
+    });
 
     if (error) console.error('Profile update error:', error);
 

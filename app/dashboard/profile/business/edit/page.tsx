@@ -58,7 +58,8 @@ export default function Page() {
     } = await supabase.auth.getSession();
 
     const userId = session?.user?.id;
-    if (!userId) return;
+    const email = session?.user?.email;
+    if (!userId || !email) return;
 
     let logoUrl = null;
 
@@ -87,6 +88,7 @@ export default function Page() {
       .from('profiles')
       .upsert({
         id: userId,
+        email,
         company_name: companyName,
         description,
         website,

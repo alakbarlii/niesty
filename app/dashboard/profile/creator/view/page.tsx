@@ -11,6 +11,8 @@ export default function CreatorProfileView() {
   );
 
   const [name, setName] = useState('');
+  const [role, setRole] = useState('');
+  const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
   const [platforms, setPlatforms] = useState<{ name: string; url: string }[]>([]);
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
@@ -25,9 +27,7 @@ export default function CreatorProfileView() {
         } = await supabase.auth.getSession();
 
         const userId = session?.user?.id;
-        if (!userId) {
-          throw new Error('No user session found');
-        }
+        if (!userId) throw new Error('No user session found');
 
         const { data, error } = await supabase
           .from('profiles')
@@ -35,13 +35,13 @@ export default function CreatorProfileView() {
           .eq('user_id', userId)
           .single();
 
-        if (error || !data) {
-          throw new Error('Profile not found');
-        }
+        if (error || !data) throw new Error('Profile not found');
 
         setName(data.name || '');
+        setRole(data.role || '');
+        setEmail(data.email || '');
         setBio(data.bio || '');
-        setProfilePicUrl(data.profile_picture || null);
+        setProfilePicUrl(data.profile_pic || null);
 
         try {
           const parsed = JSON.parse(data.social_links || '[]');
@@ -50,8 +50,7 @@ export default function CreatorProfileView() {
           setPlatforms([]);
         }
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Unknown error occurred';
+        const message = err instanceof Error ? err.message : 'Unknown error occurred';
         console.error('Profile load error:', err);
         setError(message);
       } finally {
@@ -80,7 +79,9 @@ export default function CreatorProfileView() {
           )}
           <div>
             <h1 className="text-3xl font-bold mb-1">{name}</h1>
-            {bio && <p className="text-white/70 max-w-md">{bio}</p>}
+            <p className="text-sm text-yellow-400 capitalize">{role}</p>
+            <p className="text-sm text-white/70 mt-1">Contact: {email}</p>
+            {bio && <p className="text-white/70 max-w-md mt-2">{bio}</p>}
           </div>
         </div>
         <button className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300">

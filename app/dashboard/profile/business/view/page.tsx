@@ -11,45 +11,52 @@ export default function BusinessProfileView() {
   );
 
   const [companyName, setCompanyName] = useState('');
+  const [role, setRole] = useState('');
+  const [email, setEmail] = useState('');
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      const userId = session?.user?.id;
-      if (!userId) {
-        console.warn('No user session found');
-        return;
-      }
+        const userId = session?.user?.id;
+        if (!userId) throw new Error('No user session found');
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
 
-      if (error) {
-        console.error('Error fetching business profile:', error);
-      } else {
+        if (error || !data) throw new Error('Profile not found');
+
         setCompanyName(data.company_name || '');
+        setRole(data.role || '');
+        setEmail(data.email || '');
         setDescription(data.description || '');
         setWebsite(data.website || '');
         setLogoUrl(data.logo_url || null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error occurred';
+        console.error('Business profile load error:', err);
+        setError(message);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     fetchProfile();
   }, [supabase]);
 
   if (loading) return <p className="text-white p-6">Loading...</p>;
+  if (error) return <p className="text-red-500 p-6">Error: {error}</p>;
 
   return (
     <div className="text-white p-6 max-w-3xl mx-auto bg-[#0b0b0b] rounded-2xl shadow-xl border border-white/10">
@@ -66,7 +73,9 @@ export default function BusinessProfileView() {
           )}
           <div>
             <h1 className="text-3xl font-bold mb-1">{companyName}</h1>
-            {description && <p className="text-white/70 max-w-md">{description}</p>}
+            <p className="text-sm text-yellow-400 capitalize">{role}</p>
+            <p className="text-sm text-white/70 mt-1">Contact: {email}</p>
+            {description && <p className="text-white/70 max-w-md mt-2">{description}</p>}
             {website && (
               <p className="mt-2">
                 <span className="text-white/60">Website:</span>{' '}

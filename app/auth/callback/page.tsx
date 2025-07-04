@@ -23,7 +23,7 @@ export default function AuthCallbackPage() {
 
       const user = session.user;
 
-      // 1. Check if profile already exists
+      // Check if profile exists
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('id')
@@ -31,7 +31,7 @@ export default function AuthCallbackPage() {
         .maybeSingle();
 
       if (!existingProfile) {
-        // 2. Fetch waitlist data
+        // Get waitlist data
         const { data: waitlistEntry, error: waitlistError } = await supabase
           .from('waitlist')
           .select('email, role')
@@ -44,7 +44,7 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // 3. Create profile using waitlist data
+        // Create new profile
         const { error: insertError } = await supabase
           .from('profiles')
           .insert({
@@ -62,7 +62,7 @@ export default function AuthCallbackPage() {
         }
       }
 
-      // 4. All done, route to dashboard
+      // All done
       router.replace('/dashboard');
     };
 

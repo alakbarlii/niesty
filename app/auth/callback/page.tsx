@@ -24,7 +24,7 @@ export default function AuthCallbackPage() {
       const user = session.user;
 
       // 1. Check if profile already exists
-      const { data: existingProfile, error: profileError } = await supabase
+      const { data: existingProfile } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user.id)
@@ -43,21 +43,20 @@ export default function AuthCallbackPage() {
           router.replace('/login');
           return;
         }
-        if (profileError) {
-          console.error('Profile fetch error:', profileError.message);
-        }
-        
 
-        // 3. Insert new profile
-        const { error: insertError } = await supabase.from('profiles').insert({
-          user_id: user.id,
-          email: user.email,
-          role: waitlistEntry.role,
-          name: user.user_metadata?.name || '', // optional fallback
-        });
+        // 3. Create profile using waitlist data
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            user_id: user.id,
+            email: user.email,
+            role: waitlistEntry.role,
+            name: user.user_metadata?.name || '',
+            created_at: new Date().toISOString(),
+          });
 
         if (insertError) {
-          console.error('Failed to insert profile:', insertError.message);
+          console.error('Error inserting profile:', insertError.message);
           router.replace('/login');
           return;
         }

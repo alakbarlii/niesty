@@ -17,18 +17,25 @@ export default function AuthCallbackPage() {
       } = await supabase.auth.getSession();
 
       if (sessionError || !session) {
+        console.error('Session error:', sessionError);
         router.replace('/login');
         return;
       }
 
       const user = session.user;
 
-      // Check if profile exists
-      const { data: existingProfile } = await supabase
+      // Check if profile exists (match by ID = user.id)
+      const { data: existingProfile, error: fetchError } = await supabase
         .from('profiles')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('id', user.id)
         .maybeSingle();
+
+      if (fetchError) {
+        console.error('Profile fetch error:', fetchError.message);
+        router.replace('/login');
+        return;
+      }
 
       if (!existingProfile) {
         // Get waitlist data
@@ -44,11 +51,11 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // Create new profile
+        // Create new profile (with manual ID)
         const { error: insertError } = await supabase
           .from('profiles')
           .insert({
-            user_id: user.id,
+            id: user.id, 
             email: user.email,
             role: waitlistEntry.role,
             name: user.user_metadata?.name || '',
@@ -62,7 +69,7 @@ export default function AuthCallbackPage() {
         }
       }
 
-      // All done
+      // Success — redirect to dashboard
       router.replace('/dashboard');
     };
 

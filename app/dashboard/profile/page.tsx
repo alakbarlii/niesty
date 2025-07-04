@@ -23,17 +23,17 @@ export default function ProfileRedirectPage() {
       }
 
       if (!session) {
-        // Wait a bit and try again
-        setTimeout(redirectUser, 300); // retry once after 300ms
+        setTimeout(redirectUser, 300);
         return;
       }
 
       const userId = session.user.id;
 
+      // ✅ Fix: query by user_id not id
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', userId)
+        .eq('user_id', userId) 
         .single();
 
       if (error || !data?.role) {

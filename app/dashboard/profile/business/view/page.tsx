@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import StatBadge from '@/components/StatBadge';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+
 
 export default function BusinessProfileView() {
   const supabase = createBrowserClient(
@@ -15,9 +17,12 @@ export default function BusinessProfileView() {
   const [email, setEmail] = useState('');
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUrl, setProfilePicUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+const [editHref, setEditHref] = useState<string | null>(null);
+
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -39,10 +44,13 @@ export default function BusinessProfileView() {
 
         setCompanyName(data.company_name || '');
         setRole(data.role || '');
+        setEditHref('/dashboard/profile/business/edit');
         setEmail(data.email || '');
         setDescription(data.description || '');
         setWebsite(data.website || '');
-        setLogoUrl(data.logo_url || null);
+        setProfilePicUrl(data.profile_url || null);
+      
+
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error occurred';
         console.error('Business profile load error:', err);
@@ -71,6 +79,7 @@ export default function BusinessProfileView() {
               className="rounded-xl border border-white/20 object-cover"
             />
           )}
+
           <div>
             <h1 className="text-3xl font-bold mb-1">{companyName}</h1>
             <p className="text-sm text-yellow-400 capitalize">{role}</p>
@@ -91,9 +100,17 @@ export default function BusinessProfileView() {
             )}
           </div>
         </div>
-        <button className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300">
-          Edit Profile
-        </button>
+
+        {editHref && (
+  <button
+    onClick={() => router.push(editHref)}
+    className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300"
+  >
+    Edit Profile
+  </button>
+)}
+
+
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

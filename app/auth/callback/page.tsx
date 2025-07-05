@@ -71,14 +71,15 @@ export default function AuthCallbackPage() {
 
       // Insert new profile
       const { error: insertError } = await supabase
-        .from('profiles')
-        .insert({
-          id: user.id,
-          email: user.email,
-          role: waitlistEntry.role,
-          name: user.user_metadata?.name || '',
-          created_at: new Date().toISOString(),
-        });
+      .from('profiles')
+      .insert({
+        user_id: user.id,
+        email: user.email,
+        role: waitlistEntry.role,
+        name: user.user_metadata?.name || '',
+        created_at: new Date().toISOString(),
+      });
+    
 
       if (insertError) {
         console.error('❌ Profile insert error:', insertError.message);

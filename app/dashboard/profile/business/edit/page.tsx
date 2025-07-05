@@ -137,7 +137,7 @@ export default function Page() {
         </div>
 
         <div>
-          <label className="block mb-1">Company Logo (optional)</label>
+          <label className="block mb-1">Profile picture(optional)</label>
           <input
             type="file"
             accept="image/*"

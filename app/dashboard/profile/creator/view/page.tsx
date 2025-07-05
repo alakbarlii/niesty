@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import StatBadge from '@/components/StatBadge';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 export default function CreatorProfileView() {
   const supabase = createBrowserClient(
@@ -18,6 +19,10 @@ export default function CreatorProfileView() {
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const [editHref, setEditHref] = useState<string | null>(null);
+  
+
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -39,9 +44,10 @@ export default function CreatorProfileView() {
 
         setName(data.name || '');
         setRole(data.role || '');
+        setEditHref('/dashboard/profile/creator/edit');
         setEmail(data.email || '');
         setBio(data.bio || '');
-        setProfilePicUrl(data.profile_pic || null);
+        setProfilePicUrl(data.profile_url || null);
 
         try {
           const parsed = JSON.parse(data.social_links || '[]');
@@ -84,10 +90,16 @@ export default function CreatorProfileView() {
             {bio && <p className="text-white/70 max-w-md mt-2">{bio}</p>}
           </div>
         </div>
-        <button className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300">
-          Edit Profile
-        </button>
-      </div>
+          {editHref && (
+            <button
+             onClick={() => router.push(editHref)}
+             className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300"
+              >
+                 Edit Profile
+                 </button>
+                 )}
+
+                </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
         <StatBadge label="Deals Completed" value={3} />

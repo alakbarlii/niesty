@@ -32,27 +32,35 @@ export default function Page() {
       const userId = session.user.id;
       setEmail(session.user.email || '');
 
-      const { data, error } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
 
-      if (error || !data) {
-        console.error('Profile fetch error:', error);
-        setLoading(false);
-        return;
-      }
+      if (profileError || !profileData) {
+        console.warn('No profile data found, trying waitlist fallback.');
 
-      setUsername(data.username || '');
-      setFullName(data.full_name || '');
-      setBio(data.bio || '');
+        const { data: waitlistData, error: waitlistError } = await supabase
+          .from('waitlist')
+          .select('full_name')
+          .eq('email', session.user.email)
+          .single();
 
-      try {
-        const parsedLinks = JSON.parse(data.social_links || '[]');
-        setPlatforms(parsedLinks);
-      } catch (e) {
-        console.error('Error parsing social links:', e);
+        if (!waitlistError && waitlistData?.full_name) {
+          setFullName(waitlistData.full_name);
+        }
+      } else {
+        setUsername(profileData.username || '');
+        setFullName(profileData.full_name || '');
+        setBio(profileData.bio || '');
+
+        try {
+          const parsedLinks = JSON.parse(profileData.social_links || '[]');
+          setPlatforms(parsedLinks);
+        } catch (e) {
+          console.error('Error parsing social links:', e);
+        }
       }
 
       setLoading(false);
@@ -108,7 +116,7 @@ export default function Page() {
     }
 
     const { error } = await supabase.from('profiles').upsert({
-      id: userId,
+      user_id: userId,
       full_name: fullName,
       username,
       bio,

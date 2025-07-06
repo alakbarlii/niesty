@@ -30,19 +30,29 @@ export default function Page() {
 
       const userId = session.user.id;
 
-      const { data, error } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
 
-      if (error) {
-        console.error('Profile fetch error:', error);
-      } else if (data) {
-        setUsername(data.username || '');
-        setFullName(data.full_name || '');
-        setDescription(data.description || '');
-        setWebsite(data.website || '');
+      if (profileError || !profileData) {
+        console.warn('No profile data found, trying waitlist fallback.');
+
+        const { data: waitlistData, error: waitlistError } = await supabase
+          .from('waitlist')
+          .select('full_name')
+          .eq('email', session.user.email)
+          .single();
+
+        if (!waitlistError && waitlistData?.full_name) {
+          setFullName(waitlistData.full_name);
+        }
+      } else {
+        setUsername(profileData.username || '');
+        setFullName(profileData.full_name || '');
+        setDescription(profileData.description || '');
+        setWebsite(profileData.website || '');
       }
 
       setLoading(false);

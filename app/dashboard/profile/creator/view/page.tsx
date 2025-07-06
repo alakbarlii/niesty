@@ -32,7 +32,8 @@ export default function CreatorProfileView() {
         } = await supabase.auth.getSession();
 
         const userId = session?.user?.id;
-        if (!userId) throw new Error('No user session found');
+        const userEmail = session?.user?.email;
+        if (!userId || !userEmail) throw new Error('No user session found');
 
         const { data, error } = await supabase
           .from('profiles')
@@ -40,21 +41,32 @@ export default function CreatorProfileView() {
           .eq('user_id', userId)
           .single();
 
-        if (error || !data) throw new Error('Profile not found');
+        if (error || !data) {
+          console.warn('No profile found, trying waitlist fallback.');
+          const { data: waitlistData, error: waitlistError } = await supabase
+            .from('waitlist')
+            .select('full_name')
+            .eq('email', userEmail)
+            .single();
 
-        setUsername(data.username || '');
-        setFullName(data.full_name || '');
-        setRole(data.role || '');
-        setEditHref('/dashboard/profile/creator/edit');
-        setEmail(data.email || '');
-        setBio(data.bio || '');
-        setProfileUrl(data.profile_url || null);
+          if (!waitlistError && waitlistData?.full_name) {
+            setFullName(waitlistData.full_name);
+          }
+        } else {
+          setUsername(data.username || '');
+          setFullName(data.full_name || '');
+          setRole(data.role || '');
+          setEditHref('/dashboard/profile/creator/edit');
+          setEmail(data.email || '');
+          setBio(data.bio || '');
+          setProfileUrl(data.profile_url || null);
 
-        try {
-          const parsed = JSON.parse(data.social_links || '[]');
-          setPlatforms(parsed);
-        } catch {
-          setPlatforms([]);
+          try {
+            const parsed = JSON.parse(data.social_links || '[]');
+            setPlatforms(parsed);
+          } catch {
+            setPlatforms([]);
+          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error occurred';

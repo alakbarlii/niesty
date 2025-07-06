@@ -11,6 +11,7 @@ export default function Page() {
   const [fullName, setFullName] = useState('');
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
+  const [email, setEmail] = useState('');
   const [profileFile, setProfileFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -29,6 +30,8 @@ export default function Page() {
       }
 
       const userId = session.user.id;
+      const userEmail = session.user.email || '';
+      setEmail(userEmail);
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -42,7 +45,7 @@ export default function Page() {
         const { data: waitlistData, error: waitlistError } = await supabase
           .from('waitlist')
           .select('full_name')
-          .eq('email', session.user.email)
+          .eq('email', userEmail)
           .single();
 
         if (!waitlistError && waitlistData?.full_name) {
@@ -70,7 +73,6 @@ export default function Page() {
     } = await supabase.auth.getSession();
 
     const userId = session?.user?.id;
-    const email = session?.user?.email;
     if (!userId || !email) return;
 
     let uploadedProfileUrl: string | null = null;
@@ -96,18 +98,16 @@ export default function Page() {
       }
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({
-        user_id: userId,
-        email,
-        username,
-        full_name: fullName,
-        description,
-        website,
-        profile_url: uploadedProfileUrl,
-        role: 'business',
-      });
+    const { error } = await supabase.from('profiles').upsert({
+      user_id: userId,
+      email,
+      username,
+      full_name: fullName,
+      description,
+      website,
+      profile_url: uploadedProfileUrl,
+      role: 'business',
+    });
 
     if (error) console.error('Profile update error:', error);
 

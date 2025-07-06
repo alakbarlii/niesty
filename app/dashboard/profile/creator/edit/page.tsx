@@ -30,7 +30,8 @@ export default function Page() {
       }
 
       const userId = session.user.id;
-      setEmail(session.user.email || '');
+      const userEmail = session.user.email || '';
+      setEmail(userEmail);
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -44,7 +45,7 @@ export default function Page() {
         const { data: waitlistData, error: waitlistError } = await supabase
           .from('waitlist')
           .select('full_name')
-          .eq('email', session.user.email)
+          .eq('email', userEmail)
           .single();
 
         if (!waitlistError && waitlistData?.full_name) {

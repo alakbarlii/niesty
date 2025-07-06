@@ -42,7 +42,6 @@ export default function CreatorProfileView() {
           .single();
 
         if (error || !data) {
-          console.warn('No profile found, trying waitlist fallback.');
           const { data: waitlistData, error: waitlistError } = await supabase
             .from('waitlist')
             .select('full_name')
@@ -52,6 +51,8 @@ export default function CreatorProfileView() {
           if (!waitlistError && waitlistData?.full_name) {
             setFullName(waitlistData.full_name);
           }
+
+          setUsername('');
         } else {
           setUsername(data.username || '');
           setFullName(data.full_name || '');
@@ -66,6 +67,16 @@ export default function CreatorProfileView() {
             setPlatforms(parsed);
           } catch {
             setPlatforms([]);
+          }
+
+          if (!data.full_name) {
+            const { data: waitlistData } = await supabase
+              .from('waitlist')
+              .select('full_name')
+              .eq('email', userEmail)
+              .single();
+
+            if (waitlistData?.full_name) setFullName(waitlistData.full_name);
           }
         }
       } catch (err) {
@@ -98,7 +109,7 @@ export default function CreatorProfileView() {
           )}
           <div>
             <h1 className="text-3xl font-bold mb-1">{fullName || 'Unnamed'}</h1>
-            <p className="text-sm text-yellow-400">@{username}</p>
+            <p className="text-sm text-yellow-400">@{username || 'username'}</p>
             <p className="text-sm text-white/60 capitalize mt-1">{role}</p>
             <p className="text-sm text-white/70 mt-1">Contact: {email}</p>
             {bio && <p className="text-white/70 max-w-md mt-2">{bio}</p>}

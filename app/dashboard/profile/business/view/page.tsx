@@ -33,7 +33,8 @@ export default function BusinessProfileView() {
         } = await supabase.auth.getSession();
 
         const userId = session?.user?.id;
-        if (!userId) throw new Error('No user session found');
+        const userEmail = session?.user?.email;
+        if (!userId || !userEmail) throw new Error('No user session found');
 
         const { data, error } = await supabase
           .from('profiles')
@@ -41,16 +42,27 @@ export default function BusinessProfileView() {
           .eq('user_id', userId)
           .single();
 
-        if (error || !data) throw new Error('Profile not found');
+        if (error || !data) {
+          console.warn('No profile found, trying waitlist fallback.');
+          const { data: waitlistData, error: waitlistError } = await supabase
+            .from('waitlist')
+            .select('full_name')
+            .eq('email', userEmail)
+            .single();
 
-        setFullName(data.full_name || '');
-        setUsername(data.username || '');
-        setRole(data.role || '');
-        setEmail(data.email || '');
-        setDescription(data.description || '');
-        setWebsite(data.website || '');
-        setProfileUrl(data.profile_url || null);
-        setEditHref('/dashboard/profile/business/edit');
+          if (!waitlistError && waitlistData?.full_name) {
+            setFullName(waitlistData.full_name);
+          }
+        } else {
+          setFullName(data.full_name || '');
+          setUsername(data.username || '');
+          setRole(data.role || '');
+          setEmail(data.email || '');
+          setDescription(data.description || '');
+          setWebsite(data.website || '');
+          setProfileUrl(data.profile_url || null);
+          setEditHref('/dashboard/profile/business/edit');
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error occurred';
         console.error('Business profile load error:', err);
@@ -81,8 +93,8 @@ export default function BusinessProfileView() {
           )}
 
           <div>
-            {fullName && <p className="text-sm text-white/80 mb-1">{fullName}</p>}
             <h1 className="text-3xl font-bold mb-1">{username}</h1>
+            <p className="text-sm text-white/80">{fullName}</p>
             <p className="text-sm text-yellow-400 capitalize">{role}</p>
             <p className="text-sm text-white/70 mt-1">Contact: {email}</p>
 

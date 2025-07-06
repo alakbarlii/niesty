@@ -29,7 +29,7 @@ export default function ProfileRedirectPage() {
 
       const userId = session.user.id;
 
-      // ✅ Fix: query by user_id not id
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('role')

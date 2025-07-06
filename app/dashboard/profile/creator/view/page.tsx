@@ -16,13 +16,11 @@ export default function CreatorProfileView() {
   const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
   const [platforms, setPlatforms] = useState<{ name: string; url: string }[]>([]);
-  const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+  const [profileUrl, setProfileUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
   const [editHref, setEditHref] = useState<string | null>(null);
-  
-
+  const router = useRouter();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -37,7 +35,7 @@ export default function CreatorProfileView() {
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', userId) 
           .single();
 
         if (error || !data) throw new Error('Profile not found');
@@ -47,7 +45,7 @@ export default function CreatorProfileView() {
         setEditHref('/dashboard/profile/creator/edit');
         setEmail(data.email || '');
         setBio(data.bio || '');
-        setProfilePicUrl(data.profile_url || null);
+        setProfileUrl(data.profile_url || null);
 
         try {
           const parsed = JSON.parse(data.social_links || '[]');
@@ -74,13 +72,13 @@ export default function CreatorProfileView() {
     <div className="text-white p-6 max-w-3xl mx-auto bg-[#0b0b0b] rounded-2xl shadow-xl border border-white/10">
       <div className="flex justify-between items-start mb-6">
         <div className="flex gap-4">
-          {profilePicUrl && (
+          {profileUrl && (
             <Image
-              src={profilePicUrl}
+              src={profileUrl}
               alt="Profile Picture"
               width={80}
               height={80}
-              className="rounded-full border border-white/20 object-cover"
+              className="rounded-xl border border-white/20 object-cover"
             />
           )}
           <div>
@@ -90,16 +88,15 @@ export default function CreatorProfileView() {
             {bio && <p className="text-white/70 max-w-md mt-2">{bio}</p>}
           </div>
         </div>
-          {editHref && (
-            <button
-             onClick={() => router.push(editHref)}
-             className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300"
-              >
-                 Edit Profile
-                 </button>
-                 )}
-
-                </div>
+        {editHref && (
+          <button
+            onClick={() => router.push(editHref)}
+            className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300"
+          >
+            Edit Profile
+          </button>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
         <StatBadge label="Deals Completed" value={3} />
@@ -109,21 +106,25 @@ export default function CreatorProfileView() {
 
       <div className="mt-4">
         <h2 className="text-lg font-semibold mb-2">Social Platforms</h2>
-        <ul className="space-y-2">
-          {platforms.map((p, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="text-white/70">{p.name}:</span>
-              <a
-                href={p.url}
-                className="text-yellow-400 hover:underline break-all"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {p.url}
-              </a>
-            </li>
-          ))}
-        </ul>
+        {platforms.length > 0 ? (
+          <ul className="space-y-2">
+            {platforms.map((p, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-white/70">{p.name}:</span>
+                <a
+                  href={p.url}
+                  className="text-yellow-400 hover:underline break-all"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {p.url}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-white/50 italic">No platforms added.</p>
+        )}
       </div>
     </div>
   );

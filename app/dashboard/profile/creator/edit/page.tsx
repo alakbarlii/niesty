@@ -1,4 +1,3 @@
-// Updated /dashboard/profile/creator/edit/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -12,7 +11,7 @@ export default function Page() {
   const [bio, setBio] = useState('');
   const [email, setEmail] = useState('');
   const [platforms, setPlatforms] = useState([{ name: '', url: '' }]);
-  const [profilePic, setProfilePic] = useState<File | null>(null);
+  const [profileFile, setProfileFile] = useState<File | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -35,7 +34,7 @@ export default function Page() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
+        .eq('user_id', userId)
         .single();
 
       if (error || !data) {
@@ -83,24 +82,42 @@ export default function Page() {
     const userId = session?.user?.id;
     if (!userId) return;
 
+    let uploadedProfileUrl: string | null = null;
+
+    if (profileFile) {
+      const fileExt = profileFile.name.split('.').pop();
+      const fileName = `${userId}.${fileExt}`;
+      const filePath = `profiles/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('profiles')
+        .upload(filePath, profileFile, { upsert: true });
+
+      if (uploadError) {
+        console.error('Profile picture upload failed:', uploadError);
+      } else {
+        const { data: publicUrlData } = supabase
+          .storage
+          .from('profiles')
+          .getPublicUrl(filePath);
+
+        uploadedProfileUrl = publicUrlData?.publicUrl || null;
+      }
+    }
+
     const { error } = await supabase.from('profiles').upsert({
       id: userId,
       name,
       bio,
       email,
       social_links: JSON.stringify(platforms),
-      profile_picture: profilePic ? profilePic.name : null,
+      profile_url: uploadedProfileUrl, 
+      role: 'creator',
     });
 
     if (error) console.error('Profile update error:', error);
 
     setLoading(false);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setProfilePic(e.target.files[0]);
-    }
   };
 
   return (
@@ -133,7 +150,11 @@ export default function Page() {
           <input
             type="file"
             accept="image/*"
-            onChange={handleFileChange}
+            onChange={(e) => {
+              if (e.target.files?.[0]) {
+                setProfileFile(e.target.files[0]);
+              }
+            }}
             className="block w-full text-sm text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-400 file:text-black hover:file:bg-yellow-300"
           />
         </div>

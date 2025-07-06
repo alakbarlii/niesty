@@ -7,10 +7,10 @@ export default function Page() {
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
-  const [companyName, setCompanyName] = useState('');
+  const [username, setUsername] = useState('');
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
-  const [logo, setLogo] = useState<File | null>(null);
+  const [profileFile, setProfileFile] = useState<File | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -32,13 +32,13 @@ export default function Page() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
+        .eq('user_id', userId)
         .single();
 
       if (error) {
         console.error('Profile fetch error:', error);
       } else if (data) {
-        setCompanyName(data.company_name || '');
+        setUsername(data.username || '');
         setDescription(data.description || '');
         setWebsite(data.website || '');
       }
@@ -61,26 +61,26 @@ export default function Page() {
     const email = session?.user?.email;
     if (!userId || !email) return;
 
-    let logoUrl = null;
+    let uploadedProfileUrl: string | null = null;
 
-    if (logo) {
-      const fileExt = logo.name.split('.').pop();
+    if (profileFile) {
+      const fileExt = profileFile.name.split('.').pop();
       const fileName = `${userId}.${fileExt}`;
-      const filePath = `logos/${fileName}`;
+      const filePath = `profiles/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('logos')
-        .upload(filePath, logo, { upsert: true });
+        .from('profiles')
+        .upload(filePath, profileFile, { upsert: true });
 
       if (uploadError) {
-        console.error('Logo upload failed:', uploadError);
+        console.error('Profile picture upload failed:', uploadError);
       } else {
         const { data: publicUrlData } = supabase
           .storage
-          .from('logos')
+          .from('profiles')
           .getPublicUrl(filePath);
 
-        logoUrl = publicUrlData?.publicUrl || null;
+        uploadedProfileUrl = publicUrlData?.publicUrl || null;
       }
     }
 
@@ -89,10 +89,10 @@ export default function Page() {
       .upsert({
         id: userId,
         email,
-        company_name: companyName,
+        username, 
         description,
         website,
-        logo_url: logoUrl,
+        profile_url: uploadedProfileUrl, 
         role: 'business',
       });
 
@@ -106,18 +106,18 @@ export default function Page() {
       <h1 className="text-2xl font-bold mb-4">Edit Business Profile</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="block mb-1">Company Name</label>
+          <label className="block mb-1">Brand / Company Name</label>
           <input
             type="text"
             className="w-full p-2 rounded bg-white/10 border border-white/20"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
           />
         </div>
 
         <div>
-          <label className="block mb-1">Description</label>
+          <label className="block mb-1">Company Description</label>
           <textarea
             className="w-full p-2 rounded bg-white/10 border border-white/20"
             value={description}
@@ -137,13 +137,13 @@ export default function Page() {
         </div>
 
         <div>
-          <label className="block mb-1">Profile picture(optional)</label>
+          <label className="block mb-1">Profile Picture (optional)</label>
           <input
             type="file"
             accept="image/*"
             onChange={(e) => {
               if (e.target.files && e.target.files.length > 0) {
-                setLogo(e.target.files[0]);
+                setProfileFile(e.target.files[0]);
               }
             }}
             className="w-full p-2 rounded bg-white/10 border border-white/20"

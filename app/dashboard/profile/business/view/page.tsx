@@ -12,12 +12,12 @@ export default function BusinessProfileView() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const [companyName, setCompanyName] = useState('');
+  const [username, setUserName] = useState('');
   const [role, setRole] = useState('');
   const [email, setEmail] = useState('');
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
-  const [logoUrl, setProfilePicUrl] = useState<string | null>(null);
+  const [profileUrl, setProfileUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -42,13 +42,13 @@ const [editHref, setEditHref] = useState<string | null>(null);
 
         if (error || !data) throw new Error('Profile not found');
 
-        setCompanyName(data.company_name || '');
+        setUserName(data.username || '');
         setRole(data.role || '');
         setEditHref('/dashboard/profile/business/edit');
         setEmail(data.email || '');
         setDescription(data.description || '');
         setWebsite(data.website || '');
-        setProfilePicUrl(data.profile_url || null);
+        setProfileUrl(data.profile_url || null);
       
 
       } catch (err) {
@@ -70,10 +70,10 @@ const [editHref, setEditHref] = useState<string | null>(null);
     <div className="text-white p-6 max-w-3xl mx-auto bg-[#0b0b0b] rounded-2xl shadow-xl border border-white/10">
       <div className="flex justify-between items-start mb-6">
         <div className="flex gap-4">
-          {logoUrl && (
+          {profileUrl && (
             <Image
-              src={logoUrl}
-              alt="Company Logo"
+              src={profileUrl}
+              alt="profile pic"
               width={80}
               height={80}
               className="rounded-xl border border-white/20 object-cover"
@@ -81,7 +81,7 @@ const [editHref, setEditHref] = useState<string | null>(null);
           )}
 
           <div>
-            <h1 className="text-3xl font-bold mb-1">{companyName}</h1>
+            <h1 className="text-3xl font-bold mb-1">{username}</h1>
             <p className="text-sm text-yellow-400 capitalize">{role}</p>
             <p className="text-sm text-white/70 mt-1">Contact: {email}</p>
             {description && <p className="text-white/70 max-w-md mt-2">{description}</p>}

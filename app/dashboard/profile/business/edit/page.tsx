@@ -141,7 +141,7 @@ export default function Page() {
         </div>
 
         <div>
-          <label className="block mb-1">Company Description</label>
+          <label className="block mb-1">Description</label>
           <textarea
             className="w-full p-2 rounded bg-white/10 border border-white/20"
             value={description}

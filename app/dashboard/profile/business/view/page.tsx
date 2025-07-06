@@ -43,7 +43,6 @@ export default function BusinessProfileView() {
           .single();
 
         if (error || !data) {
-          console.warn('No profile found, trying waitlist fallback.');
           const { data: waitlistData, error: waitlistError } = await supabase
             .from('waitlist')
             .select('full_name')
@@ -53,6 +52,9 @@ export default function BusinessProfileView() {
           if (!waitlistError && waitlistData?.full_name) {
             setFullName(waitlistData.full_name);
           }
+
+          setUsername('');
+          setEditHref('/dashboard/profile/business/edit');
         } else {
           setFullName(data.full_name || '');
           setUsername(data.username || '');
@@ -62,6 +64,16 @@ export default function BusinessProfileView() {
           setWebsite(data.website || '');
           setProfileUrl(data.profile_url || null);
           setEditHref('/dashboard/profile/business/edit');
+
+          if (!data.full_name) {
+            const { data: waitlistData } = await supabase
+              .from('waitlist')
+              .select('full_name')
+              .eq('email', userEmail)
+              .single();
+
+            if (waitlistData?.full_name) setFullName(waitlistData.full_name);
+          }
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error occurred';
@@ -93,9 +105,9 @@ export default function BusinessProfileView() {
           )}
 
           <div>
-            <h1 className="text-3xl font-bold mb-1">{username}</h1>
-            <p className="text-sm text-white/80">{fullName}</p>
-            <p className="text-sm text-yellow-400 capitalize">{role}</p>
+            <h1 className="text-3xl font-bold mb-1">{fullName || 'Unnamed'}</h1>
+            <p className="text-sm text-yellow-400">@{username || 'username'}</p>
+            <p className="text-sm text-white/60 capitalize mt-1">{role}</p>
             <p className="text-sm text-white/70 mt-1">Contact: {email}</p>
 
             {description && (

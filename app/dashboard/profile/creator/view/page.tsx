@@ -1,4 +1,5 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import StatBadge from '@/components/StatBadge';
@@ -11,7 +12,8 @@ export default function CreatorProfileView() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('');
   const [email, setEmail] = useState('');
   const [bio, setBio] = useState('');
@@ -35,12 +37,13 @@ export default function CreatorProfileView() {
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
-          .eq('user_id', userId) 
+          .eq('user_id', userId)
           .single();
 
         if (error || !data) throw new Error('Profile not found');
 
-        setName(data.name || '');
+        setUsername(data.username || '');
+        setFullName(data.full_name || '');
         setRole(data.role || '');
         setEditHref('/dashboard/profile/creator/edit');
         setEmail(data.email || '');
@@ -82,8 +85,9 @@ export default function CreatorProfileView() {
             />
           )}
           <div>
-            <h1 className="text-3xl font-bold mb-1">{name}</h1>
-            <p className="text-sm text-yellow-400 capitalize">{role}</p>
+            <h1 className="text-3xl font-bold mb-1">{fullName || 'Unnamed'}</h1>
+            <p className="text-sm text-yellow-400">@{username}</p>
+            <p className="text-sm text-white/60 capitalize mt-1">{role}</p>
             <p className="text-sm text-white/70 mt-1">Contact: {email}</p>
             {bio && <p className="text-white/70 max-w-md mt-2">{bio}</p>}
           </div>

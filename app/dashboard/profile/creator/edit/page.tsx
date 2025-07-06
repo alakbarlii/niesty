@@ -7,7 +7,8 @@ export default function Page() {
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
   const [email, setEmail] = useState('');
   const [platforms, setPlatforms] = useState([{ name: '', url: '' }]);
@@ -43,7 +44,8 @@ export default function Page() {
         return;
       }
 
-      setName(data.name || '');
+      setUsername(data.username || '');
+      setFullName(data.full_name || '');
       setBio(data.bio || '');
 
       try {
@@ -107,11 +109,12 @@ export default function Page() {
 
     const { error } = await supabase.from('profiles').upsert({
       id: userId,
-      name,
+      full_name: fullName,
+      username,
       bio,
       email,
       social_links: JSON.stringify(platforms),
-      profile_url: uploadedProfileUrl, 
+      profile_url: uploadedProfileUrl,
       role: 'creator',
     });
 
@@ -125,12 +128,23 @@ export default function Page() {
       <h1 className="text-2xl font-bold mb-4">Edit Profile</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="block mb-1">Name</label>
+          <label className="block mb-1">Full Name</label>
           <input
             type="text"
             className="w-full p-2 rounded bg-white/10 border border-white/20"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block mb-1">Username</label>
+          <input
+            type="text"
+            className="w-full p-2 rounded bg-white/10 border border-white/20"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
           />
         </div>

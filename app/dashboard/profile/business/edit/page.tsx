@@ -8,6 +8,7 @@ export default function Page() {
 
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
   const [profileFile, setProfileFile] = useState<File | null>(null);
@@ -39,6 +40,7 @@ export default function Page() {
         console.error('Profile fetch error:', error);
       } else if (data) {
         setUsername(data.username || '');
+        setFullName(data.full_name || '');
         setDescription(data.description || '');
         setWebsite(data.website || '');
       }
@@ -87,12 +89,13 @@ export default function Page() {
     const { error } = await supabase
       .from('profiles')
       .upsert({
-        id: userId,
+        user_id: userId,
         email,
-        username, 
+        username,
+        full_name: fullName,
         description,
         website,
-        profile_url: uploadedProfileUrl, 
+        profile_url: uploadedProfileUrl,
         role: 'business',
       });
 
@@ -105,6 +108,17 @@ export default function Page() {
     <div className="text-white p-6 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Edit Business Profile</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label className="block mb-1">Full Name</label>
+          <input
+            type="text"
+            className="w-full p-2 rounded bg-white/10 border border-white/20"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+          />
+        </div>
+
         <div>
           <label className="block mb-1">Brand / Company Name</label>
           <input
@@ -137,12 +151,12 @@ export default function Page() {
         </div>
 
         <div>
-          <label className="block mb-1">Profile Picture (optional)</label>
+          <label className="block mb-1">Logo / Profile Picture (optional)</label>
           <input
             type="file"
             accept="image/*"
             onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
+              if (e.target.files?.[0]) {
                 setProfileFile(e.target.files[0]);
               }
             }}

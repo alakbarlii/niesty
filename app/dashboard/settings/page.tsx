@@ -87,7 +87,7 @@ export default function SettingsPage() {
             <div className="mb-4">
               <button
                 onClick={() => router.push(editHref)}
-                className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-3 px-4 rounded-lg transition"
+                className="w-full bg-black hover:bg-black text-white font-semibold py-3 px-4 rounded-lg transition"
               >
                 Edit Profile
               </button>

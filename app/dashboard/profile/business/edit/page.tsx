@@ -11,7 +11,6 @@ export default function Page() {
   const [fullName, setFullName] = useState('');
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
-  const [email, setEmail] = useState('');
   const [profileFile, setProfileFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -31,7 +30,6 @@ export default function Page() {
 
       const userId = session.user.id;
       const userEmail = session.user.email || '';
-      setEmail(userEmail);
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -39,23 +37,29 @@ export default function Page() {
         .eq('user_id', userId)
         .single();
 
-      if (profileError || !profileData) {
-        console.warn('No profile data found, trying waitlist fallback.');
-
-        const { data: waitlistData, error: waitlistError } = await supabase
+      if (!profileData || profileError) {
+        const { data: waitlistData } = await supabase
           .from('waitlist')
           .select('full_name')
           .eq('email', userEmail)
           .single();
 
-        if (!waitlistError && waitlistData?.full_name) {
-          setFullName(waitlistData.full_name);
-        }
+        if (waitlistData?.full_name) setFullName(waitlistData.full_name);
       } else {
         setUsername(profileData.username || '');
         setFullName(profileData.full_name || '');
         setDescription(profileData.description || '');
         setWebsite(profileData.website || '');
+
+        if (!profileData.full_name) {
+          const { data: waitlistData } = await supabase
+            .from('waitlist')
+            .select('full_name')
+            .eq('email', userEmail)
+            .single();
+
+          if (waitlistData?.full_name) setFullName(waitlistData.full_name);
+        }
       }
 
       setLoading(false);
@@ -73,7 +77,8 @@ export default function Page() {
     } = await supabase.auth.getSession();
 
     const userId = session?.user?.id;
-    if (!userId || !email) return;
+    const userEmail = session?.user?.email;
+    if (!userId || !userEmail) return;
 
     let uploadedProfileUrl: string | null = null;
 
@@ -100,7 +105,7 @@ export default function Page() {
 
     const { error } = await supabase.from('profiles').upsert({
       user_id: userId,
-      email,
+      email: userEmail,
       username,
       full_name: fullName,
       description,
@@ -141,7 +146,7 @@ export default function Page() {
         </div>
 
         <div>
-          <label className="block mb-1">Description</label>
+          <label className="block mb-1">Company Description</label>
           <textarea
             className="w-full p-2 rounded bg-white/10 border border-white/20"
             value={description}

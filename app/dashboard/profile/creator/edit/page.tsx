@@ -10,9 +10,9 @@ export default function Page() {
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
-  const [email, setEmail] = useState('');
   const [platforms, setPlatforms] = useState([{ name: '', url: '' }]);
   const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [profileUrl, setProfileUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -31,7 +31,6 @@ export default function Page() {
 
       const userId = session.user.id;
       const userEmail = session.user.email || '';
-      setEmail(userEmail);
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -40,8 +39,6 @@ export default function Page() {
         .single();
 
       if (profileError || !profileData) {
-        console.warn('No profile data found, trying waitlist fallback.');
-
         const { data: waitlistData, error: waitlistError } = await supabase
           .from('waitlist')
           .select('full_name')
@@ -55,12 +52,23 @@ export default function Page() {
         setUsername(profileData.username || '');
         setFullName(profileData.full_name || '');
         setBio(profileData.bio || '');
+        setProfileUrl(profileData.profile_url || null);
 
         try {
           const parsedLinks = JSON.parse(profileData.social_links || '[]');
           setPlatforms(parsedLinks);
         } catch (e) {
           console.error('Error parsing social links:', e);
+        }
+
+        if (!profileData.full_name) {
+          const { data: waitlistData } = await supabase
+            .from('waitlist')
+            .select('full_name')
+            .eq('email', userEmail)
+            .single();
+
+          if (waitlistData?.full_name) setFullName(waitlistData.full_name);
         }
       }
 
@@ -91,9 +99,10 @@ export default function Page() {
     } = await supabase.auth.getSession();
 
     const userId = session?.user?.id;
-    if (!userId) return;
+    const userEmail = session?.user?.email;
+    if (!userId || !userEmail) return;
 
-    let uploadedProfileUrl: string | null = null;
+    let uploadedProfileUrl = profileUrl;
 
     if (profileFile) {
       const fileExt = profileFile.name.split('.').pop();
@@ -107,8 +116,7 @@ export default function Page() {
       if (uploadError) {
         console.error('Profile picture upload failed:', uploadError);
       } else {
-        const { data: publicUrlData } = supabase
-          .storage
+        const { data: publicUrlData } = supabase.storage
           .from('profiles')
           .getPublicUrl(filePath);
 
@@ -121,10 +129,10 @@ export default function Page() {
       full_name: fullName,
       username,
       bio,
-      email,
       social_links: JSON.stringify(platforms),
       profile_url: uploadedProfileUrl,
       role: 'creator',
+      email: userEmail,
     });
 
     if (error) console.error('Profile update error:', error);

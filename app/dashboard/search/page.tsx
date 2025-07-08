@@ -145,12 +145,12 @@ export default function Page() {
                       height={64}
                       className="rounded-full object-cover border border-white/20"
                     />
-                    <div className="flex flex-col gap-1 w-full">
-                      <div className="text-white font-bold text-xl leading-tight">{profile.full_name}</div>
-                      <div className="text-sm text-gray-400 capitalize">{profile.role}</div>
+                    <div className="flex flex-col justify-between w-full">
+                      <div className="text-white font-extrabold text-xl mb-1">{profile.full_name}</div>
+                      <div className="text-sm text-gray-400 capitalize mb-1">{profile.role}</div>
                       <div className="flex justify-between items-center">
                         <div className="text-sm text-gray-300 truncate max-w-xs">{profile.description}</div>
-                        <div className="text-sm text-yellow-400 font-medium">⭐ 5.0</div>
+                        <div className="text-sm text-yellow-400 font-medium ml-2">⭐ 5.0</div>
                       </div>
                     </div>
                   </div>

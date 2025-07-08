@@ -89,7 +89,7 @@ export default function Page() {
         <div className="flex flex-col gap-4 pt-10 mb-2">
           <h1 className="text-4xl font-bold text-white tracking-tight mb-6">Search</h1>
           <div className="relative w-full">
-          <Search className="absolute z-10 left-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white" />
+          <Search className="absolute z-10 left-4.5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white" />
 
             <input
               type="text"
@@ -104,7 +104,8 @@ export default function Page() {
               searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-5 top-1/2 h-8 transform -translate-y-1/2 text-3xl text-gray-400 hover:text-white"
+                  className="absolute right-5 top-1/2 transform -translate-y-[45%] text-3xl text-gray-400 hover:text-white"
+
                 >
                   &times;
                 </button>

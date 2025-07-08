@@ -52,7 +52,7 @@ export default function Page() {
       const timeout = setTimeout(() => {
         const lowerSearch = searchTerm.toLowerCase();
         const filtered = profiles.filter((p) => {
-          const matchesName = p.full_name?.toLowerCase().startsWith(lowerSearch);
+          const matchesName = p.full_name?.toLowerCase().includes(lowerSearch);
           const matchesRole = roleFilter === 'all' || p.role === roleFilter;
           return matchesName && matchesRole;
         });
@@ -76,7 +76,7 @@ export default function Page() {
   return (
     <section className="p-6 md:p-12">
       <div className="flex flex-col gap-8 max-w-6xl mx-auto">
-        <div className="flex flex-col gap-4 pt-6 mb-4">
+        <div className="flex flex-col gap-4 pt-10 mb-3">
           <h1 className="text-4xl font-bold text-white">Search</h1>
           <div className="relative w-full max-w-xl">
             <input
@@ -84,10 +84,10 @@ export default function Page() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search..."
-              className="w-full rounded-xl border px-4 py-3 pr-14 text-lg mt-2 focus:outline-none"
+              className="w-full rounded-xl border px-4 py-3 pr-14 text-lg focus:outline-none"
             />
             {loading ? (
-              <div className="absolute right-3 top-3 w-6 h-6 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
+              <div className="absolute right-3 top-3 w-6 h-6 border-2 mt-2 border-t-white border-gray-400 rounded-full animate-spin" />
             ) : (
               searchTerm && (
                 <button
@@ -116,9 +116,9 @@ export default function Page() {
         </div>
 
         <div className="min-h-[100px]">
-          {loading && searchTerm && <p className="text-gray-400 mt-4">Searching...</p>}
+          {loading && <p className="text-gray-400 mt-4">Searching...</p>}
 
-          {!loading && searchTerm && visibleProfiles.length === 0 && (
+          {!loading && visibleProfiles.length === 0 && (
             <p className="text-gray-400 mt-4">No matching profiles found.</p>
           )}
 

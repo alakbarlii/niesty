@@ -1,4 +1,4 @@
-
+// app/dashboard/search/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -146,7 +146,7 @@ export default function Page() {
                       className="rounded-full object-cover border border-white/20"
                     />
                     <div className="flex flex-col gap-1 w-full">
-                      <div className="text-white font-semibold text-lg leading-tight">{profile.full_name}</div>
+                      <div className="text-white font-bold text-xl leading-tight">{profile.full_name}</div>
                       <div className="text-sm text-gray-400 capitalize">{profile.role}</div>
                       <div className="flex justify-between items-center">
                         <div className="text-sm text-gray-300 truncate max-w-xs">{profile.description}</div>

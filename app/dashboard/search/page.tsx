@@ -52,14 +52,21 @@ export default function Page() {
       const timeout = setTimeout(() => {
         const lowerSearch = searchTerm.toLowerCase();
         const filtered = profiles.filter((p) => {
-          const matchesName = p.full_name?.toLowerCase().includes(lowerSearch);
+          const matchesName = p.full_name?.toLowerCase().includes(lowerSearch) || p.username?.toLowerCase().includes(lowerSearch);
           const matchesRole = roleFilter === 'all' || p.role === roleFilter;
           return matchesName && matchesRole;
         });
-        console.log('Filtered profiles:', filtered);
-        setFilteredProfiles(filtered);
-        setVisibleProfiles(filtered.slice(0, pageSize));
-        setHasMore(filtered.length > pageSize);
+
+        if (!searchTerm && roleFilter === 'all') {
+          setFilteredProfiles(profiles);
+          setVisibleProfiles(profiles.slice(0, pageSize));
+          setHasMore(profiles.length > pageSize);
+        } else {
+          setFilteredProfiles(filtered);
+          setVisibleProfiles(filtered.slice(0, pageSize));
+          setHasMore(filtered.length > pageSize);
+        }
+
         setLoading(false);
       }, 300);
 
@@ -102,15 +109,15 @@ export default function Page() {
         </div>
 
         <div className="flex gap-2 text-sm">
-          {['all', 'creator', 'business'].map((role) => (
+          {[{ label: 'All', value: 'all' }, { label: 'Creators', value: 'creator' }, { label: 'Businesses', value: 'business' }].map(({ label, value }) => (
             <button
-              key={role}
-              onClick={() => setRoleFilter(role as 'all' | 'creator' | 'business')}
+              key={value}
+              onClick={() => setRoleFilter(value as 'all' | 'creator' | 'business')}
               className={`px-4 py-1.5 rounded-full border text-sm font-medium ${
-                roleFilter === role ? 'bg-white text-black' : 'bg-black text-white border-white'
+                roleFilter === value ? 'bg-white text-black' : 'bg-black text-white border-white'
               }`}
             >
-              {role === 'all' ? 'All' : role === 'creator' ? 'Creators' : 'Businesses'}
+              {label}
             </button>
           ))}
         </div>

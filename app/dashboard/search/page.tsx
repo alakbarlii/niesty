@@ -130,26 +130,24 @@ export default function Page() {
           )}
 
           {!loading && visibleProfiles.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
               {visibleProfiles.map((profile) => (
                 <Link
                   key={profile.id}
                   href={`/dashboard/view/${profile.username}`}
-                  className="bg-white/5 border border-white/10 p-4 rounded-xl hover:shadow-lg transition"
+                  className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.02] transition duration-200 shadow-lg hover:shadow-xl"
                 >
-                  <div className="flex gap-4 items-center">
+                  <div className="p-4 flex flex-col items-center text-center">
                     <Image
                       src={profile.profile_url || '/default-avatar.png'}
                       alt="avatar"
-                      width={48}
-                      height={48}
-                      className="rounded-full object-cover"
+                      width={80}
+                      height={80}
+                      className="rounded-full object-cover mb-4 border border-white/20"
                     />
-                    <div>
-                      <div className="font-semibold text-white">{profile.full_name}</div>
-                      <div className="text-sm text-gray-400 capitalize">{profile.role}</div>
-                      <div className="text-sm text-gray-300 truncate max-w-xs">{profile.description}</div>
-                    </div>
+                    <div className="font-semibold text-white text-lg">{profile.full_name}</div>
+                    <div className="text-sm text-gray-400 capitalize mb-1">{profile.role}</div>
+                    <div className="text-sm text-gray-300 line-clamp-2 max-w-xs">{profile.description}</div>
                   </div>
                 </Link>
               ))}

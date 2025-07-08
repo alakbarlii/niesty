@@ -104,7 +104,7 @@ export default function Page() {
               searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-5 top-1/2 transform -translate-y-[45%] text-3xl text-gray-400 hover:text-white"
+                  className="absolute right-5 top-1/2 transform -translate-y-[55%] text-3xl text-gray-400 hover:text-white"
 
                 >
                   &times;

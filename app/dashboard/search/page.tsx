@@ -137,7 +137,7 @@ export default function Page() {
                   href={`/dashboard/view/${profile.username}`}
                   className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.01] transition duration-200 shadow-md hover:shadow-xl"
                 >
-                  <div className="p-5 flex items-center gap-4">
+                  <div className="p-5 flex items-start gap-4">
                     <Image
                       src={profile.profile_url || '/default-avatar.png'}
                       alt="avatar"
@@ -145,11 +145,13 @@ export default function Page() {
                       height={64}
                       className="rounded-full object-cover border border-white/20"
                     />
-                    <div>
+                    <div className="flex flex-col gap-1 w-full">
                       <div className="text-white font-semibold text-lg">{profile.full_name}</div>
                       <div className="text-sm text-gray-400 capitalize">{profile.role}</div>
-                      <div className="text-sm text-gray-300 truncate max-w-xs">{profile.description}</div>
-                      <div className="text-sm text-yellow-400 font-medium mt-1">⭐ 5.0</div>
+                      <div className="flex justify-between items-center">
+                        <div className="text-sm text-gray-300 truncate max-w-xs">{profile.description}</div>
+                        <div className="text-sm text-yellow-400 font-medium">⭐ 5.0</div>
+                      </div>
                     </div>
                   </div>
                 </Link>

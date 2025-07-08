@@ -84,24 +84,24 @@ export default function Page() {
 
   return (
     <section className="p-6 md:p-12">
-      <div className="flex flex-col gap-8 max-w-3xl mx-auto">
-        <div className="flex flex-col gap-4 pt-10 mb-3">
-          <h1 className="text-4xl font-bold text-white">Search</h1>
+      <div className="flex flex-col gap-6 max-w-3xl mx-auto">
+        <div className="flex flex-col gap-2 pt-10 mb-2">
+          <h1 className="text-5xl font-extrabold text-white mb-1">Search</h1>
           <div className="relative w-full max-w-xl">
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search..."
-              className="w-full rounded-xl border px-4 py-2.5 pr-14 text-lg focus:outline-none"
+              className="w-full rounded-xl border px-4 py-2 pr-14 text-lg focus:outline-none"
             />
             {loading ? (
-              <div className="absolute right-3 top-3 w-6 h-6 border-2 mt-1 border-t-white border-gray-400 rounded-full animate-spin" />
+              <div className="absolute right-3 top-2.5 w-6 h-6 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
             ) : (
               searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-2 text-3xl text-gray-400 hover:text-white"
+                  className="absolute right-3 top-1.5 text-3xl text-gray-400 hover:text-white"
                 >
                   &times;
                 </button>
@@ -110,7 +110,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="flex gap-2 text-sm">
+        <div className="flex gap-2 text-sm -mt-2">
           {[{ label: 'All', value: 'all' }, { label: 'Creators', value: 'creator' }, { label: 'Businesses', value: 'business' }].map(({ label, value }) => (
             <button
               key={value}
@@ -153,7 +153,7 @@ export default function Page() {
                     <div className="flex flex-col justify-start w-full">
                       <div className="text-white font-extrabold text-xl mb-1">{profile.full_name}</div>
                       <div className="text-sm text-gray-400 capitalize mb-1">
-                        {profile.role} <span className="text-yellow-400 ml-1">⭐ 5.0</span>
+                        {profile.role} <span className="text-yellow-400 ml-2">⭐ 5.0</span>
                       </div>
                       <div className="text-sm text-gray-300 truncate max-w-xs">{profile.description}</div>
                     </div>

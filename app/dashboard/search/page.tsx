@@ -87,16 +87,16 @@ export default function Page() {
     <section className="p-6 md:p-12">
       <div className="flex flex-col gap-6 max-w-3xl mx-auto">
         <div className="flex flex-col gap-4 pt-10 mb-2">
-          <h1 className="text-3xl font-extrabold text-white tracking-tight mb-3">Search</h1>
-          <div className="relative w-full max-w-xl">
+          <h1 className="text-5xl font-extrabold text-white tracking-tight mb-1">Search</h1>
+          <div className="relative w-full">
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search..."
-              className="w-full rounded-full border px-5 py-3 pr-14 left-4 text-lg bg-black/40 backdrop-blur-sm text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white"
+              className="w-full pl-10 pr-14 py-3 rounded-full border text-lg bg-black/40 backdrop-blur-sm text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white"
             />
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             {loading ? (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
             ) : (
@@ -112,7 +112,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="flex gap-2 text-sm -mt-2">
+        <div className="flex gap-2 text-sm">
           {[{ label: 'All', value: 'all' }, { label: 'Creators', value: 'creator' }, { label: 'Businesses', value: 'business' }].map(({ label, value }) => (
             <button
               key={value}

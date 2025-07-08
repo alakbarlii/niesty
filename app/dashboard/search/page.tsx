@@ -96,7 +96,7 @@ export default function Page() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search..."
-              className="w-full rounded-full border pl-12 pr-12 py-3 text-lg bg-black/40 backdrop-blur-sm text-white placeholder:text-gray-400 focus:outline-none"
+              className="w-full rounded-full border pl-12 pr-12 py-3 text-lg bg-black/40 backdrop-blur-sm text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
             />
             {loading ? (
               <div className="absolute right-5 top-1/2 transform -translate-y-1/2 w-6 h-6 border-2 border-t-white border-gray-400 rounded-full animate-spin" />

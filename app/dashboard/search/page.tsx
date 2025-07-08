@@ -23,7 +23,8 @@ export default function Page() {
   const [filteredProfiles, setFilteredProfiles] = useState<Profile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'creator' | 'business'>('all');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
 
   useEffect(() => {
     const supabase = createBrowserClient(
@@ -37,8 +38,7 @@ export default function Page() {
         const others = data.filter((profile) => profile.user_id !== session?.user?.id);
         setProfiles(others);
       }
-      // Always delay just a bit for smoother feel
-      setTimeout(() => setLoading(false), 400);
+      setInitialLoad(false);
     };
 
     if (session?.user?.id) {
@@ -47,14 +47,22 @@ export default function Page() {
   }, [session]);
 
   useEffect(() => {
-    const lowerSearch = searchTerm.toLowerCase();
-    const filtered = profiles.filter((p) => {
-      const matchesName = p.full_name?.toLowerCase().includes(lowerSearch);
-      const matchesRole = roleFilter === 'all' || p.role === roleFilter;
-      return matchesName && matchesRole;
-    });
-    setFilteredProfiles(filtered);
-  }, [searchTerm, roleFilter, profiles]);
+    if (!initialLoad) {
+      setLoading(true);
+      const timeout = setTimeout(() => {
+        const lowerSearch = searchTerm.toLowerCase();
+        const filtered = profiles.filter((p) => {
+          const matchesName = p.full_name?.toLowerCase().includes(lowerSearch);
+          const matchesRole = roleFilter === 'all' || p.role === roleFilter;
+          return matchesName && matchesRole;
+        });
+        setFilteredProfiles(filtered);
+        setLoading(false);
+      }, 300);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [searchTerm, roleFilter, profiles, initialLoad]);
 
   return (
     <section className="p-4 md:p-8">
@@ -76,7 +84,7 @@ export default function Page() {
             searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1.5 text-3xl text-gray-400 hover:text-white"
+                className="absolute right-2 top-1.5 text-3xl text-gray-400 hover:text-white"
               >
                 &times;
               </button>
@@ -99,11 +107,15 @@ export default function Page() {
           ))}
         </div>
 
-        {/* Loading / Empty / Results */}
+        {/* Results */}
         <div className="mt-6">
-          {!loading && filteredProfiles.length === 0 && searchTerm ? (
+          {loading && searchTerm && <p className="text-gray-400">Searching...</p>}
+
+          {!loading && searchTerm && filteredProfiles.length === 0 && (
             <p className="text-gray-400">No matching profiles found.</p>
-          ) : (
+          )}
+
+          {!loading && filteredProfiles.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredProfiles.map((profile) => (
                 <Link

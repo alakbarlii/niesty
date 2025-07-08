@@ -89,7 +89,7 @@ export default function Page() {
         <div className="flex flex-col gap-4 pt-10 mb-2">
           <h1 className="text-5xl font-extrabold text-white tracking-tight mb-6">Search</h1>
           <div className="relative w-full">
-          <Search className="absolute z-10 left-4 top-7/10 transform -translate-y-1/2 w-6 h-6 text-white" />
+          <Search className="absolute z-10 left-4 top-2/3 transform -translate-y-1/2 w-6 h-6 text-white" />
 
             <input
               type="text"

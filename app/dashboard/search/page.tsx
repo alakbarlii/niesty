@@ -88,14 +88,14 @@ export default function Page() {
       <div className="flex flex-col gap-6 max-w-3xl mx-auto">
         <div className="flex flex-col gap-4 pt-10 mb-2">
           <h1 className="text-5xl font-extrabold text-white tracking-tight mb-4">Search</h1>
-          <div className="relative w-full max-w-xl">
+          <div className="relative w-full">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search..."
-              className="w-full rounded-full border pl-12 pr-14 py-3 text-lg bg-black/40 backdrop-blur-sm text-white placeholder:text-gray-400 focus:outline-none"
+              className="w-full rounded-full border pl-12 pr-12 py-3 text-lg bg-black/40 backdrop-blur-sm text-white placeholder:text-gray-400 focus:outline-none"
             />
             {loading ? (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 border-2 border-t-white border-gray-400 rounded-full animate-spin" />

@@ -82,7 +82,7 @@ export default function Page() {
 
   return (
     <section className="p-6 md:p-12">
-      <div className="flex flex-col gap-8 max-w-6xl mx-auto">
+      <div className="flex flex-col gap-8 max-w-3xl mx-auto">
         <div className="flex flex-col gap-4 pt-10 mb-3">
           <h1 className="text-4xl font-bold text-white">Search</h1>
           <div className="relative w-full max-w-xl">
@@ -130,24 +130,27 @@ export default function Page() {
           )}
 
           {!loading && visibleProfiles.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+            <div className="flex flex-col gap-6 mt-6">
               {visibleProfiles.map((profile) => (
                 <Link
                   key={profile.id}
                   href={`/dashboard/view/${profile.username}`}
-                  className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.02] transition duration-200 shadow-lg hover:shadow-xl"
+                  className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.01] transition duration-200 shadow-md hover:shadow-xl"
                 >
-                  <div className="p-4 flex flex-col items-center text-center">
+                  <div className="p-5 flex items-center gap-4">
                     <Image
                       src={profile.profile_url || '/default-avatar.png'}
                       alt="avatar"
-                      width={80}
-                      height={80}
-                      className="rounded-full object-cover mb-4 border border-white/20"
+                      width={64}
+                      height={64}
+                      className="rounded-full object-cover border border-white/20"
                     />
-                    <div className="font-semibold text-white text-lg">{profile.full_name}</div>
-                    <div className="text-sm text-gray-400 capitalize mb-1">{profile.role}</div>
-                    <div className="text-sm text-gray-300 line-clamp-2 max-w-xs">{profile.description}</div>
+                    <div>
+                      <div className="text-white font-semibold text-lg">{profile.full_name}</div>
+                      <div className="text-sm text-gray-400 capitalize">{profile.role}</div>
+                      <div className="text-sm text-gray-300 truncate max-w-xs">{profile.description}</div>
+                      <div className="text-sm text-yellow-400 font-medium mt-1">⭐ 5.0</div>
+                    </div>
                   </div>
                 </Link>
               ))}

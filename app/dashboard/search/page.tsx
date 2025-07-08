@@ -139,21 +139,21 @@ export default function Page() {
                   href={`/dashboard/view/${profile.username}`}
                   className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.01] transition duration-200 shadow-md hover:shadow-xl"
                 >
-                  <div className="p-5 flex gap-4">
-                    <Image
-                      src={profile.profile_url || '/default-avatar.png'}
-                      alt="avatar"
-                      width={64}
-                      height={64}
-                      className="rounded-full object-cover border border-white/20"
-                    />
-                    <div className="flex flex-col justify-between w-full">
+                  <div className="p-5 flex gap-4 items-start">
+                    <div className="flex flex-col items-center w-[64px]">
+                      <Image
+                        src={profile.profile_url || '/default-avatar.png'}
+                        alt="avatar"
+                        width={64}
+                        height={64}
+                        className="w-[64px] h-[64px] rounded-full object-cover border border-white/20"
+                      />
+                      <div className="text-xs text-gray-400 mt-1 truncate">@{profile.username}</div>
+                    </div>
+                    <div className="flex flex-col justify-start w-full">
                       <div className="text-white font-extrabold text-xl mb-1">{profile.full_name}</div>
-                      <div className="flex justify-between items-center mb-1">
-                        <div className="text-sm text-gray-400 capitalize">
-                          {profile.role} <span className="text-yellow-400 ml-1">⭐ 5.0</span>
-                        </div>
-                        <div className="text-xs text-gray-500">@{profile.username}</div>
+                      <div className="text-sm text-gray-400 capitalize mb-1">
+                        {profile.role} <span className="text-yellow-400 ml-1">⭐ 5.0</span>
                       </div>
                       <div className="text-sm text-gray-300 truncate max-w-xs">{profile.description}</div>
                     </div>

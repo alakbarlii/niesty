@@ -87,9 +87,9 @@ export default function Page() {
     <section className="p-6 md:p-12">
       <div className="flex flex-col gap-6 max-w-3xl mx-auto">
         <div className="flex flex-col gap-4 pt-10 mb-2">
-          <h1 className="text-5xl font-extrabold text-white tracking-tight mb-6">Search</h1>
+          <h1 className="text-4xl font-bold text-white tracking-tight mb-6">Search</h1>
           <div className="relative w-full">
-          <Search className="absolute z-10 left-4 top-2/3 transform -translate-y-1/2 w-6 h-6 text-white" />
+          <Search className="absolute z-10 left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white" />
 
             <input
               type="text"
@@ -99,12 +99,12 @@ export default function Page() {
               className="w-full rounded-full border pl-12 pr-12 py-3 text-lg bg-black/40 backdrop-blur-sm text-white placeholder:text-gray-400 focus:outline-none"
             />
             {loading ? (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 w-6 h-8 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
+              <div className="absolute right-5 top-1/2 transform -translate-y-1/2 w-7 h-7 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
             ) : (
               searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 h-8 transform -translate-y-1/2 text-3xl text-gray-400 hover:text-white"
+                  className="absolute right-5 top-1/2 h-8 transform -translate-y-1/2 text-3xl text-gray-400 hover:text-white"
                 >
                   &times;
                 </button>

@@ -76,7 +76,7 @@ export default function Page() {
   return (
     <section className="p-6 md:p-12">
       <div className="flex flex-col gap-8 max-w-6xl mx-auto">
-        <div className="flex flex-col gap-4 pt-6">
+        <div className="flex flex-col gap-4 pt-6 mb-4">
           <h1 className="text-4xl font-bold text-white">Search</h1>
           <div className="relative w-full max-w-xl">
             <input

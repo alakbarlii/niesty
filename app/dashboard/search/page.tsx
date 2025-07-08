@@ -2,7 +2,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSession } from '@/lib/supabase/supabase-provider';
 import { createBrowserClient } from '@supabase/ssr';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -18,13 +17,16 @@ interface Profile {
 }
 
 export default function Page() {
-  const session = useSession();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [filteredProfiles, setFilteredProfiles] = useState<Profile[]>([]);
+  const [visibleProfiles, setVisibleProfiles] = useState<Profile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'creator' | 'business'>('all');
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+
+  const pageSize = 6;
 
   useEffect(() => {
     const supabase = createBrowserClient(
@@ -35,16 +37,14 @@ export default function Page() {
     const fetchProfiles = async () => {
       const { data, error } = await supabase.from('profiles').select('*');
       if (!error && data) {
-        const others = data.filter((profile) => profile.user_id !== session?.user?.id);
-        setProfiles(others);
+        setProfiles(data);
+        console.log('Fetched profiles:', data);
       }
       setInitialLoad(false);
     };
 
-    if (session?.user?.id) {
-      fetchProfiles();
-    }
-  }, [session]);
+    fetchProfiles();
+  }, []);
 
   useEffect(() => {
     if (!initialLoad) {
@@ -52,11 +52,14 @@ export default function Page() {
       const timeout = setTimeout(() => {
         const lowerSearch = searchTerm.toLowerCase();
         const filtered = profiles.filter((p) => {
-          const matchesName = p.full_name?.toLowerCase().includes(lowerSearch);
+          const matchesName = p.full_name?.toLowerCase().startsWith(lowerSearch);
           const matchesRole = roleFilter === 'all' || p.role === roleFilter;
           return matchesName && matchesRole;
         });
+        console.log('Filtered profiles:', filtered);
         setFilteredProfiles(filtered);
+        setVisibleProfiles(filtered.slice(0, pageSize));
+        setHasMore(filtered.length > pageSize);
         setLoading(false);
       }, 300);
 
@@ -64,41 +67,46 @@ export default function Page() {
     }
   }, [searchTerm, roleFilter, profiles, initialLoad]);
 
-  return (
-    <section className="p-4 md:p-8">
-      <div className="flex flex-col gap-4">
-        <h1 className="text-3xl font-bold text-white">Search</h1>
+  const loadMore = () => {
+    const next = filteredProfiles.slice(visibleProfiles.length, visibleProfiles.length + pageSize);
+    setVisibleProfiles([...visibleProfiles, ...next]);
+    setHasMore(filteredProfiles.length > visibleProfiles.length + next.length);
+  };
 
-        {/* Search Bar */}
-        <div className="relative w-full max-w-xl">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search..."
-            className="w-full rounded-xl border px-4 py-2 pr-14 text-lg focus:outline-none"
-          />
-          {loading ? (
-            <div className="absolute right-3 top-2.5 w-6 h-6 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
-          ) : (
-            searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2 top-1.5 text-3xl text-gray-400 hover:text-white"
-              >
-                &times;
-              </button>
-            )
-          )}
+  return (
+    <section className="p-6 md:p-12">
+      <div className="flex flex-col gap-8 max-w-6xl mx-auto">
+        <div className="flex flex-col gap-4 pt-6">
+          <h1 className="text-4xl font-bold text-white">Search</h1>
+          <div className="relative w-full max-w-xl">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search..."
+              className="w-full rounded-xl border px-4 py-3 pr-14 text-lg focus:outline-none"
+            />
+            {loading ? (
+              <div className="absolute right-3 top-3 w-6 h-6 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
+            ) : (
+              searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-2 text-3xl text-gray-400 hover:text-white"
+                >
+                  &times;
+                </button>
+              )
+            )}
+          </div>
         </div>
 
-        {/* Role Filters */}
         <div className="flex gap-2 text-sm">
           {['all', 'creator', 'business'].map((role) => (
             <button
               key={role}
               onClick={() => setRoleFilter(role as 'all' | 'creator' | 'business')}
-              className={`px-3 py-1 rounded-full border ${
+              className={`px-4 py-1.5 rounded-full border text-sm font-medium ${
                 roleFilter === role ? 'bg-white text-black' : 'bg-black text-white border-white'
               }`}
             >
@@ -107,17 +115,16 @@ export default function Page() {
           ))}
         </div>
 
-        {/* Results */}
-        <div className="mt-6">
-          {loading && searchTerm && <p className="text-gray-400">Searching...</p>}
+        <div className="min-h-[100px]">
+          {loading && searchTerm && <p className="text-gray-400 mt-4">Searching...</p>}
 
-          {!loading && searchTerm && filteredProfiles.length === 0 && (
-            <p className="text-gray-400">No matching profiles found.</p>
+          {!loading && searchTerm && visibleProfiles.length === 0 && (
+            <p className="text-gray-400 mt-4">No matching profiles found.</p>
           )}
 
-          {!loading && filteredProfiles.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredProfiles.map((profile) => (
+          {!loading && visibleProfiles.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-2">
+              {visibleProfiles.map((profile) => (
                 <Link
                   key={profile.id}
                   href={`/dashboard/view/${profile.username}`}
@@ -139,6 +146,17 @@ export default function Page() {
                   </div>
                 </Link>
               ))}
+            </div>
+          )}
+
+          {!loading && hasMore && (
+            <div className="mt-6 text-center">
+              <button
+                onClick={loadMore}
+                className="px-5 py-2 rounded-full bg-white text-black font-semibold hover:bg-gray-200"
+              >
+                See More
+              </button>
             </div>
           )}
         </div>

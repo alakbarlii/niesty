@@ -58,7 +58,7 @@ export default function Page() {
   return (
     <section className="p-4 md:p-8">
       <div className="flex flex-col gap-4">
-        <h1 className="text-3xl font-bold text-white">Search</h1>
+        <h1 className="text-4xl font-bold text-white">Search</h1>
 
         {/* Search Bar */}
         <div className="relative w-full max-w-xl">
@@ -67,12 +67,15 @@ export default function Page() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search..."
-            className="w-full rounded-xl border px-4 py-2 pr-10 text-lg focus:outline-none"
+            className="w-full rounded-xl border px-4 py-2 pr-14 text-lg focus:outline-none"
           />
-          {searchTerm && (
+          {loading && (
+            <div className="absolute right-3 top-2.5 w-5 h-5 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
+          )}
+          {searchTerm && !loading && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-2 top-2 text-xl text-gray-400 hover:text-white"
+              className="absolute right-2 top-1.5 text-2xl text-gray-400 hover:text-white"
             >
               &times;
             </button>
@@ -98,7 +101,7 @@ export default function Page() {
         <div className="mt-6">
           {loading ? (
             <p className="text-white">Loading profiles...</p>
-          ) : filteredProfiles.length === 0 ? (
+          ) : filteredProfiles.length === 0 && searchTerm ? (
             <p className="text-gray-400">No matching profiles found.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -1,4 +1,3 @@
-// app/dashboard/search/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -26,15 +25,25 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [hasMore, setHasMore] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const pageSize = 6;
 
-  useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setCurrentUserId(data?.user?.id ?? null);
+    };
+
+    fetchUser();
+  }, [supabase.auth]);
+
+  useEffect(() => {
     const fetchProfiles = async () => {
       const { data, error } = await supabase.from('profiles').select('*');
       if (!error && data) {
@@ -45,7 +54,7 @@ export default function Page() {
     };
 
     fetchProfiles();
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     if (!initialLoad) {
@@ -55,7 +64,7 @@ export default function Page() {
         const filtered = profiles.filter((p) => {
           const matchesName = p.full_name?.toLowerCase().includes(lowerSearch);
           const matchesUsername = p.username?.toLowerCase().includes(lowerSearch.replace(/^@/, '')) ||
-                                   ('@' + p.username?.toLowerCase()).includes(lowerSearch);
+            ('@' + p.username?.toLowerCase()).includes(lowerSearch);
           const matchesRole = roleFilter === 'all' || p.role === roleFilter;
           return (matchesName || matchesUsername) && matchesRole;
         });
@@ -86,10 +95,10 @@ export default function Page() {
   return (
     <section className="p-6 md:p-12">
       <div className="flex flex-col gap-6 max-w-3xl mx-auto">
-        <div className="flex flex-col gap-4 pt-10 mb-2">
+        <div className="flex flex-col gap-4 pt-3 mb-1">
           <h1 className="text-4xl font-bold text-white tracking-tight mb-6">Search</h1>
           <div className="relative w-full">
-          <Search className="absolute z-10 left-4.5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white" />
+            <Search className="absolute z-10 left-4.5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white" />
 
             <input
               type="text"
@@ -105,7 +114,6 @@ export default function Page() {
                 <button
                   onClick={() => setSearchTerm('')}
                   className="absolute right-5 top-1/2 transform -translate-y-[60%] text-3xl text-gray-400 hover:text-white"
-
                 >
                   &times;
                 </button>
@@ -140,26 +148,26 @@ export default function Page() {
               {visibleProfiles.map((profile) => (
                 <Link
                   key={profile.id}
-                  href={`/dashboard/view/${profile.username}`}
+                  href={
+                    profile.user_id === currentUserId
+                      ? `/dashboard/profile/${profile.role}`
+                      : `/dashboard/view/${profile.username}`
+                  }
                   className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.01] transition duration-200 shadow-md hover:shadow-xl"
                 >
                   <div className="p-5 flex gap-4 items-start">
-
-                  <div className="flex flex-col items-center w-[64px]">
-                     <div className="w-[64px] h-[64px] rounded-full overflow-hidden border border-white/20">
-                      <Image
-                       src={profile.profile_url || '/default-avatar.png'}
-                        alt="avatar"
-                        width={64}
-                        height={64}
-                        className="object-cover w-full h-full"
-                         />
-                         </div>
-                         
-                       <div className="text-xs text-gray-400 mt-1 truncate">@{profile.username}</div>
-                       </div>
-
-
+                    <div className="flex flex-col items-center w-[64px]">
+                      <div className="w-[64px] h-[64px] rounded-full overflow-hidden border border-white/20">
+                        <Image
+                          src={profile.profile_url || '/default-avatar.png'}
+                          alt="avatar"
+                          width={64}
+                          height={64}
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1 truncate">@{profile.username}</div>
+                    </div>
                     <div className="flex flex-col justify-start w-full pr-2">
                       <div className="text-white font-extrabold text-xl mb-1">{profile.full_name}</div>
                       <div className="text-sm text-gray-400 capitalize mb-1">

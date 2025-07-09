@@ -144,16 +144,22 @@ export default function Page() {
                   className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.01] transition duration-200 shadow-md hover:shadow-xl"
                 >
                   <div className="p-5 flex gap-4 items-start">
-                  <div className="w-[64px] h-[64px] rounded-full overflow-hidden border border-white/20">
+
+                  <div className="flex flex-col items-center w-[64px]">
+                     <div className="w-[64px] h-[64px] rounded-full overflow-hidden border border-white/20">
                       <Image
-                        src={profile.profile_url || '/default-avatar.png'}
+                       src={profile.profile_url || '/default-avatar.png'}
                         alt="avatar"
                         width={64}
                         height={64}
                         className="object-cover w-full h-full"
-                      />
-                      <div className="text-xs text-gray-400 mt-1 truncate">@{profile.username}</div>
-                    </div>
+                         />
+                         </div>
+                         
+                       <div className="text-xs text-gray-400 mt-1 truncate">@{profile.username}</div>
+                       </div>
+
+
                     <div className="flex flex-col justify-start w-full pr-2">
                       <div className="text-white font-extrabold text-xl mb-1">{profile.full_name}</div>
                       <div className="text-sm text-gray-400 capitalize mb-1">

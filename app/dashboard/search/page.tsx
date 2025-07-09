@@ -150,7 +150,7 @@ export default function Page() {
                   key={profile.id}
                   href={
                     profile.user_id === currentUserId
-                      ? `/dashboard/profile/${profile.role}`
+                      ? `/dashboard/profile/${profile.role}/view`
                       : `/dashboard/view/${profile.username}`
                   }
                   className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.01] transition duration-200 shadow-md hover:shadow-xl"

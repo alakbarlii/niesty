@@ -126,7 +126,7 @@ export default function PublicProfile() {
                   <div className="text-xs text-gray-400">Deals Completed</div>
                 </div>
                 <div className="bg-black px-4 py-2 rounded-xl text-center text-sm border border-white/10 text-white">
-                  <div className="text-yellow-400 font-semibold text-md">{profile.avg_rating || '-'}</div>
+                  <div className="text-yellow-400 font-semibold text-md">{profile.avg_rating || '⭐ 5.0'}</div>
                   <div className="text-xs text-gray-400">Avg. Rating</div>
                 </div>
               </div>

@@ -24,6 +24,7 @@ export default function PublicProfile() {
   const [showMenu, setShowMenu] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reportMessage, setReportMessage] = useState('');
+  const [showLink, setShowLink] = useState(false);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -81,16 +82,26 @@ export default function PublicProfile() {
 
             {showMenu && (
               <div className="absolute right-4 top-12 bg-black border border-white/10 rounded-md shadow-md w-60 z-20 p-3">
-                <div className="text-sm text-white font-medium mb-2">Share this profile</div>
-                <div className="bg-gray-800 text-white text-xs px-2 py-1 rounded mb-2 break-all">
-                  {window.location.href}
-                </div>
-                <button
-                  onClick={handleCopy}
-                  className="w-full py-1.5 bg-yellow-400 hover:bg-yellow-500 text-black rounded text-sm font-semibold mb-3"
+                <div
+                  className="text-sm text-white font-medium mb-2 cursor-pointer"
+                  onClick={() => setShowLink(!showLink)}
                 >
-                  {copied ? 'Copied!' : 'Copy Link'}
-                </button>
+                  Share this profile
+                </div>
+
+                {showLink && (
+                  <>
+                    <div className="bg-gray-800 text-white text-xs px-2 py-1 rounded mb-2 break-all">
+                      {window.location.href}
+                    </div>
+                    <button
+                      onClick={handleCopy}
+                      className="w-full py-1.5 bg-yellow-400 hover:bg-yellow-500 text-black rounded text-sm font-semibold mb-3"
+                    >
+                      {copied ? 'Copied!' : 'Copy Link'}
+                    </button>
+                  </>
+                )}
 
                 <hr className="border-white/10 mb-3" />
 
@@ -108,24 +119,25 @@ export default function PublicProfile() {
             <div className="text-gray-400 text-sm mt-1 capitalize">{profile.role}</div>
             <div className="text-gray-300 text-sm mt-1">Contact: {profile.email}</div>
 
-            <div className="flex gap-4 mt-5">
-              <div className="bg-black px-4 py-2 rounded-xl text-center text-sm border border-white/10 text-white cursor-pointer" onClick={() => window.location.href = `/dashboard/view/${profile.username}/deals`}>
-                <div className="text-yellow-400 font-semibold text-md">{profile.deals_completed || 0}</div>
-                <div className="text-xs text-gray-400">Deals Completed</div>
+            <div className="flex justify-between items-end mt-5">
+              <div className="flex gap-4">
+                <div className="bg-black px-4 py-2 rounded-xl text-center text-sm border border-white/10 text-white cursor-pointer" onClick={() => window.location.href = `/dashboard/view/${profile.username}/deals`}>
+                  <div className="text-yellow-400 font-semibold text-md">{profile.deals_completed || 0}</div>
+                  <div className="text-xs text-gray-400">Deals Completed</div>
+                </div>
+                <div className="bg-black px-4 py-2 rounded-xl text-center text-sm border border-white/10 text-white">
+                  <div className="text-yellow-400 font-semibold text-md">{profile.avg_rating || '-'}</div>
+                  <div className="text-xs text-gray-400">Avg. Rating</div>
+                </div>
               </div>
-              <div className="bg-black px-4 py-2 rounded-xl text-center text-sm border border-white/10 text-white">
-                <div className="text-yellow-400 font-semibold text-md">{profile.avg_rating || '-'}</div>
-                <div className="text-xs text-gray-400">Avg. Rating</div>
+              <div className="flex gap-3">
+                <button className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500">
+                  Request Deal
+                </button>
+                <button className="px-4 py-2 rounded-full bg-gray-700 text-white font-semibold hover:bg-gray-600">
+                  Send Message
+                </button>
               </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500">
-                Request Deal
-              </button>
-              <button className="px-4 py-2 rounded-full bg-gray-700 text-white font-semibold hover:bg-gray-600">
-                Send Message
-              </button>
             </div>
 
             {reporting && (

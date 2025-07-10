@@ -28,6 +28,7 @@ export default function PublicProfile() {
   const [showLink, setShowLink] = useState(false);
   const [showDealModal, setShowDealModal] = useState(false);
   const [dealMessage, setDealMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -200,7 +201,8 @@ export default function PublicProfile() {
                       if (error) {
                         alert('Failed to send deal: ' + error.message);
                       } else {
-                        alert('Deal request sent successfully!');
+                        setShowToast(true);
+                        setTimeout(() => setShowToast(false), 3000);
                         setShowDealModal(false);
                         setDealMessage('');
                       }
@@ -210,6 +212,12 @@ export default function PublicProfile() {
                     Send Deal
                   </button>
                 </div>
+              </div>
+            )}
+
+            {showToast && (
+              <div className="fixed bottom-6 right-6 bg-yellow-500 text-black px-5 py-3 rounded-lg shadow-lg text-sm font-semibold z-50">
+                Your deal request has been successfully sent.
               </div>
             )}
           </div>

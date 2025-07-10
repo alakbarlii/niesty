@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import Image from 'next/image';
 import { MoreVertical, Flag } from 'lucide-react';
+import { sendDealRequest } from '@/lib/supabase/deals';
 
 interface Profile {
   id: string;
@@ -25,6 +26,8 @@ export default function PublicProfile() {
   const [reporting, setReporting] = useState(false);
   const [reportMessage, setReportMessage] = useState('');
   const [showLink, setShowLink] = useState(false);
+  const [showDealModal, setShowDealModal] = useState(false);
+  const [dealMessage, setDealMessage] = useState('');
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -131,7 +134,10 @@ export default function PublicProfile() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <button className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500">
+                <button
+                  onClick={() => setShowDealModal(true)}
+                  className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500"
+                >
                   Request Deal
                 </button>
                 <button className="px-4 py-2 rounded-full bg-gray-700 text-white font-semibold hover:bg-gray-600">
@@ -156,6 +162,54 @@ export default function PublicProfile() {
                 >
                   Submit Report
                 </button>
+              </div>
+            )}
+
+            {showDealModal && (
+              <div className="mt-6 bg-black/40 p-4 rounded-xl border border-yellow-500 text-white">
+                <div className="text-yellow-400 font-semibold mb-2">Describe your sponsorship offer</div>
+                <textarea
+                  value={dealMessage}
+                  onChange={(e) => setDealMessage(e.target.value)}
+                  placeholder="Type your offer here..."
+                  className="w-full bg-black/20 text-white p-2 rounded border border-white/10 focus:outline-none"
+                  rows={3}
+                />
+                <div className="mt-3 flex gap-3 justify-end">
+                  <button
+                    onClick={() => setShowDealModal(false)}
+                    className="px-4 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const { data: userData } = await supabase.auth.getUser();
+                      const user = userData?.user;
+                      if (!user) {
+                        alert('You must be logged in.');
+                        return;
+                      }
+
+                      const { error } = await sendDealRequest({
+                        senderId: user.id,
+                        receiverId: profile.id,
+                        message: dealMessage,
+                      });
+
+                      if (error) {
+                        alert('Failed to send deal: ' + error.message);
+                      } else {
+                        alert('Deal request sent successfully!');
+                        setShowDealModal(false);
+                        setDealMessage('');
+                      }
+                    }}
+                    className="px-4 py-1.5 bg-yellow-500 text-black rounded hover:bg-yellow-600"
+                  >
+                    Send Deal
+                  </button>
+                </div>
               </div>
             )}
           </div>

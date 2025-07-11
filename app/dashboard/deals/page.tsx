@@ -5,11 +5,6 @@ import { createBrowserClient } from '@supabase/ssr';
 
 type DealStatus = 'pending' | 'accepted' | 'rejected';
 
-interface Sender {
-  full_name: string;
-  username: string;
-}
-
 interface CleanDeal {
   id: string;
   message: string;
@@ -17,20 +12,6 @@ interface CleanDeal {
   sender_id: string;
   receiver_id: string;
   created_at: string;
-  sender: Sender;
-}
-
-interface RawDeal {
-  id: string;
-  message: string;
-  status: DealStatus;
-  sender_id: string;
-  receiver_id: string;
-  created_at: string;
-  sender: {
-    full_name?: unknown;
-    username?: unknown;
-  } | null;
 }
 
 const supabase = createBrowserClient(
@@ -64,18 +45,7 @@ export default function DealsPage() {
 
     const { data, error: dealsError } = await supabase
       .from('deals')
-      .select(`
-        id,
-        message,
-        status,
-        created_at,
-        sender_id,
-        receiver_id,
-        sender:sender_id (
-          full_name,
-          username
-        )
-      `)
+      .select('*') // ← No join here
       .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
 
@@ -85,28 +55,7 @@ export default function DealsPage() {
       return;
     }
 
-    const cleaned: CleanDeal[] = (data as RawDeal[])
-      .filter((d) => {
-        return (
-          d.sender !== null &&
-          typeof d.sender.full_name === 'string' &&
-          typeof d.sender.username === 'string'
-        );
-      })
-      .map((d) => ({
-        id: d.id,
-        message: d.message,
-        status: d.status,
-        sender_id: d.sender_id,
-        receiver_id: d.receiver_id,
-        created_at: d.created_at,
-        sender: {
-          full_name: d.sender!.full_name as string,
-          username: d.sender!.username as string,
-        },
-      }));
-
-    setDeals(cleaned);
+    setDeals(data as CleanDeal[]);
     setLoading(false);
   }, []);
 
@@ -143,6 +92,7 @@ export default function DealsPage() {
           {deals.map((deal) => {
             const isReceiver = userId === deal.receiver_id;
             const isPending = deal.status === 'pending';
+            const isSender = userId === deal.sender_id;
 
             return (
               <li
@@ -152,7 +102,7 @@ export default function DealsPage() {
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <p className="font-semibold">
-                      From: {deal.sender.full_name} (@{deal.sender.username})
+                      {isSender ? 'You sent this deal' : 'You received this deal'}
                     </p>
                     <p className="text-sm text-gray-500">
                       {new Date(deal.created_at).toLocaleString()}

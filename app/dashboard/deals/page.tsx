@@ -120,25 +120,31 @@ export default function DealsPage() {
             return (
               <li
                 key={deal.id}
-                className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md transition-all duration-200"
+                className="rounded-2xl border border-gray-200 bg-[#fefefe] p-5 shadow-md hover:shadow-lg transition-all duration-200"
               >
-                <div className="flex justify-between items-start mb-3">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-gray-500">
-                      {isSender ? 'You sent this deal' : 'Deal from'}
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex flex-col space-y-2 w-full">
+                    <p className="text-sm text-gray-500 font-medium">
+                      {isSender && deal.sender_info
+                        ? `Your offer to `
+                        : deal.sender_info
+                        ? `${deal.sender_info.full_name}’s offer for you`
+                        : ''}
+                      {deal.sender_info && (
+                        <a
+                          href={`/dashboard/view/${deal.sender_info.username}`}
+                          target="_blank"
+                          className="text-blue-600 hover:underline font-semibold ml-1"
+                        >
+                          {isSender ? `@${deal.sender_info.username}` : ''}
+                        </a>
+                      )}
                     </p>
 
-                    {deal.sender_info && (
-                      <a
-                        href={`/dashboard/view/${deal.sender_info.username}`}
-                        target="_blank"
-                        className="text-sm font-semibold text-blue-600 hover:underline"
-                      >
-                        {deal.sender_info.full_name}
-                      </a>
-                    )}
+                    <p className="text-[15px] text-gray-800 leading-relaxed">
+                      {deal.message}
+                    </p>
 
-                    <p className="text-gray-800 text-base leading-relaxed">{deal.message}</p>
                     <p className="text-xs text-gray-400">
                       {new Date(deal.created_at).toLocaleString()}
                     </p>
@@ -146,12 +152,12 @@ export default function DealsPage() {
 
                   <div className="flex flex-col items-end gap-2">
                     <span
-                      className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                      className={`text-xs font-semibold px-3 py-1 rounded-full capitalize border ${
                         deal.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
+                          ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
                           : deal.status === 'accepted'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
+                          ? 'bg-green-50 text-green-800 border-green-200'
+                          : 'bg-red-50 text-red-800 border-red-200'
                       }`}
                     >
                       {deal.status}

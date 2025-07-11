@@ -1,24 +1,19 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
-interface Profile {
-  id: string;
-  full_name: string;
-  username: string;
-}
-
-interface DealDetail {
+interface Deal {
   id: string;
   message: string;
   status: 'pending' | 'accepted' | 'rejected';
   sender_id: string;
   receiver_id: string;
   created_at: string;
-  sender_info?: Profile;
-  receiver_info?: Profile;
+  sender_info?: {
+    full_name: string;
+    username: string;
+  };
 }
 
 const supabase = createBrowserClient(
@@ -26,166 +21,145 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export default function DealDetailPage() {
-  const { id } = useParams();
-  const [deal, setDeal] = useState<DealDetail | null>(null);
+export default function DealsPage() {
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [updating, setUpdating] = useState<'accepted' | 'rejected' | null>(null);
 
-  const fetchDeal = useCallback(async () => {
+  const fetchSenderInfos = async (deals: Deal[]) => {
+    const senderIds = [...new Set(deals.map((d) => d.sender_id))];
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, full_name')
+      .in('id', senderIds);
+
+    if (error || !data) return deals;
+
+    const senderMap = new Map(data.map((u) => [u.id, u]));
+
+    return deals.map((deal) => ({
+      ...deal,
+      sender_info: senderMap.get(deal.sender_id),
+    }));
+  };
+
+  const fetchDeals = useCallback(async () => {
     setLoading(true);
+    setError(null);
+
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      setError('User not authenticated');
+      setError('Failed to fetch user.');
       setLoading(false);
       return;
     }
+
     setUserId(user.id);
 
-    const { data, error: dealError } = await supabase
+    const { data, error: dealsError } = await supabase
       .from('deals')
       .select('*')
-      .eq('id', id)
-      .single();
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+      .order('created_at', { ascending: false });
 
-    if (dealError || !data) {
-      setError('Deal not found.');
+    if (dealsError || !data) {
+      setError('Failed to fetch deals.');
       setLoading(false);
       return;
     }
 
-    const userIds = [data.sender_id, data.receiver_id];
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name, username')
-      .in('id', userIds);
-
-    const sender = profiles?.find((p) => p.id === data.sender_id);
-    const receiver = profiles?.find((p) => p.id === data.receiver_id);
-
-    setDeal({ ...data, sender_info: sender, receiver_info: receiver });
+    const rawDeals = data as Deal[];
+    const dealsWithSenders = await fetchSenderInfos(rawDeals);
+    setDeals(dealsWithSenders);
     setLoading(false);
-  }, [id]);
-
-  const updateStatus = async (status: 'accepted' | 'rejected') => {
-    if (!deal) return;
-    setUpdating(status);
-    await supabase.from('deals').update({ status }).eq('id', deal.id);
-    setUpdating(null);
-    fetchDeal();
-  };
+  }, []);
 
   useEffect(() => {
-    fetchDeal();
-  }, [fetchDeal]);
-
-  if (loading) return <div className="p-6 text-center text-gray-500">Loading deal...</div>;
-  if (error) return <div className="p-6 text-center text-red-500">{error}</div>;
-  if (!deal) return null;
-
-  const isReceiver = userId === deal.receiver_id;
-  const isPending = deal.status === 'pending';
-
-  const steps = [
-    { title: 'Request Sent', done: true },
-    { title: 'Waiting for Response', done: deal.status !== 'pending' },
-    { title: 'Accepted', done: deal.status === 'accepted' },
-    { title: 'Rejected', done: deal.status === 'rejected' },
-  ];
+    fetchDeals();
+  }, [fetchDeals]);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <div className="border border-gray-200 bg-white p-6 rounded-2xl shadow-md">
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-xl font-bold">Deal Details</h2>
-          <span
-            className={`text-sm font-semibold px-3 py-1 rounded-full capitalize border ${
+    <div className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Your Deals</h1>
+
+      {loading ? (
+        <div className="text-center text-gray-500">Loading deals...</div>
+      ) : error ? (
+        <div className="text-center text-red-500">{error}</div>
+      ) : deals.length === 0 ? (
+        <div className="text-center text-gray-400">No deals yet.</div>
+      ) : (
+        <ul className="space-y-5">
+          {deals.map((deal) => {
+            const isSender = userId === deal.sender_id;
+            const otherPartyName = deal.sender_info?.full_name || 'Someone';
+            const statusColor =
               deal.status === 'pending'
-                ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                ? 'border-yellow-400 bg-yellow-50'
                 : deal.status === 'accepted'
-                ? 'bg-green-50 text-green-800 border-green-200'
-                : 'bg-red-50 text-red-800 border-red-200'
-            }`}
-          >
-            {deal.status}
-          </span>
-        </div>
+                ? 'border-green-500 bg-green-50'
+                : 'border-red-400 bg-red-50';
 
-        <p className="text-sm text-gray-400 mb-2">
-          Sent on {new Date(deal.created_at).toLocaleString()}
-        </p>
+            return (
+              <li
+                key={deal.id}
+                className={`relative group border-l-4 ${statusColor} rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200`}
+              >
+                <a href={`/dashboard/deals/${deal.id}`} className="block">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-sm text-gray-600 font-medium">
+                      {isSender
+                        ? `Your offer to ${otherPartyName}`
+                        : `${otherPartyName}'s offer to you`}
+                    </p>
+                    <span
+                      className={`text-xs font-semibold px-2 py-1 rounded-full capitalize border ${
+                        deal.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                          : deal.status === 'accepted'
+                          ? 'bg-green-100 text-green-800 border-green-300'
+                          : 'bg-red-100 text-red-800 border-red-300'
+                      }`}
+                    >
+                      {deal.status}
+                    </span>
+                  </div>
 
-        <div className="text-sm text-gray-700 mb-2">
-          <strong>From:</strong>{' '}
-          <a
-            href={`/dashboard/view/${deal.sender_info?.username}`}
-            className="text-blue-600 hover:underline"
-            target="_blank"
-          >
-            {deal.sender_info?.full_name}
-          </a>
-        </div>
+                  <p className="text-gray-900 text-sm leading-relaxed line-clamp-2">
+                    {deal.message}
+                  </p>
 
-        <div className="text-sm text-gray-700 mb-4">
-          <strong>To:</strong>{' '}
-          <a
-            href={`/dashboard/view/${deal.receiver_info?.username}`}
-            className="text-blue-600 hover:underline"
-            target="_blank"
-          >
-            {deal.receiver_info?.full_name}
-          </a>
-        </div>
+                  <div className="mt-4 space-y-1 text-xs text-gray-500">
+                    <p className="font-medium">Deal Progress</p>
+                    <ol className="list-decimal list-inside space-y-0.5 ml-3">
+                      <li className="text-gray-700">Request Sent</li>
+                      <li className={deal.status !== 'pending' ? 'text-gray-700' : 'text-gray-300'}>
+                        Negotiate Terms
+                      </li>
+                      <li className={deal.status === 'accepted' ? 'text-gray-700' : 'text-gray-300'}>
+                        Confirm Agreement
+                      </li>
+                      <li className="text-gray-300">Platform Escrow</li>
+                      <li className="text-gray-300">Content Submitted</li>
+                      <li className="text-gray-300">Approval & Review</li>
+                      <li className="text-gray-300">Payment Released</li>
+                    </ol>
+                  </div>
 
-        <p className="text-gray-900 text-[15px] leading-relaxed whitespace-pre-line mb-6">
-          {deal.message}
-        </p>
-
-        <div className="border-t pt-4">
-          <h3 className="text-sm font-bold mb-3 text-gray-700">Deal Progress</h3>
-          <ol className="space-y-3">
-            {steps.map((step, idx) => (
-              <li key={idx} className="flex items-center gap-3">
-                <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                    step.done ? 'bg-green-500 border-green-600' : 'bg-white border-gray-300'
-                  }`}
-                >
-                  {step.done && <span className="block w-2 h-2 bg-white rounded-full"></span>}
-                </div>
-                <span className={`text-sm ${step.done ? 'text-green-800' : 'text-gray-500'}`}>
-                  {step.title}
-                </span>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Sent {new Date(deal.created_at).toLocaleString()}
+                  </p>
+                </a>
               </li>
-            ))}
-          </ol>
-        </div>
-
-        {isReceiver && isPending && (
-          <div className="mt-6 flex gap-4">
-            <button
-              onClick={() => updateStatus('accepted')}
-              disabled={updating === 'accepted'}
-              className="px-4 py-2 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700"
-            >
-              {updating === 'accepted' ? 'Accepting...' : 'Accept'}
-            </button>
-            <button
-              onClick={() => updateStatus('rejected')}
-              disabled={updating === 'rejected'}
-              className="px-4 py-2 bg-red-600 text-white text-sm rounded-xl hover:bg-red-700"
-            >
-              {updating === 'rejected' ? 'Rejecting...' : 'Reject'}
-            </button>
-          </div>
-        )}
-      </div>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

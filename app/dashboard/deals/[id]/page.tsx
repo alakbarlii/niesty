@@ -3,25 +3,22 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import Link from 'next/link';
 
-type DealStatus = 'pending' | 'accepted' | 'rejected';
+interface Profile {
+  id: string;
+  full_name: string;
+  username: string;
+}
 
-interface Deal {
+interface DealDetail {
   id: string;
   message: string;
-  status: DealStatus;
-  created_at: string;
+  status: 'pending' | 'accepted' | 'rejected';
   sender_id: string;
   receiver_id: string;
-  sender_info?: {
-    full_name: string;
-    username: string;
-  };
-  receiver_info?: {
-    full_name: string;
-    username: string;
-  };
+  created_at: string;
+  sender_info?: Profile;
+  receiver_info?: Profile;
 }
 
 const supabase = createBrowserClient(
@@ -31,12 +28,25 @@ const supabase = createBrowserClient(
 
 export default function DealDetailPage() {
   const { id } = useParams();
-  const [deal, setDeal] = useState<Deal | null>(null);
+  const [deal, setDeal] = useState<DealDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [updating, setUpdating] = useState<'accepted' | 'rejected' | null>(null);
 
   const fetchDeal = useCallback(async () => {
     setLoading(true);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setError('User not authenticated');
+      setLoading(false);
+      return;
+    }
+    setUserId(user.id);
 
     const { data, error: dealError } = await supabase
       .from('deals')
@@ -59,54 +69,36 @@ export default function DealDetailPage() {
     const sender = profiles?.find((p) => p.id === data.sender_id);
     const receiver = profiles?.find((p) => p.id === data.receiver_id);
 
-    setDeal({
-      ...data,
-      sender_info: sender,
-      receiver_info: receiver,
-    });
+    setDeal({ ...data, sender_info: sender, receiver_info: receiver });
     setLoading(false);
   }, [id]);
+
+  const updateStatus = async (status: 'accepted' | 'rejected') => {
+    if (!deal) return;
+    setUpdating(status);
+    await supabase.from('deals').update({ status }).eq('id', deal.id);
+    setUpdating(null);
+    fetchDeal();
+  };
 
   useEffect(() => {
     fetchDeal();
   }, [fetchDeal]);
 
-  if (loading) return <div className="p-6 text-center text-gray-500">Loading...</div>;
-  if (error || !deal) return <div className="p-6 text-center text-red-500">{error}</div>;
+  if (loading) return <div className="p-6 text-center text-gray-500">Loading deal...</div>;
+  if (error) return <div className="p-6 text-center text-red-500">{error}</div>;
+  if (!deal) return null;
 
-  const statusSteps = ['sent', 'accepted', 'in progress', 'completed'];
-  const currentIndex = deal.status === 'pending' ? 0 : deal.status === 'accepted' ? 1 : 2;
+  const isReceiver = userId === deal.receiver_id;
+  const isPending = deal.status === 'pending';
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Deal Details</h1>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <p className="text-sm text-gray-500 mb-1">From</p>
-        <Link
-          href={`/dashboard/view/${deal.sender_info?.username}`}
-          className="text-blue-600 hover:underline font-semibold"
-        >
-          {deal.sender_info?.full_name} (@{deal.sender_info?.username})
-        </Link>
-
-        <p className="text-sm text-gray-500 mt-4 mb-1">To</p>
-        <Link
-          href={`/dashboard/view/${deal.receiver_info?.username}`}
-          className="text-blue-600 hover:underline font-semibold"
-        >
-          {deal.receiver_info?.full_name} (@{deal.receiver_info?.username})
-        </Link>
-
-        <div className="mt-6">
-          <p className="text-sm text-gray-500 mb-1">Message</p>
-          <p className="text-gray-800 text-[15px] leading-relaxed">{deal.message}</p>
-        </div>
-
-        <div className="mt-6">
-          <p className="text-sm text-gray-500 mb-1">Status</p>
+      <div className="border border-gray-200 bg-white p-6 rounded-2xl shadow-md">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-xl font-bold">Deal Details</h2>
           <span
-            className={`text-xs font-semibold px-3 py-1 rounded-full capitalize border ${
+            className={`text-sm font-semibold px-3 py-1 rounded-full capitalize border ${
               deal.status === 'pending'
                 ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
                 : deal.status === 'accepted'
@@ -118,29 +110,54 @@ export default function DealDetailPage() {
           </span>
         </div>
 
-        <div className="mt-6">
-          <p className="text-sm text-gray-500 mb-1">Created</p>
-          <p className="text-xs text-gray-400">
-            {new Date(deal.created_at).toLocaleString()}
-          </p>
-        </div>
-      </div>
+        <p className="text-sm text-gray-400 mb-2">
+          Sent on {new Date(deal.created_at).toLocaleString()}
+        </p>
 
-      <div className="border-t pt-6">
-        <h2 className="text-lg font-semibold mb-2">Timeline</h2>
-        <div className="flex items-center gap-3 flex-wrap">
-          {statusSteps.map((step, i) => (
-            <div key={step} className="flex items-center gap-2">
-              <div
-                className={`w-4 h-4 rounded-full ${
-                  i <= currentIndex ? 'bg-green-500' : 'bg-gray-300'
-                }`}
-              />
-              <span className="text-sm capitalize">{step}</span>
-              {i < statusSteps.length - 1 && <div className="w-6 h-px bg-gray-300" />}
-            </div>
-          ))}
+        <div className="text-sm text-gray-700 mb-2">
+          <strong>From:</strong>{' '}
+          <a
+            href={`/dashboard/view/${deal.sender_info?.username}`}
+            className="text-blue-600 hover:underline"
+            target="_blank"
+          >
+            {deal.sender_info?.full_name}
+          </a>
         </div>
+
+        <div className="text-sm text-gray-700 mb-4">
+          <strong>To:</strong>{' '}
+          <a
+            href={`/dashboard/view/${deal.receiver_info?.username}`}
+            className="text-blue-600 hover:underline"
+            target="_blank"
+          >
+            {deal.receiver_info?.full_name}
+          </a>
+        </div>
+
+        <p className="text-gray-900 text-[15px] leading-relaxed whitespace-pre-line">
+          {deal.message}
+        </p>
+
+        {isReceiver && isPending && (
+          <div className="mt-6 flex gap-4">
+            <button
+              onClick={() => updateStatus('accepted')}
+              disabled={updating === 'accepted'}
+              className="px-4 py-2 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700"
+            >
+              {updating === 'accepted' ? 'Accepting...' : 'Accept'}
+            </button>
+            <button
+              onClick={() => updateStatus('rejected')}
+              disabled={updating === 'rejected'}
+              className="px-4 py-2 bg-red-600 text-white text-sm rounded-xl hover:bg-red-700"
+            >
+              {updating === 'rejected' ? 'Rejecting...' : 'Reject'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

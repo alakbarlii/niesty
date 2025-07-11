@@ -12,6 +12,10 @@ interface CleanDeal {
   sender_id: string;
   receiver_id: string;
   created_at: string;
+  sender_info?: {
+    username: string;
+    full_name: string;
+  };
 }
 
 const supabase = createBrowserClient(
@@ -25,6 +29,23 @@ export default function DealsPage() {
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const fetchSenderInfos = async (deals: CleanDeal[]) => {
+    const senderIds = [...new Set(deals.map((d) => d.sender_id))];
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, full_name')
+      .in('id', senderIds);
+
+    if (error || !data) return deals;
+
+    const senderMap = new Map(data.map((u) => [u.id, u]));
+
+    return deals.map((deal) => ({
+      ...deal,
+      sender_info: senderMap.get(deal.sender_id),
+    }));
+  };
 
   const fetchDeals = useCallback(async () => {
     setLoading(true);
@@ -45,17 +66,19 @@ export default function DealsPage() {
 
     const { data, error: dealsError } = await supabase
       .from('deals')
-      .select('*') // ← No join here
+      .select('*')
       .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
 
-    if (dealsError) {
+    if (dealsError || !data) {
       setError('Failed to fetch deals.');
       setLoading(false);
       return;
     }
 
-    setDeals(data as CleanDeal[]);
+    const rawDeals = data as CleanDeal[];
+    const dealsWithSenders = await fetchSenderInfos(rawDeals);
+    setDeals(dealsWithSenders);
     setLoading(false);
   }, []);
 
@@ -97,21 +120,33 @@ export default function DealsPage() {
             return (
               <li
                 key={deal.id}
-                className="border p-4 rounded-md shadow-sm bg-white hover:bg-gray-50"
+                className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md transition-all duration-200"
               >
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <p className="font-semibold">
-                      {isSender ? 'You sent this deal' : 'You received this deal'}
+                <div className="flex justify-between items-start mb-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-gray-500">
+                      {isSender ? 'You sent this deal' : 'Deal from'}
                     </p>
-                    <p className="text-sm text-gray-500">
+
+                    {deal.sender_info && (
+                      <a
+                        href={`/dashboard/view/${deal.sender_info.username}`}
+                        target="_blank"
+                        className="text-sm font-semibold text-blue-600 hover:underline"
+                      >
+                        {deal.sender_info.full_name}
+                      </a>
+                    )}
+
+                    <p className="text-gray-800 text-base leading-relaxed">{deal.message}</p>
+                    <p className="text-xs text-gray-400">
                       {new Date(deal.created_at).toLocaleString()}
                     </p>
-                    <p className="mt-2 text-gray-800 text-sm">{deal.message}</p>
                   </div>
+
                   <div className="flex flex-col items-end gap-2">
                     <span
-                      className={`text-sm px-3 py-1 rounded-full capitalize font-medium ${
+                      className={`text-xs font-semibold px-3 py-1 rounded-full ${
                         deal.status === 'pending'
                           ? 'bg-yellow-100 text-yellow-800'
                           : deal.status === 'accepted'
@@ -123,18 +158,18 @@ export default function DealsPage() {
                     </span>
 
                     {isReceiver && isPending && (
-                      <div className="flex gap-2 mt-1">
+                      <div className="flex gap-2">
                         <button
                           onClick={() => updateStatus(deal.id, 'accepted')}
                           disabled={updatingId === deal.id}
-                          className="text-green-600 hover:text-green-800 text-sm font-medium"
+                          className="text-sm font-medium text-green-600 hover:text-green-700"
                         >
                           {updatingId === deal.id ? 'Accepting...' : 'Accept'}
                         </button>
                         <button
                           onClick={() => updateStatus(deal.id, 'rejected')}
                           disabled={updatingId === deal.id}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          className="text-sm font-medium text-red-600 hover:text-red-700"
                         >
                           {updatingId === deal.id ? 'Rejecting...' : 'Reject'}
                         </button>

@@ -1,91 +1,127 @@
-"use client";
+'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+
+type DealStatus = 'pending' | 'accepted' | 'rejected';
 
 interface Sender {
   full_name: string;
   username: string;
 }
 
-interface Deal {
+interface CleanDeal {
   id: string;
   message: string;
-  status: string;
+  status: DealStatus;
+  sender_id: string;
+  receiver_id: string;
+  created_at: string;
   sender: Sender;
 }
 
 interface RawDeal {
   id: string;
   message: string;
-  status: string;
+  status: DealStatus;
+  sender_id: string;
+  receiver_id: string;
+  created_at: string;
   sender: {
-    full_name: string;
-    username: string;
+    full_name?: unknown;
+    username?: unknown;
   } | null;
 }
 
-export default function DealsPage() {
-  const [deals, setDeals] = useState<Deal[] | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+export default function DealsPage() {
+  const [deals, setDeals] = useState<CleanDeal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchDeals = useCallback(async () => {
-    setRefreshing(true);
+    setLoading(true);
+    setError(null);
+
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error('Failed to get user:', userError);
-      setDeals([]);
-      setRefreshing(false);
+      setError('Failed to fetch user.');
+      setLoading(false);
       return;
     }
+
+    setUserId(user.id);
 
     const { data, error: dealsError } = await supabase
       .from('deals')
-      .select(`id, message, status, sender:sender_id(full_name, username)`)
-      .eq('receiver_id', user.id)
+      .select(`
+        id,
+        message,
+        status,
+        created_at,
+        sender_id,
+        receiver_id,
+        sender:sender_id (
+          full_name,
+          username
+        )
+      `)
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
 
     if (dealsError) {
-      console.error('Error fetching deals:', dealsError);
-      setDeals([]);
-      setRefreshing(false);
+      setError('Failed to fetch deals.');
+      setLoading(false);
       return;
     }
 
-    const mappedDeals: Deal[] = (data as unknown as RawDeal[]).map((deal) => ({
-      id: deal.id,
-      message: deal.message,
-      status: deal.status,
-      sender: {
-        full_name: deal.sender?.full_name ?? 'Unknown',
-        username: deal.sender?.username ?? 'unknown',
-      },
-    }));
+    const cleaned: CleanDeal[] = (data as RawDeal[])
+      .filter((d) => {
+        return (
+          d.sender !== null &&
+          typeof d.sender.full_name === 'string' &&
+          typeof d.sender.username === 'string'
+        );
+      })
+      .map((d) => ({
+        id: d.id,
+        message: d.message,
+        status: d.status,
+        sender_id: d.sender_id,
+        receiver_id: d.receiver_id,
+        created_at: d.created_at,
+        sender: {
+          full_name: d.sender!.full_name as string,
+          username: d.sender!.username as string,
+        },
+      }));
 
-    setDeals(mappedDeals);
-    setRefreshing(false);
-  }, [supabase]);
+    setDeals(cleaned);
+    setLoading(false);
+  }, []);
 
-  const handleStatusUpdate = async (dealId: string, newStatus: string) => {
-    const { error } = await supabase
-      .from('deals')
-      .update({ status: newStatus })
-      .eq('id', dealId);
+  const updateStatus = async (id: string, status: DealStatus) => {
+    setUpdatingId(id);
+    const { error } = await supabase.from('deals').update({ status }).eq('id', id);
+    setUpdatingId(null);
 
     if (error) {
-      console.error('Failed to update deal status:', error);
-    } else {
-      fetchDeals();
+      console.error(error.message);
+      alert('Failed to update deal.');
+      return;
     }
+
+    fetchDeals();
   };
 
   useEffect(() => {
@@ -93,61 +129,73 @@ export default function DealsPage() {
   }, [fetchDeals]);
 
   return (
-    <div className="p-4 md:p-8">
-      <h1 className="text-3xl font-bold mb-4">Your Deals</h1>
-      <p className="text-lg opacity-80 mb-6">You can track your sponsorship deals here.</p>
+    <div className="p-6 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Your Deals</h1>
 
-      {deals === null || refreshing ? (
-        <p className="text-gray-400">Loading...</p>
+      {loading ? (
+        <div className="text-center text-gray-500">Loading deals...</div>
+      ) : error ? (
+        <div className="text-center text-red-500">{error}</div>
       ) : deals.length === 0 ? (
-        <p className="text-gray-400">No deals yet.</p>
+        <div className="text-center text-gray-500">No deals found.</div>
       ) : (
-        <div className="space-y-4">
-          {deals.map((deal) => (
-            <div
-              key={deal.id}
-              className="bg-white/5 border border-white/10 rounded-xl p-4 text-white"
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-md font-semibold text-yellow-400">
-                    {deal.sender.full_name} (@{deal.sender.username})
-                  </p>
-                  <p className="text-sm mt-1 text-gray-300">{deal.message}</p>
+        <ul className="space-y-4">
+          {deals.map((deal) => {
+            const isReceiver = userId === deal.receiver_id;
+            const isPending = deal.status === 'pending';
+
+            return (
+              <li
+                key={deal.id}
+                className="border p-4 rounded-md shadow-sm bg-white hover:bg-gray-50"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="font-semibold">
+                      From: {deal.sender.full_name} (@{deal.sender.username})
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(deal.created_at).toLocaleString()}
+                    </p>
+                    <p className="mt-2 text-gray-800 text-sm">{deal.message}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span
+                      className={`text-sm px-3 py-1 rounded-full capitalize font-medium ${
+                        deal.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : deal.status === 'accepted'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {deal.status}
+                    </span>
+
+                    {isReceiver && isPending && (
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          onClick={() => updateStatus(deal.id, 'accepted')}
+                          disabled={updatingId === deal.id}
+                          className="text-green-600 hover:text-green-800 text-sm font-medium"
+                        >
+                          {updatingId === deal.id ? 'Accepting...' : 'Accept'}
+                        </button>
+                        <button
+                          onClick={() => updateStatus(deal.id, 'rejected')}
+                          disabled={updatingId === deal.id}
+                          className="text-red-600 hover:text-red-800 text-sm font-medium"
+                        >
+                          {updatingId === deal.id ? 'Rejecting...' : 'Reject'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-xs px-2 py-1 rounded font-medium uppercase ${
-                      deal.status === 'pending'
-                        ? 'bg-yellow-500 text-black'
-                        : deal.status === 'accepted'
-                        ? 'bg-green-600'
-                        : 'bg-red-600'
-                    }`}
-                  >
-                    {deal.status}
-                  </span>
-                  {deal.status === 'pending' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleStatusUpdate(deal.id, 'accepted')}
-                        className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => handleStatusUpdate(deal.id, 'rejected')}
-                        className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

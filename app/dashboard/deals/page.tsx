@@ -4,12 +4,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 
-type DealStatus = 'pending' | 'accepted' | 'rejected';
-
 interface CleanDeal {
   id: string;
   message: string;
-  status: DealStatus;
+  status: 'pending' | 'accepted' | 'rejected';
   sender_id: string;
   receiver_id: string;
   created_at: string;
@@ -29,6 +27,7 @@ export default function DealsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchSenderInfos = async (deals: CleanDeal[]) => {
     const senderIds = [...new Set(deals.map((d) => d.sender_id))];
@@ -82,6 +81,20 @@ export default function DealsPage() {
     setLoading(false);
   }, []);
 
+  const updateStatus = async (id: string, status: 'pending' | 'accepted' | 'rejected') => {
+    setUpdatingId(id);
+    const { error } = await supabase.from('deals').update({ status }).eq('id', id);
+    setUpdatingId(null);
+
+    if (error) {
+      console.error(error.message);
+      alert('Failed to update deal.');
+      return;
+    }
+
+    fetchDeals();
+  };
+
   useEffect(() => {
     fetchDeals();
   }, [fetchDeals]);
@@ -100,10 +113,15 @@ export default function DealsPage() {
         <ul className="space-y-4">
           {deals.map((deal) => {
             const isSender = userId === deal.sender_id;
+            const isReceiver = userId === deal.receiver_id;
+            const isPending = deal.status === 'pending';
 
             return (
-              <Link key={deal.id} href={`/dashboard/deals/${deal.id}`}>
-                <li className="cursor-pointer rounded-2xl border border-gray-200 bg-white p-5 shadow-md hover:shadow-lg transition-all duration-200">
+              <li key={deal.id}>
+                <Link
+                  href={`/dashboard/deals/${deal.id}`}
+                  className="block rounded-2xl border border-gray-200 bg-white p-5 shadow-md hover:shadow-lg transition-all duration-200"
+                >
                   <div className="flex justify-between items-start gap-4">
                     <div className="flex flex-col space-y-2 w-full">
                       <p className="text-sm text-gray-500 font-medium">
@@ -135,10 +153,35 @@ export default function DealsPage() {
                       >
                         {deal.status}
                       </span>
+
+                      {isReceiver && isPending && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              updateStatus(deal.id, 'accepted');
+                            }}
+                            disabled={updatingId === deal.id}
+                            className="text-sm font-medium text-green-600 hover:text-green-700"
+                          >
+                            {updatingId === deal.id ? 'Accepting...' : 'Accept'}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              updateStatus(deal.id, 'rejected');
+                            }}
+                            disabled={updatingId === deal.id}
+                            className="text-sm font-medium text-red-600 hover:text-red-700"
+                          >
+                            {updatingId === deal.id ? 'Rejecting...' : 'Reject'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </li>
-              </Link>
+                </Link>
+              </li>
             );
           })}
         </ul>

@@ -2,9 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import Link from 'next/link';
 
-interface CleanDeal {
+interface Deal {
   id: string;
   message: string;
   status: 'pending' | 'accepted' | 'rejected';
@@ -12,8 +11,8 @@ interface CleanDeal {
   receiver_id: string;
   created_at: string;
   sender_info?: {
-    username: string;
     full_name: string;
+    username: string;
   };
 }
 
@@ -23,13 +22,12 @@ const supabase = createBrowserClient(
 );
 
 export default function DealsPage() {
-  const [deals, setDeals] = useState<CleanDeal[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const fetchSenderInfos = async (deals: CleanDeal[]) => {
+  const fetchSenderInfos = async (deals: Deal[]) => {
     const senderIds = [...new Set(deals.map((d) => d.sender_id))];
     const { data, error } = await supabase
       .from('profiles')
@@ -75,112 +73,71 @@ export default function DealsPage() {
       return;
     }
 
-    const rawDeals = data as CleanDeal[];
+    const rawDeals = data as Deal[];
     const dealsWithSenders = await fetchSenderInfos(rawDeals);
     setDeals(dealsWithSenders);
     setLoading(false);
   }, []);
-
-  const updateStatus = async (id: string, status: 'pending' | 'accepted' | 'rejected') => {
-    setUpdatingId(id);
-    const { error } = await supabase.from('deals').update({ status }).eq('id', id);
-    setUpdatingId(null);
-
-    if (error) {
-      console.error(error.message);
-      alert('Failed to update deal.');
-      return;
-    }
-
-    fetchDeals();
-  };
 
   useEffect(() => {
     fetchDeals();
   }, [fetchDeals]);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Your Deals</h1>
+    <div className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Your Deals</h1>
 
       {loading ? (
         <div className="text-center text-gray-500">Loading deals...</div>
       ) : error ? (
         <div className="text-center text-red-500">{error}</div>
       ) : deals.length === 0 ? (
-        <div className="text-center text-gray-500">No deals found.</div>
+        <div className="text-center text-gray-400">No deals yet.</div>
       ) : (
-        <ul className="space-y-4">
+        <ul className="space-y-5">
           {deals.map((deal) => {
             const isSender = userId === deal.sender_id;
-            const isReceiver = userId === deal.receiver_id;
-            const isPending = deal.status === 'pending';
+            const otherPartyName = deal.sender_info?.full_name || 'Someone';
+            const statusColor =
+              deal.status === 'pending'
+                ? 'border-yellow-400 bg-yellow-50'
+                : deal.status === 'accepted'
+                ? 'border-green-500 bg-green-50'
+                : 'border-red-400 bg-red-50';
 
             return (
-              <li key={deal.id}>
-                <Link
-                  href={`/dashboard/deals/${deal.id}`}
-                  className="block rounded-2xl border border-gray-200 bg-white p-5 shadow-md hover:shadow-lg transition-all duration-200"
-                >
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="flex flex-col space-y-2 w-full">
-                      <p className="text-sm text-gray-500 font-medium">
-                        {isSender && deal.sender_info
-                          ? `Your offer to ${deal.sender_info.full_name}`
-                          : deal.sender_info
-                          ? `${deal.sender_info.full_name}’s offer for you`
-                          : ''}
-                      </p>
-
-                      <p className="text-[15px] text-gray-800 leading-relaxed line-clamp-2">
-                        {deal.message}
-                      </p>
-
-                      <p className="text-xs text-gray-400">
-                        {new Date(deal.created_at).toLocaleString()}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-2">
-                      <span
-                        className={`text-xs font-semibold px-3 py-1 rounded-full capitalize border ${
-                          deal.status === 'pending'
-                            ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
-                            : deal.status === 'accepted'
-                            ? 'bg-green-50 text-green-800 border-green-200'
-                            : 'bg-red-50 text-red-800 border-red-200'
-                        }`}
-                      >
-                        {deal.status}
-                      </span>
-
-                      {isReceiver && isPending && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              updateStatus(deal.id, 'accepted');
-                            }}
-                            disabled={updatingId === deal.id}
-                            className="text-sm font-medium text-green-600 hover:text-green-700"
-                          >
-                            {updatingId === deal.id ? 'Accepting...' : 'Accept'}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              updateStatus(deal.id, 'rejected');
-                            }}
-                            disabled={updatingId === deal.id}
-                            className="text-sm font-medium text-red-600 hover:text-red-700"
-                          >
-                            {updatingId === deal.id ? 'Rejecting...' : 'Reject'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
+              <li
+                key={deal.id}
+                className={`relative group border-l-4 ${statusColor} rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200`}
+              >
+                <a href={`/dashboard/deals/${deal.id}`} className="block">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-sm text-gray-600 font-medium">
+                      {isSender
+                        ? `Your offer to ${otherPartyName}`
+                        : `${otherPartyName}'s offer to you`}
+                    </p>
+                    <span
+                      className={`text-xs font-semibold px-2 py-1 rounded-full capitalize border ${
+                        deal.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                          : deal.status === 'accepted'
+                          ? 'bg-green-100 text-green-800 border-green-300'
+                          : 'bg-red-100 text-red-800 border-red-300'
+                      }`}
+                    >
+                      {deal.status}
+                    </span>
                   </div>
-                </Link>
+
+                  <p className="text-gray-900 text-sm leading-relaxed line-clamp-2">
+                    {deal.message}
+                  </p>
+
+                  <p className="text-xs text-gray-400 mt-2">
+                    Sent {new Date(deal.created_at).toLocaleString()}
+                  </p>
+                </a>
               </li>
             );
           })}

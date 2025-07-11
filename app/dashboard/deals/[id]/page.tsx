@@ -92,6 +92,13 @@ export default function DealDetailPage() {
   const isReceiver = userId === deal.receiver_id;
   const isPending = deal.status === 'pending';
 
+  const steps = [
+    { title: 'Request Sent', done: true },
+    { title: 'Waiting for Response', done: deal.status !== 'pending' },
+    { title: 'Accepted', done: deal.status === 'accepted' },
+    { title: 'Rejected', done: deal.status === 'rejected' },
+  ];
+
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div className="border border-gray-200 bg-white p-6 rounded-2xl shadow-md">
@@ -136,9 +143,29 @@ export default function DealDetailPage() {
           </a>
         </div>
 
-        <p className="text-gray-900 text-[15px] leading-relaxed whitespace-pre-line">
+        <p className="text-gray-900 text-[15px] leading-relaxed whitespace-pre-line mb-6">
           {deal.message}
         </p>
+
+        <div className="border-t pt-4">
+          <h3 className="text-sm font-bold mb-3 text-gray-700">Deal Progress</h3>
+          <ol className="space-y-3">
+            {steps.map((step, idx) => (
+              <li key={idx} className="flex items-center gap-3">
+                <div
+                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    step.done ? 'bg-green-500 border-green-600' : 'bg-white border-gray-300'
+                  }`}
+                >
+                  {step.done && <span className="block w-2 h-2 bg-white rounded-full"></span>}
+                </div>
+                <span className={`text-sm ${step.done ? 'text-green-800' : 'text-gray-500'}`}>
+                  {step.title}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
 
         {isReceiver && isPending && (
           <div className="mt-6 flex gap-4">

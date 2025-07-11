@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+import Link from 'next/link';
 
 type DealStatus = 'pending' | 'accepted' | 'rejected';
 
@@ -28,7 +29,6 @@ export default function DealsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchSenderInfos = async (deals: CleanDeal[]) => {
     const senderIds = [...new Set(deals.map((d) => d.sender_id))];
@@ -82,20 +82,6 @@ export default function DealsPage() {
     setLoading(false);
   }, []);
 
-  const updateStatus = async (id: string, status: DealStatus) => {
-    setUpdatingId(id);
-    const { error } = await supabase.from('deals').update({ status }).eq('id', id);
-    setUpdatingId(null);
-
-    if (error) {
-      console.error(error.message);
-      alert('Failed to update deal.');
-      return;
-    }
-
-    fetchDeals();
-  };
-
   useEffect(() => {
     fetchDeals();
   }, [fetchDeals]);
@@ -113,77 +99,46 @@ export default function DealsPage() {
       ) : (
         <ul className="space-y-4">
           {deals.map((deal) => {
-            const isReceiver = userId === deal.receiver_id;
-            const isPending = deal.status === 'pending';
             const isSender = userId === deal.sender_id;
 
             return (
-              <li
-                key={deal.id}
-                className="rounded-2xl border border-gray-200 bg-[#fefefe] p-5 shadow-md hover:shadow-lg transition-all duration-200"
-              >
-                <div className="flex justify-between items-start gap-4">
-                  <div className="flex flex-col space-y-2 w-full">
-                    <p className="text-sm text-gray-500 font-medium">
-                      {isSender && deal.sender_info
-                        ? `Your offer to `
-                        : deal.sender_info
-                        ? `${deal.sender_info.full_name}’s offer for you`
-                        : ''}
-                      {deal.sender_info && (
-                        <a
-                          href={`/dashboard/view/${deal.sender_info.username}`}
-                          target="_blank"
-                          className="text-blue-600 hover:underline font-semibold ml-1"
-                        >
-                          {isSender ? `@${deal.sender_info.username}` : ''}
-                        </a>
-                      )}
-                    </p>
+              <Link key={deal.id} href={`/dashboard/deals/${deal.id}`}>
+                <li className="cursor-pointer rounded-2xl border border-gray-200 bg-white p-5 shadow-md hover:shadow-lg transition-all duration-200">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex flex-col space-y-2 w-full">
+                      <p className="text-sm text-gray-500 font-medium">
+                        {isSender && deal.sender_info
+                          ? `Your offer to ${deal.sender_info.full_name}`
+                          : deal.sender_info
+                          ? `${deal.sender_info.full_name}’s offer for you`
+                          : ''}
+                      </p>
 
-                    <p className="text-[15px] text-gray-800 leading-relaxed">
-                      {deal.message}
-                    </p>
+                      <p className="text-[15px] text-gray-800 leading-relaxed line-clamp-2">
+                        {deal.message}
+                      </p>
 
-                    <p className="text-xs text-gray-400">
-                      {new Date(deal.created_at).toLocaleString()}
-                    </p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(deal.created_at).toLocaleString()}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-2">
+                      <span
+                        className={`text-xs font-semibold px-3 py-1 rounded-full capitalize border ${
+                          deal.status === 'pending'
+                            ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                            : deal.status === 'accepted'
+                            ? 'bg-green-50 text-green-800 border-green-200'
+                            : 'bg-red-50 text-red-800 border-red-200'
+                        }`}
+                      >
+                        {deal.status}
+                      </span>
+                    </div>
                   </div>
-
-                  <div className="flex flex-col items-end gap-2">
-                    <span
-                      className={`text-xs font-semibold px-3 py-1 rounded-full capitalize border ${
-                        deal.status === 'pending'
-                          ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
-                          : deal.status === 'accepted'
-                          ? 'bg-green-50 text-green-800 border-green-200'
-                          : 'bg-red-50 text-red-800 border-red-200'
-                      }`}
-                    >
-                      {deal.status}
-                    </span>
-
-                    {isReceiver && isPending && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => updateStatus(deal.id, 'accepted')}
-                          disabled={updatingId === deal.id}
-                          className="text-sm font-medium text-green-600 hover:text-green-700"
-                        >
-                          {updatingId === deal.id ? 'Accepting...' : 'Accept'}
-                        </button>
-                        <button
-                          onClick={() => updateStatus(deal.id, 'rejected')}
-                          disabled={updatingId === deal.id}
-                          className="text-sm font-medium text-red-600 hover:text-red-700"
-                        >
-                          {updatingId === deal.id ? 'Rejecting...' : 'Reject'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </li>
+                </li>
+              </Link>
             );
           })}
         </ul>

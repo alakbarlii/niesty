@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import DealProgress from '@/components/DealProgress';
-import { CheckCircle, XCircle, Clock } from 'lucide-react';
+import { CheckCircle, Clock, XCircle } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -96,59 +96,42 @@ export default function DealDetailPage() {
 
   const isSender = userId === deal.sender_id;
   const otherUser = isSender ? deal.receiver_info : deal.sender_info;
-  const directionText = isSender
-    ? `Your offer to ${otherUser?.full_name}`
-    : `${otherUser?.full_name}'s offer to you`;
-
-  const statusIcon =
-    deal.status === 'accepted' ? (
-      <CheckCircle className="text-green-600 w-4 h-4 mr-1 inline" />
-    ) : deal.status === 'pending' ? (
-      <Clock className="text-yellow-600 w-4 h-4 mr-1 inline" />
-    ) : (
-      <XCircle className="text-red-600 w-4 h-4 mr-1 inline" />
-    );
+  const stageName = DEAL_STAGES.includes(deal.deal_stage)
+    ? deal.deal_stage
+    : 'Unknown Stage';
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Deal Details</h1>
+      <div className="bg-white rounded-xl shadow-md p-6 space-y-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2 text-sm text-gray-800 font-medium">
+            {deal.status === 'accepted' ? (
+              <CheckCircle className="text-green-600 w-4 h-4" />
+            ) : deal.status === 'pending' ? (
+              <Clock className="text-yellow-600 w-4 h-4" />
+            ) : (
+              <XCircle className="text-red-600 w-4 h-4" />
+            )}
+            {isSender
+              ? `Your offer to ${otherUser?.full_name || 'Someone'}`
+              : `${otherUser?.full_name || 'Someone'}'s offer to you`}
+          </div>
 
-      <div className="border rounded-xl p-5 bg-white shadow-sm space-y-4">
-        <div className="text-sm text-gray-700 space-y-1">
-          <p className="font-medium text-gray-800">
-            {statusIcon} {directionText}
+          <p className="text-xs text-gray-500">
+            Sent on: {new Date(deal.created_at).toLocaleString()}
           </p>
-          <p>
-            <span className="font-medium">Status:</span>{' '}
-            <span
-              className={`capitalize px-2 py-0.5 text-sm rounded ${
-                deal.status === 'pending'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : deal.status === 'accepted'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-red-100 text-red-800'
-              }`}
-            >
-              {deal.status}
-            </span>
-          </p>
-          <p>
-            <span className="font-medium">Sent on:</span>{' '}
-            {new Date(deal.created_at).toLocaleString()}
+
+          <p className="text-sm text-gray-700">
+            <span className="font-semibold">Current Stage:</span> {stageName}
           </p>
         </div>
 
         <div>
           <p className="text-sm text-gray-600 font-medium mb-1">Description</p>
-          <p className="bg-gray-50 p-3 rounded text-gray-800 text-sm">
-            {deal.message}
-          </p>
+          <p className="bg-gray-50 p-3 rounded text-gray-800 text-sm">{deal.message}</p>
         </div>
 
-        <div>
-          <p className="text-sm text-gray-600 font-medium mb-1">Deal Progress</p>
-          <DealProgress currentStage={DEAL_STAGES.indexOf(deal.deal_stage)} />
-        </div>
+        <DealProgress currentStage={DEAL_STAGES.indexOf(deal.deal_stage)} />
       </div>
     </div>
   );

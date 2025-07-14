@@ -17,6 +17,15 @@ interface Deal {
   receiver_info?: { full_name: string; username: string };
 }
 
+const DEAL_STAGES = [
+  'Waiting for Response',
+  'Negotiating Terms',
+  'Platform Escrow',
+  'Content Submitted',
+  'Approved',
+  'Payment Released',
+];
+
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -76,39 +85,45 @@ export default function DealsPage() {
         <p className="text-gray-400">No deals found.</p>
       ) : (
         <div className="space-y-4">
-          {deals.map((deal) => (
-            <div
-              key={deal.id}
-              className="bg-gray-900 text-white rounded-xl shadow-sm p-5 hover:shadow-md transition duration-200 cursor-pointer border border-gray-800"
-              onClick={() => router.push(`/dashboard/deals/${deal.id}`)}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-semibold">
-                  {userId === deal.sender_id
-                    ? `Your offer to ${deal.receiver_info?.full_name}`
-                    : `${deal.sender_info?.full_name}'s offer to you`}
+          {deals.map((deal) => {
+            const isSender = userId === deal.sender_id;
+            const otherUser = isSender ? deal.receiver_info : deal.sender_info;
+            const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
+
+            return (
+              <div
+                key={deal.id}
+                className="bg-gray-900 text-white rounded-xl shadow-sm p-5 hover:shadow-md transition duration-200 cursor-pointer border border-gray-800"
+                onClick={() => router.push(`/dashboard/deals/${deal.id}`)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-semibold">
+                    {isSender
+                      ? `Your offer to ${otherUser?.full_name}`
+                      : `${otherUser?.full_name}'s offer to you`}
+                  </div>
+                  <span
+                    className={`capitalize text-xs font-semibold px-2 py-1 rounded ${
+                      deal.status === 'pending'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : deal.status === 'accepted'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}
+                  >
+                    {deal.status}
+                  </span>
                 </div>
-                <span
-                  className={`capitalize text-xs font-semibold px-2 py-1 rounded ${
-                    deal.status === 'pending'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : deal.status === 'accepted'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                  }`}
-                >
-                  {deal.status}
-                </span>
-              </div>
 
-              <p className="text-sm text-gray-300 line-clamp-2 mb-2">{deal.message}</p>
+                <p className="text-sm text-gray-300 line-clamp-2 mb-2">{deal.message}</p>
 
-              <div className="text-xs text-gray-500">
-                Sent on: {new Date(deal.created_at).toLocaleDateString()} ·{' '}
-                Stage: <span className="text-gray-300">{deal.deal_stage}</span>
+                <div className="text-xs text-gray-500">
+                  Sent on: {new Date(deal.created_at).toLocaleDateString()} ·{' '}
+                  Stage: <span className="text-gray-300">{DEAL_STAGES[currentStageIndex] || deal.deal_stage}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

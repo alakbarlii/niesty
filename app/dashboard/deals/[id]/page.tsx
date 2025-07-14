@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import DealProgress from '@/components/DealProgress';
-import { CheckCircle, Clock, XCircle } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -96,42 +96,50 @@ export default function DealDetailPage() {
 
   const isSender = userId === deal.sender_id;
   const otherUser = isSender ? deal.receiver_info : deal.sender_info;
-  const stageName = DEAL_STAGES.includes(deal.deal_stage)
-    ? deal.deal_stage
-    : 'Unknown Stage';
+  const currentStage = deal.deal_stage;
+  const currentStageIndex = DEAL_STAGES.indexOf(currentStage);
+  const statusColor =
+    currentStageIndex === 0
+      ? 'text-yellow-800 bg-yellow-100 border-yellow-300'
+      : currentStageIndex < 5
+      ? 'text-blue-800 bg-blue-100 border-blue-300'
+      : 'text-green-800 bg-green-100 border-green-300';
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <div className="bg-white rounded-xl shadow-md p-6 space-y-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-sm text-gray-800 font-medium">
-            {deal.status === 'accepted' ? (
-              <CheckCircle className="text-green-600 w-4 h-4" />
-            ) : deal.status === 'pending' ? (
-              <Clock className="text-yellow-600 w-4 h-4" />
-            ) : (
-              <XCircle className="text-red-600 w-4 h-4" />
-            )}
+      <h1 className="text-2xl font-bold mb-4">Deal Details</h1>
+
+      <div className="border rounded-xl p-5 bg-white shadow-sm space-y-4">
+        <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
+          <CheckCircle className="w-4 h-4 text-green-600" />
+          <p className="font-medium">
             {isSender
-              ? `Your offer to ${otherUser?.full_name || 'Someone'}`
+              ? `Your offer to ${otherUser?.full_name || 'Unknown'}`
               : `${otherUser?.full_name || 'Someone'}'s offer to you`}
-          </div>
-
-          <p className="text-xs text-gray-500">
-            Sent on: {new Date(deal.created_at).toLocaleString()}
           </p>
+        </div>
 
-          <p className="text-sm text-gray-700">
-            <span className="font-semibold">Current Stage:</span> {stageName}
+        <p
+          className={`inline-block text-xs font-semibold px-2 py-1 rounded-full border ${statusColor}`}
+        >
+          {currentStage}
+        </p>
+
+        <p className="text-xs text-gray-500">
+          Sent on: {new Date(deal.created_at).toLocaleString()}
+        </p>
+
+        <div>
+          <p className="text-sm text-gray-600 font-medium mb-1">Description</p>
+          <p className="bg-gray-50 p-3 rounded text-gray-800 text-sm">
+            {deal.message}
           </p>
         </div>
 
         <div>
-          <p className="text-sm text-gray-600 font-medium mb-1">Description</p>
-          <p className="bg-gray-50 p-3 rounded text-gray-800 text-sm">{deal.message}</p>
+          <p className="text-sm text-gray-600 font-medium mb-1">Deal Progress</p>
+          <DealProgress currentStage={currentStageIndex} />
         </div>
-
-        <DealProgress currentStage={DEAL_STAGES.indexOf(deal.deal_stage)} />
       </div>
     </div>
   );

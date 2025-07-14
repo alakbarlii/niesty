@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import DealProgress from '@/components/DealProgress';
+import { CheckCircle, XCircle, Clock } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -17,7 +18,6 @@ interface Deal {
   receiver_info?: { full_name: string; username: string };
 }
 
-// Must match DealProgress.tsx
 const DEAL_STAGES = [
   'Waiting for Response',
   'Negotiating Terms',
@@ -95,10 +95,19 @@ export default function DealDetailPage() {
   if (!deal) return <div className="p-6 text-gray-500">Deal not found.</div>;
 
   const isSender = userId === deal.sender_id;
-  const isReceiver = userId === deal.receiver_id;
   const otherUser = isSender ? deal.receiver_info : deal.sender_info;
+  const directionText = isSender
+    ? `Your offer to ${otherUser?.full_name}`
+    : `${otherUser?.full_name}'s offer to you`;
 
-  const userRoleLabel = isSender ? 'You (Creator)' : isReceiver ? 'You (Sponsor)' : 'Unknown';
+  const statusIcon =
+    deal.status === 'accepted' ? (
+      <CheckCircle className="text-green-600 w-4 h-4 mr-1 inline" />
+    ) : deal.status === 'pending' ? (
+      <Clock className="text-yellow-600 w-4 h-4 mr-1 inline" />
+    ) : (
+      <XCircle className="text-red-600 w-4 h-4 mr-1 inline" />
+    );
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -106,12 +115,8 @@ export default function DealDetailPage() {
 
       <div className="border rounded-xl p-5 bg-white shadow-sm space-y-4">
         <div className="text-sm text-gray-700 space-y-1">
-          <p>
-            <span className="font-medium">Your Role:</span> {userRoleLabel}
-          </p>
-          <p>
-            <span className="font-medium">With:</span>{' '}
-            {otherUser?.full_name || 'Unknown'} ({otherUser?.username || 'no username'})
+          <p className="font-medium text-gray-800">
+            {statusIcon} {directionText}
           </p>
           <p>
             <span className="font-medium">Status:</span>{' '}
@@ -134,7 +139,7 @@ export default function DealDetailPage() {
         </div>
 
         <div>
-          <p className="text-sm text-gray-600 font-medium mb-1">Message</p>
+          <p className="text-sm text-gray-600 font-medium mb-1">Description</p>
           <p className="bg-gray-50 p-3 rounded text-gray-800 text-sm">
             {deal.message}
           </p>

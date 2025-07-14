@@ -114,10 +114,10 @@ export default function DealsPage() {
             const otherPartyName = deal.sender_info?.full_name || 'Someone';
             const statusColor =
               deal.status === 'pending'
-                ? 'border-yellow-400 bg-yellow-50'
+                ? 'border-yellow-400 bg-yellow-100'
                 : deal.status === 'accepted'
-                ? 'border-green-500 bg-green-50'
-                : 'border-red-400 bg-red-50';
+                ? 'border-green-500 bg-green-100'
+                : 'border-red-400 bg-red-100';
 
             const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
             const stageProgress = ((currentStageIndex + 1) / DEAL_STAGES.length) * 100;
@@ -138,7 +138,7 @@ export default function DealsPage() {
               >
                 <a href={`/dashboard/deals/${deal.id}`} className="block">
                   <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm text-gray-600 font-medium flex items-center">
+                    <p className="text-sm text-gray-700 font-medium flex items-center">
                       {statusIcon}
                       {isSender
                         ? `Your offer to ${otherPartyName}`

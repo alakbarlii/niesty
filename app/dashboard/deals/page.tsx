@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+import { CheckCircle, XCircle, Clock, Loader } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -10,11 +11,21 @@ interface Deal {
   sender_id: string;
   receiver_id: string;
   created_at: string;
+  deal_stage: string;
   sender_info?: {
     full_name: string;
     username: string;
   };
 }
+
+const DEAL_STAGES = [
+  'Waiting for Response',
+  'Negotiating Terms',
+  'Platform Escrow',
+  'Content Submitted',
+  'Approved',
+  'Payment Released',
+];
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -88,7 +99,10 @@ export default function DealsPage() {
       <h1 className="text-2xl font-bold mb-6">Your Deals</h1>
 
       {loading ? (
-        <div className="text-center text-gray-500">Loading deals...</div>
+        <div className="text-center text-gray-500 flex items-center justify-center gap-2">
+          <Loader className="animate-spin w-4 h-4" />
+          Loading deals...
+        </div>
       ) : error ? (
         <div className="text-center text-red-500">{error}</div>
       ) : deals.length === 0 ? (
@@ -105,6 +119,18 @@ export default function DealsPage() {
                 ? 'border-green-500 bg-green-50'
                 : 'border-red-400 bg-red-50';
 
+            const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
+            const stageProgress = ((currentStageIndex + 1) / DEAL_STAGES.length) * 100;
+
+            const statusIcon =
+              deal.status === 'accepted' ? (
+                <CheckCircle className="text-green-600 w-4 h-4 mr-1" />
+              ) : deal.status === 'pending' ? (
+                <Clock className="text-yellow-600 w-4 h-4 mr-1" />
+              ) : (
+                <XCircle className="text-red-600 w-4 h-4 mr-1" />
+              );
+
             return (
               <li
                 key={deal.id}
@@ -112,7 +138,8 @@ export default function DealsPage() {
               >
                 <a href={`/dashboard/deals/${deal.id}`} className="block">
                   <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm text-gray-600 font-medium">
+                    <p className="text-sm text-gray-600 font-medium flex items-center">
+                      {statusIcon}
                       {isSender
                         ? `Your offer to ${otherPartyName}`
                         : `${otherPartyName}'s offer to you`}
@@ -137,6 +164,24 @@ export default function DealsPage() {
                   <p className="text-xs text-gray-400 mt-2">
                     Sent {new Date(deal.created_at).toLocaleString()}
                   </p>
+
+                  <div className="mt-4">
+                    <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`absolute top-0 left-0 h-full transition-all duration-500 ${
+                          deal.status === 'accepted'
+                            ? 'bg-green-500'
+                            : deal.status === 'rejected'
+                            ? 'bg-red-500'
+                            : 'bg-yellow-500'
+                        }`}
+                        style={{ width: `${stageProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Stage: {DEAL_STAGES[currentStageIndex] || 'Unknown'}
+                    </p>
+                  </div>
                 </a>
               </li>
             );

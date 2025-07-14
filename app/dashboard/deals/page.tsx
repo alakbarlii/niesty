@@ -102,6 +102,11 @@ export default function DealsPage() {
     fetchDeals();
   }, [fetchDeals]);
 
+  const handleUpdateStatus = async (dealId: string, status: 'accepted' | 'rejected') => {
+    await supabase.from('deals').update({ status }).eq('id', dealId);
+    fetchDeals();
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6 text-white">Your Deals</h1>
@@ -174,6 +179,23 @@ export default function DealsPage() {
                     />
                   </div>
                 </a>
+
+                {!isSender && deal.status === 'pending' && (
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={() => handleUpdateStatus(deal.id, 'accepted')}
+                      className="text-xs font-semibold px-4 py-1 rounded bg-green-600 hover:bg-green-700 transition"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleUpdateStatus(deal.id, 'rejected')}
+                      className="text-xs font-semibold px-4 py-1 rounded bg-red-600 hover:bg-red-700 transition"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}

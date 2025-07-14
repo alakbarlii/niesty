@@ -1,31 +1,21 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import { CheckCircle, XCircle, Clock, Loader } from 'lucide-react';
+import { Loader } from 'lucide-react';
 
 interface Deal {
   id: string;
-  message: string;
-  status: 'pending' | 'accepted' | 'rejected';
   sender_id: string;
   receiver_id: string;
-  created_at: string;
+  message: string;
+  status: 'pending' | 'accepted' | 'rejected';
   deal_stage: string;
-  sender_info?: {
-    full_name: string;
-    username: string;
-  };
+  created_at: string;
+  sender_info?: { full_name: string; username: string };
+  receiver_info?: { full_name: string; username: string };
 }
-
-const DEAL_STAGES = [
-  'Waiting for Response',
-  'Negotiating Terms',
-  'Platform Escrow',
-  'Content Submitted',
-  'Approved',
-  'Payment Released',
-];
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -34,159 +24,92 @@ const supabase = createBrowserClient(
 
 export default function DealsPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-
-  const fetchSenderInfos = async (deals: Deal[]) => {
-    const senderIds = [...new Set(deals.map((d) => d.sender_id))];
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username, full_name')
-      .in('id', senderIds);
-
-    if (error || !data) return deals;
-
-    const senderMap = new Map(data.map((u) => [u.id, u]));
-
-    return deals.map((deal) => ({
-      ...deal,
-      sender_info: senderMap.get(deal.sender_id),
-    }));
-  };
-
-  const fetchDeals = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError('Failed to fetch user.');
-      setLoading(false);
-      return;
-    }
-
-    setUserId(user.id);
-
-    const { data, error: dealsError } = await supabase
-      .from('deals')
-      .select('*')
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order('created_at', { ascending: false });
-
-    if (dealsError || !data) {
-      setError('Failed to fetch deals.');
-      setLoading(false);
-      return;
-    }
-
-    const rawDeals = data as Deal[];
-    const dealsWithSenders = await fetchSenderInfos(rawDeals);
-    setDeals(dealsWithSenders);
-    setLoading(false);
-  }, []);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
+    const fetchDeals = async () => {
+      setLoading(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (!user || userError) {
+        setLoading(false);
+        return;
+      }
+
+      setUserId(user.id);
+
+      const { data, error } = await supabase
+        .from('deals')
+        .select('*, sender_info:profiles!deals_sender_id_fkey(full_name,username), receiver_info:profiles!deals_receiver_id_fkey(full_name,username)')
+        .order('created_at', { ascending: false });
+
+      if (!data || error) {
+        setDeals([]);
+      } else {
+        setDeals(data);
+      }
+
+      setLoading(false);
+    };
+
     fetchDeals();
-  }, [fetchDeals]);
+  }, []);
+
+  if (loading)
+    return (
+      <div className="p-6 flex items-center gap-2 text-gray-500">
+        <Loader className="w-4 h-4 animate-spin" /> Loading deals...
+      </div>
+    );
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Your Deals</h1>
+    <div className="p-6 max-w-4xl mx-auto space-y-4">
+      <h1 className="text-2xl font-bold text-white">Your Deals</h1>
 
-      {loading ? (
-        <div className="text-center text-gray-500 flex items-center justify-center gap-2">
-          <Loader className="animate-spin w-4 h-4" />
-          Loading deals...
-        </div>
-      ) : error ? (
-        <div className="text-center text-red-500">{error}</div>
-      ) : deals.length === 0 ? (
-        <div className="text-center text-gray-400">No deals yet.</div>
+      {deals.length === 0 ? (
+        <p className="text-gray-400">No deals found.</p>
       ) : (
-        <ul className="space-y-5">
-          {deals.map((deal) => {
-            const isSender = userId === deal.sender_id;
-            const otherPartyName = deal.sender_info?.full_name || 'Someone';
-            const statusColor =
-              deal.status === 'pending'
-                ? 'border-yellow-400 bg-yellow-100'
-                : deal.status === 'accepted'
-                ? 'border-green-500 bg-green-100'
-                : 'border-red-400 bg-red-100';
+        <div className="space-y-4">
+          {deals.map((deal) => (
+            <div
+              key={deal.id}
+              className="bg-gray-900 text-white rounded-xl shadow-sm p-5 hover:shadow-md transition duration-200 cursor-pointer border border-gray-800"
+              onClick={() => router.push(`/dashboard/deals/${deal.id}`)}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-semibold">
+                  {userId === deal.sender_id
+                    ? `Your offer to ${deal.receiver_info?.full_name}`
+                    : `${deal.sender_info?.full_name}'s offer to you`}
+                </div>
+                <span
+                  className={`capitalize text-xs font-semibold px-2 py-1 rounded ${
+                    deal.status === 'pending'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : deal.status === 'accepted'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}
+                >
+                  {deal.status}
+                </span>
+              </div>
 
-            const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
-            const stageProgress = ((currentStageIndex + 1) / DEAL_STAGES.length) * 100;
+              <p className="text-sm text-gray-300 line-clamp-2 mb-2">{deal.message}</p>
 
-            const statusIcon =
-              deal.status === 'accepted' ? (
-                <CheckCircle className="text-green-600 w-4 h-4 mr-1" />
-              ) : deal.status === 'pending' ? (
-                <Clock className="text-yellow-600 w-4 h-4 mr-1" />
-              ) : (
-                <XCircle className="text-red-600 w-4 h-4 mr-1" />
-              );
-
-            return (
-              <li
-                key={deal.id}
-                className={`relative group border-l-4 ${statusColor} rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200`}
-              >
-                <a href={`/dashboard/deals/${deal.id}`} className="block">
-                  <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm text-gray-700 font-medium flex items-center">
-                      {statusIcon}
-                      {isSender
-                        ? `Your offer to ${otherPartyName}`
-                        : `${otherPartyName}'s offer to you`}
-                    </p>
-                    <span
-                      className={`text-xs font-semibold px-2 py-1 rounded-full capitalize border ${
-                        deal.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                          : deal.status === 'accepted'
-                          ? 'bg-green-100 text-green-800 border-green-300'
-                          : 'bg-red-100 text-red-800 border-red-300'
-                      }`}
-                    >
-                      {deal.status}
-                    </span>
-                  </div>
-
-                  <p className="text-gray-900 text-sm leading-relaxed line-clamp-2">
-                    {deal.message}
-                  </p>
-
-                  <p className="text-xs text-gray-400 mt-2">
-                    Sent {new Date(deal.created_at).toLocaleString()}
-                  </p>
-
-                  <div className="mt-4">
-                    <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className={`absolute top-0 left-0 h-full transition-all duration-500 ${
-                          deal.status === 'accepted'
-                            ? 'bg-green-500'
-                            : deal.status === 'rejected'
-                            ? 'bg-red-500'
-                            : 'bg-yellow-500'
-                        }`}
-                        style={{ width: `${stageProgress}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Stage: {DEAL_STAGES[currentStageIndex] || 'Unknown'}
-                    </p>
-                  </div>
-                </a>
-              </li>
-            );
-          })}
-        </ul>
+              <div className="text-xs text-gray-500">
+                Sent on: {new Date(deal.created_at).toLocaleDateString()} ·{' '}
+                Stage: <span className="text-gray-300">{deal.deal_stage}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import DealProgress from '@/components/DealProgress';
-import { Loader } from 'lucide-react';
+import { CheckCircle, Clock, Loader } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -109,11 +108,11 @@ export default function DealDetailPage() {
 
       <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-4">
         <div className="text-sm space-y-1">
-          <p>
+          <div className="bg-gray-800 p-3 rounded text-center text-lg font-semibold text-white">
             {isSender
               ? `Your offer to ${otherUser?.full_name}`
               : `${otherUser?.full_name}'s offer to you`}
-          </p>
+          </div>
 
           <p>
             <span className="font-medium">Current Stage:</span>{' '}
@@ -136,7 +135,36 @@ export default function DealDetailPage() {
         </div>
 
         <div>
-          <DealProgress currentStage={currentStageIndex} />
+          <p className="text-sm font-medium mb-1 text-gray-300">Deal Progress</p>
+          <div className="space-y-2">
+            {DEAL_STAGES.map((stage, index) => {
+              const isCompleted = index < currentStageIndex;
+              const isCurrent = index === currentStageIndex;
+
+              return (
+                <div key={index} className="flex items-center gap-2">
+                  {isCompleted ? (
+                    <CheckCircle className="text-green-500 w-4 h-4" />
+                  ) : isCurrent ? (
+                    <Clock className="text-yellow-400 w-4 h-4 animate-pulse" />
+                  ) : (
+                    <div className="w-4 h-4 rounded-full border border-gray-500" />
+                  )}
+                  <span
+                    className={`text-sm ${
+                      isCompleted
+                        ? 'text-green-400'
+                        : isCurrent
+                        ? 'text-yellow-300 font-semibold'
+                        : 'text-gray-400'
+                    }`}
+                  >
+                    {stage}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

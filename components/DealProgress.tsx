@@ -1,9 +1,8 @@
-// components/DealProgress.tsx
 'use client';
 
 import { CheckCircle, Clock } from 'lucide-react';
 
-const DEAL_STAGES = [
+export const DEAL_STAGES = [
   'Waiting for Response',
   'Negotiating Terms',
   'Platform Escrow',
@@ -12,7 +11,7 @@ const DEAL_STAGES = [
   'Payment Released',
 ];
 
-interface DealProgressProps {
+export interface DealProgressProps {
   currentStage: number;
 }
 

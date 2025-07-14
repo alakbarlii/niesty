@@ -16,6 +16,10 @@ interface Deal {
     full_name: string;
     username: string;
   };
+  receiver_info?: {
+    full_name: string;
+    username: string;
+  };
 }
 
 const DEAL_STAGES = [
@@ -38,21 +42,14 @@ export default function DealsPage() {
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  const fetchSenderInfos = async (deals: Deal[]) => {
-    const senderIds = [...new Set(deals.map((d) => d.sender_id))];
+  const fetchProfiles = async (ids: string[]) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name')
-      .in('id', senderIds);
+      .select('id, full_name, username')
+      .in('id', ids);
 
-    if (error || !data) return deals;
-
-    const senderMap = new Map(data.map((u) => [u.id, u]));
-
-    return deals.map((deal) => ({
-      ...deal,
-      sender_info: senderMap.get(deal.sender_id),
-    }));
+    if (error || !data) return new Map();
+    return new Map(data.map((user) => [user.id, user]));
   };
 
   const fetchDeals = useCallback(async () => {
@@ -85,8 +82,19 @@ export default function DealsPage() {
     }
 
     const rawDeals = data as Deal[];
-    const dealsWithSenders = await fetchSenderInfos(rawDeals);
-    setDeals(dealsWithSenders);
+    const allUserIds = Array.from(
+      new Set(rawDeals.flatMap((d) => [d.sender_id, d.receiver_id]))
+    );
+
+    const userMap = await fetchProfiles(allUserIds);
+
+    const dealsWithUsers = rawDeals.map((deal) => ({
+      ...deal,
+      sender_info: userMap.get(deal.sender_id),
+      receiver_info: userMap.get(deal.receiver_id),
+    }));
+
+    setDeals(dealsWithUsers);
     setLoading(false);
   }, []);
 
@@ -111,7 +119,7 @@ export default function DealsPage() {
         <ul className="space-y-5">
           {deals.map((deal) => {
             const isSender = userId === deal.sender_id;
-            const otherPartyName = deal.sender_info?.full_name || 'Someone';
+            const otherParty = isSender ? deal.receiver_info : deal.sender_info;
             const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
             const stageProgress = ((currentStageIndex + 1) / DEAL_STAGES.length) * 100;
 
@@ -134,8 +142,8 @@ export default function DealsPage() {
                     <p className="text-sm font-medium flex items-center">
                       {statusIcon}
                       {isSender
-                        ? `Your offer to ${otherPartyName}`
-                        : `${otherPartyName}'s offer to you`}
+                        ? `Your offer to ${otherParty?.full_name || 'Unknown'}`
+                        : `${otherParty?.full_name || 'Unknown'}'s offer to you`}
                     </p>
                     <span
                       className={`text-xs font-semibold px-2 py-1 rounded capitalize border ${

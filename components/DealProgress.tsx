@@ -16,14 +16,16 @@ export interface DealProgressProps {
 }
 
 export default function DealProgress({ currentStage }: DealProgressProps) {
+  const validStage = currentStage >= 0 && currentStage < DEAL_STAGES.length;
+
   return (
     <div className="space-y-2">
       <h2 className="text-sm font-medium text-gray-300">Deal Progress</h2>
 
       <ol className="relative border-l border-gray-700 ml-3">
         {DEAL_STAGES.map((stage, index) => {
-          const isCompleted = index < currentStage;
-          const isCurrent = index === currentStage;
+          const isCompleted = validStage && index < currentStage;
+          const isCurrent = validStage && index === currentStage;
 
           return (
             <li key={stage} className="mb-6 ml-4">

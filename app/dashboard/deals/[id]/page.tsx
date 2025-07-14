@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import DealProgress from '@/components/DealProgress';
-import { CheckCircle, Clock, Loader } from 'lucide-react';
+import { Loader } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -109,22 +109,16 @@ export default function DealDetailPage() {
 
       <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-4">
         <div className="text-sm space-y-1">
-          <p className="flex items-center text-sm">
-            <CheckCircle className="text-green-600 w-4 h-4 mr-1" />
-            <span className="ml-1">
-              {isSender
-                ? `Your offer to ${otherUser?.full_name}`
-                : `${otherUser?.full_name}'s offer to you`}
-            </span>
+          <p>
+            {isSender
+              ? `Your offer to ${otherUser?.full_name}`
+              : `${otherUser?.full_name}'s offer to you`}
           </p>
 
-          <p className="flex items-center">
-            <Clock className="text-yellow-400 w-4 h-4 mr-1" />
-            <span>
-              <span className="font-medium">Current Stage:</span>{' '}
-              <span className="text-blue-300 font-semibold">
-                {DEAL_STAGES[currentStageIndex] || 'Unknown'}
-              </span>
+          <p>
+            <span className="font-medium">Current Stage:</span>{' '}
+            <span className="text-blue-300 font-semibold">
+              {DEAL_STAGES[currentStageIndex] || 'Unknown'}
             </span>
           </p>
 

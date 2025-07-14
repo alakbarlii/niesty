@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import DealProgress from '@/components/DealProgress';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Clock, Loader } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -90,54 +90,58 @@ export default function DealDetailPage() {
     if (dealId) fetchDeal();
   }, [dealId]);
 
-  if (loading) return <div className="p-6">Loading deal...</div>;
+  if (loading)
+    return (
+      <div className="p-6 flex items-center gap-2 text-gray-500">
+        <Loader className="w-4 h-4 animate-spin" /> Loading deal...
+      </div>
+    );
   if (error) return <div className="p-6 text-red-500">{error}</div>;
   if (!deal) return <div className="p-6 text-gray-500">Deal not found.</div>;
 
   const isSender = userId === deal.sender_id;
   const otherUser = isSender ? deal.receiver_info : deal.sender_info;
-  const currentStage = deal.deal_stage;
-  const currentStageIndex = DEAL_STAGES.indexOf(currentStage);
-  const statusColor =
-    currentStageIndex === 0
-      ? 'text-yellow-800 bg-yellow-100 border-yellow-300'
-      : currentStageIndex < 5
-      ? 'text-blue-800 bg-blue-100 border-blue-300'
-      : 'text-green-800 bg-green-100 border-green-300';
+  const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Deal Details</h1>
 
-      <div className="border rounded-xl p-5 bg-white shadow-sm space-y-4">
-        <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
-          <CheckCircle className="w-4 h-4 text-green-600" />
-          <p className="font-medium">
-            {isSender
-              ? `Your offer to ${otherUser?.full_name || 'Unknown'}`
-              : `${otherUser?.full_name || 'Someone'}'s offer to you`}
+      <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-4">
+        <div className="text-sm space-y-1">
+          <p className="flex items-center text-sm">
+            <CheckCircle className="text-green-600 w-4 h-4 mr-1" />
+            <span className="ml-1">
+              {isSender
+                ? `Your offer to ${otherUser?.full_name}`
+                : `${otherUser?.full_name}'s offer to you`}
+            </span>
+          </p>
+
+          <p className="flex items-center">
+            <Clock className="text-yellow-400 w-4 h-4 mr-1" />
+            <span>
+              <span className="font-medium">Current Stage:</span>{' '}
+              <span className="text-blue-300 font-semibold">
+                {DEAL_STAGES[currentStageIndex] || 'Unknown'}
+              </span>
+            </span>
+          </p>
+
+          <p>
+            <span className="font-medium">Sent on:</span>{' '}
+            {new Date(deal.created_at).toLocaleString()}
           </p>
         </div>
 
-        <p
-          className={`inline-block text-xs font-semibold px-2 py-1 rounded-full border ${statusColor}`}
-        >
-          {currentStage}
-        </p>
-
-        <p className="text-xs text-gray-500">
-          Sent on: {new Date(deal.created_at).toLocaleString()}
-        </p>
-
         <div>
-          <p className="text-sm text-gray-600 font-medium mb-1">Description</p>
-          <p className="bg-gray-50 p-3 rounded text-gray-800 text-sm">
+          <p className="text-sm font-medium mb-1 text-gray-300">Description</p>
+          <p className="bg-gray-800 p-3 rounded text-sm text-gray-200">
             {deal.message}
           </p>
         </div>
 
         <div>
-          <p className="text-sm text-gray-600 font-medium mb-1">Deal Progress</p>
           <DealProgress currentStage={currentStageIndex} />
         </div>
       </div>

@@ -1,11 +1,7 @@
+// components/DealProgress.tsx
 'use client';
 
-import { Check, Clock } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-interface DealProgressProps {
-  currentStage: number; // 0 = Waiting for Response, 5 = Payment Released
-}
+import { CheckCircle, Clock } from 'lucide-react';
 
 const DEAL_STAGES = [
   'Waiting for Response',
@@ -16,29 +12,45 @@ const DEAL_STAGES = [
   'Payment Released',
 ];
 
+interface DealProgressProps {
+  currentStage: number;
+}
+
 export default function DealProgress({ currentStage }: DealProgressProps) {
   return (
-    <div className="mt-4">
-      <h2 className="text-sm font-semibold text-gray-700 mb-2">Deal Progress</h2>
-      <ol className="space-y-2 ml-4 list-decimal">
-        {DEAL_STAGES.map((stage, index) => (
-          <li
-            key={stage}
-            className={cn(
-              'flex items-center gap-2 text-sm',
-              index < currentStage && 'text-green-600',
-              index === currentStage && 'text-yellow-500 font-semibold',
-              index > currentStage && 'text-gray-400'
-            )}
-          >
-            {index < currentStage && <Check className="w-4 h-4 text-green-600" />}
-            {index === currentStage && <Clock className="w-4 h-4 text-yellow-500 animate-pulse" />}
-            {index > currentStage && (
-              <span className="w-4 h-4 inline-block rounded-full border border-gray-300" />
-            )}
-            {stage}
-          </li>
-        ))}
+    <div className="space-y-2">
+      <h2 className="text-sm font-medium text-gray-300">Deal Progress</h2>
+
+      <ol className="relative border-l border-gray-700 ml-3">
+        {DEAL_STAGES.map((stage, index) => {
+          const isCompleted = index < currentStage;
+          const isCurrent = index === currentStage;
+
+          return (
+            <li key={stage} className="mb-6 ml-4">
+              <div className="absolute w-3 h-3 rounded-full -left-1.5 border border-gray-500 flex items-center justify-center bg-gray-900">
+                {isCompleted ? (
+                  <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+                ) : isCurrent ? (
+                  <Clock className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
+                ) : (
+                  <div className="w-2 h-2 rounded-full bg-gray-500" />
+                )}
+              </div>
+              <p
+                className={`text-sm ml-4 ${
+                  isCompleted
+                    ? 'text-green-400'
+                    : isCurrent
+                    ? 'text-yellow-300 font-semibold animate-pulse'
+                    : 'text-gray-400'
+                }`}
+              >
+                {stage}
+              </p>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );

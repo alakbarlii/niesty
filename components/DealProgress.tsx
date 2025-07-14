@@ -13,9 +13,10 @@ export const DEAL_STAGES = [
 
 export interface DealProgressProps {
   currentStage: number;
+  status: 'pending' | 'accepted' | 'rejected';
 }
 
-export default function DealProgress({ currentStage }: DealProgressProps) {
+export default function DealProgress({ currentStage, status }: DealProgressProps) {
   const validStage = currentStage >= 0 && currentStage < DEAL_STAGES.length;
 
   return (
@@ -32,7 +33,7 @@ export default function DealProgress({ currentStage }: DealProgressProps) {
               <div className="absolute w-3 h-3 rounded-full -left-1.5 border border-gray-500 flex items-center justify-center bg-gray-900">
                 {isCompleted ? (
                   <CheckCircle className="w-3.5 h-3.5 text-green-400" />
-                ) : isCurrent ? (
+                ) : isCurrent && status === 'pending' ? (
                   <Clock className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
                 ) : (
                   <div className="w-2 h-2 rounded-full bg-gray-500" />
@@ -42,7 +43,7 @@ export default function DealProgress({ currentStage }: DealProgressProps) {
                 className={`text-sm ml-4 ${
                   isCompleted
                     ? 'text-green-400'
-                    : isCurrent
+                    : isCurrent && status === 'pending'
                     ? 'text-yellow-300 font-semibold animate-pulse'
                     : 'text-gray-400'
                 }`}

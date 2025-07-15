@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import { CheckCircle, Clock, Loader } from 'lucide-react';
+import { Loader } from 'lucide-react';
+import DealProgress from '@/components/DealProgress'; 
 
 interface Deal {
   id: string;
@@ -134,38 +135,32 @@ export default function DealDetailPage() {
           </p>
         </div>
 
-        <div>
-          <p className="text-sm font-medium mb-1 text-gray-300">Deal Progress</p>
-          <div className="space-y-2">
-            {DEAL_STAGES.map((stage, index) => {
-              const isCompleted = index < currentStageIndex;
-              const isCurrent = index === currentStageIndex;
+        <DealProgress currentStage={currentStageIndex} />
 
-              return (
-                <div key={index} className="flex items-center gap-2">
-                  {isCompleted ? (
-                    <CheckCircle className="text-green-500 w-4 h-4" />
-                  ) : isCurrent ? (
-                    <Clock className="text-yellow-400 w-4 h-4 animate-pulse" />
-                  ) : (
-                    <div className="w-4 h-4 rounded-full border border-gray-500" />
-                  )}
-                  <span
-                    className={`text-sm ${
-                      isCompleted
-                        ? 'text-green-400'
-                        : isCurrent
-                        ? 'text-yellow-300 font-semibold'
-                        : 'text-gray-400'
-                    }`}
-                  >
-                    {stage}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        {/* DEV BUTTON FOR ADVANCING STAGE */}
+        <button
+          className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
+          onClick={async () => {
+            if (!deal) return;
+            const currentIndex = DEAL_STAGES.indexOf(deal.deal_stage);
+            if (currentIndex === -1 || currentIndex >= DEAL_STAGES.length - 1) return;
+
+            const nextStage = DEAL_STAGES[currentIndex + 1];
+
+            const { error } = await supabase
+              .from('deals')
+              .update({ deal_stage: nextStage })
+              .eq('id', deal.id);
+
+            if (!error) {
+              setDeal({ ...deal, deal_stage: nextStage });
+            } else {
+              alert('Error updating stage');
+            }
+          }}
+        >
+          Advance to Next Stage
+        </button>
       </div>
     </div>
   );

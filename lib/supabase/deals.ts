@@ -1,3 +1,5 @@
+'use client';
+
 import { createBrowserClient } from '@supabase/ssr';
 
 const supabase = createBrowserClient(
@@ -19,7 +21,18 @@ export const sendDealRequest = async ({
     receiver_id: receiverId,
     message,
     status: 'pending',
+    deal_stage: 'Waiting for Response', // Ensure valid initial stage
   });
+
+  return { data, error };
+};
+
+
+export const updateDealStage = async (dealId: string, newStage: string) => {
+  const { data, error } = await supabase
+    .from('deals')
+    .update({ deal_stage: newStage })
+    .eq('id', dealId);
 
   return { data, error };
 };

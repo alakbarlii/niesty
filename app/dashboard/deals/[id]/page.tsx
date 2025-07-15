@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { Loader } from 'lucide-react';
-import DealProgress from '@/components/DealProgress'; 
+import DealProgress from '@/components/DealProgress';
 
 interface Deal {
   id: string;
@@ -107,7 +107,7 @@ export default function DealDetailPage() {
     <div className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Deal Details</h1>
 
-      <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-4">
+      <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-6">
         <div className="text-sm space-y-1">
           <div className="bg-gray-800 p-3 rounded text-center text-lg font-semibold text-white">
             {isSender
@@ -138,29 +138,32 @@ export default function DealDetailPage() {
         <DealProgress currentStage={currentStageIndex} />
 
         {/* DEV BUTTON FOR ADVANCING STAGE */}
-        <button
-          className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
-          onClick={async () => {
-            if (!deal) return;
-            const currentIndex = DEAL_STAGES.indexOf(deal.deal_stage);
-            if (currentIndex === -1 || currentIndex >= DEAL_STAGES.length - 1) return;
+        {currentStageIndex < DEAL_STAGES.length - 1 ? (
+          <div className="pt-2 border-t border-gray-800">
+            <button
+              onClick={async () => {
+                const nextStage = DEAL_STAGES[currentStageIndex + 1];
+                const { error } = await supabase
+                  .from('deals')
+                  .update({ deal_stage: nextStage })
+                  .eq('id', deal.id);
 
-            const nextStage = DEAL_STAGES[currentIndex + 1];
-
-            const { error } = await supabase
-              .from('deals')
-              .update({ deal_stage: nextStage })
-              .eq('id', deal.id);
-
-            if (!error) {
-              setDeal({ ...deal, deal_stage: nextStage });
-            } else {
-              alert('Error updating stage');
-            }
-          }}
-        >
-          Advance to Next Stage
-        </button>
+                if (!error) {
+                  setDeal({ ...deal, deal_stage: nextStage });
+                } else {
+                  alert('Failed to advance stage.');
+                }
+              }}
+              className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150"
+            >
+              Advance to Next Stage
+            </button>
+          </div>
+        ) : (
+          <div className="pt-2 border-t border-gray-800 text-center text-green-400 font-semibold text-sm">
+            Deal Completed
+          </div>
+        )}
       </div>
     </div>
   );

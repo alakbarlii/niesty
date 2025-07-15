@@ -21,7 +21,7 @@ export const sendDealRequest = async ({
     receiver_id: receiverId,
     message,
     status: 'pending',
-    deal_stage: 'Waiting for Response', // Ensure valid initial stage
+    deal_stage: 'Waiting for Response', 
   });
 
   return { data, error };

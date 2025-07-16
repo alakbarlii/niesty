@@ -42,7 +42,7 @@ export default function DealDetailPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState(false); // fixed name
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -178,14 +178,14 @@ export default function DealDetailPage() {
         )}
       </div>
 
-      {/* Personal Notes section */}
+      {/* Personal Notes */}
       <div className="mt-6">
         <PersonalNotes dealId={deal.id} />
       </div>
 
-      {/* Direct Chat Window */}
+      {/* Directly Open Chat at Bottom Right */}
       {showChat && userId && (
-        <div className="fixed bottom-4 right-4 z-50 w-full max-w-md bg-gray-900 rounded-xl shadow-lg border border-gray-800">
+        <div className="fixed bottom-4 right-4 w-full max-w-md z-50">
           <DealChat dealId={deal.id} currentUserId={userId} />
         </div>
       )}

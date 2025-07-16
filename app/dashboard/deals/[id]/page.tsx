@@ -42,7 +42,7 @@ export default function DealDetailPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showChatIcon, setShowChatIcon] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -120,9 +120,9 @@ export default function DealDetailPage() {
                 : `${otherUser?.full_name}'s offer to you`}
             </span>
             <button
-              onClick={() => setShowChatIcon(true)}
+              onClick={() => setShowChat(true)}
               className="text-gray-300 hover:text-white"
-              aria-label="Open chat launcher"
+              aria-label="Open chat"
             >
               <MessageSquare className="w-5 h-5" />
             </button>
@@ -178,14 +178,16 @@ export default function DealDetailPage() {
         )}
       </div>
 
-      {/* Personal Notes section outside the deal card */}
+      {/* Personal Notes section */}
       <div className="mt-6">
         <PersonalNotes dealId={deal.id} />
       </div>
 
-      {/* Chat launcher at bottom-right if opened */}
-      {showChatIcon && userId && (
-        <DealChat dealId={deal.id} currentUserId={userId} />
+      {/* Direct Chat Window */}
+      {showChat && userId && (
+        <div className="fixed bottom-4 right-4 z-50 w-full max-w-md bg-gray-900 rounded-xl shadow-lg border border-gray-800">
+          <DealChat dealId={deal.id} currentUserId={userId} />
+        </div>
       )}
     </div>
   );

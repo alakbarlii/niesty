@@ -42,7 +42,7 @@ export default function DealDetailPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showChat, setShowChat] = useState(false); // fixed name
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -120,7 +120,7 @@ export default function DealDetailPage() {
                 : `${otherUser?.full_name}'s offer to you`}
             </span>
             <button
-              onClick={() => setShowChat(true)}
+              onClick={() => setShowChat(!showChat)}
               className="text-gray-300 hover:text-white"
               aria-label="Open chat"
             >
@@ -183,11 +183,9 @@ export default function DealDetailPage() {
         <PersonalNotes dealId={deal.id} />
       </div>
 
-      {/* Directly Open Chat at Bottom Right */}
+      {/* Chat Window */}
       {showChat && userId && (
-        <div className="fixed bottom-4 right-4 w-full max-w-md z-50">
-          <DealChat dealId={deal.id} currentUserId={userId} />
-        </div>
+        <DealChat dealId={deal.id} currentUserId={userId} />
       )}
     </div>
   );

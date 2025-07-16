@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import { Loader } from 'lucide-react';
+import { Loader, MessageSquare } from 'lucide-react';
 import DealProgress from '@/components/DealProgress';
 import PersonalNotes from '@/components/PersonalNotes';
+import DealChat from '@/components/DealChat';
 
 interface Deal {
   id: string;
@@ -41,6 +42,7 @@ export default function DealDetailPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -106,6 +108,16 @@ export default function DealDetailPage() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
+      <div className="absolute top-4 right-4 z-40">
+        <button
+          onClick={() => setIsChatOpen(true)}
+          className="bg-blue-600 hover:bg-blue-700 p-2 rounded-full shadow text-white"
+          aria-label="Open Chat"
+        >
+          <MessageSquare className="w-5 h-5" />
+        </button>
+      </div>
+
       <h1 className="text-2xl font-bold mb-4">Deal Details</h1>
 
       {/* Main Deal Box */}
@@ -171,6 +183,9 @@ export default function DealDetailPage() {
       <div className="mt-6">
         <PersonalNotes dealId={deal.id} />
       </div>
+
+      {/* Floating Chat Window */}
+      {isChatOpen && userId && <DealChat dealId={deal.id} currentUserId={userId} />}
     </div>
   );
 }

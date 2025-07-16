@@ -42,7 +42,7 @@ export default function DealDetailPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [showChatIcon, setShowChatIcon] = useState(false);
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -107,26 +107,25 @@ export default function DealDetailPage() {
   const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="absolute top-4 right-4 z-40">
-        <button
-          onClick={() => setIsChatOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 p-2 rounded-full shadow text-white"
-          aria-label="Open Chat"
-        >
-          <MessageSquare className="w-5 h-5" />
-        </button>
-      </div>
-
+    <div className="p-6 max-w-3xl mx-auto relative">
       <h1 className="text-2xl font-bold mb-4">Deal Details</h1>
 
       {/* Main Deal Box */}
       <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-6 relative">
         <div className="text-sm space-y-1">
-          <div className="bg-gray-800 p-3 rounded text-center text-lg font-semibold text-white">
-            {isSender
-              ? `Your offer to ${otherUser?.full_name}`
-              : `${otherUser?.full_name}'s offer to you`}
+          <div className="bg-gray-800 p-3 rounded flex items-center justify-between text-lg font-semibold text-white">
+            <span>
+              {isSender
+                ? `Your offer to ${otherUser?.full_name}`
+                : `${otherUser?.full_name}'s offer to you`}
+            </span>
+            <button
+              onClick={() => setShowChatIcon(true)}
+              className="text-gray-300 hover:text-white"
+              aria-label="Open chat launcher"
+            >
+              <MessageSquare className="w-5 h-5" />
+            </button>
           </div>
 
           <p>
@@ -184,8 +183,10 @@ export default function DealDetailPage() {
         <PersonalNotes dealId={deal.id} />
       </div>
 
-      {/* Floating Chat Window */}
-      {isChatOpen && userId && <DealChat dealId={deal.id} currentUserId={userId} />}
+      {/* Chat launcher at bottom-right if opened */}
+      {showChatIcon && userId && (
+        <DealChat dealId={deal.id} currentUserId={userId} />
+      )}
     </div>
   );
 }

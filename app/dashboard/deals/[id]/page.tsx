@@ -108,7 +108,7 @@ export default function DealDetailPage() {
     <div className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Deal Details</h1>
 
-      <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-6">
+      <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-6 relative">
         <div className="text-sm space-y-1">
           <div className="bg-gray-800 p-3 rounded text-center text-lg font-semibold text-white">
             {isSender
@@ -138,7 +138,6 @@ export default function DealDetailPage() {
 
         <DealProgress currentStage={currentStageIndex} />
 
-        {/* DEV BUTTON FOR ADVANCING STAGE */}
         {currentStageIndex < DEAL_STAGES.length - 1 ? (
           <div className="pt-2 border-t border-gray-800">
             <button
@@ -165,10 +164,12 @@ export default function DealDetailPage() {
             Deal Completed
           </div>
         )}
-       
-      </div>
-      <PersonalNotes dealId={deal.id} />
-    </div>
 
-  ); 
+       
+        <div className="border-t border-gray-800 pt-4">
+          <PersonalNotes dealId={deal.id} />
+        </div>
+      </div>
+    </div>
+  );
 }

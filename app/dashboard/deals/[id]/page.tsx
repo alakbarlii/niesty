@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { Loader } from 'lucide-react';
 import DealProgress from '@/components/DealProgress';
+import PersonalNotes from '@/components/PersonalNotes';
 
 interface Deal {
   id: string;
@@ -164,7 +165,10 @@ export default function DealDetailPage() {
             Deal Completed
           </div>
         )}
+       
       </div>
+      <PersonalNotes dealId={deal.id} />
     </div>
-  );
+
+  ); 
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { useUser } from '@supabase/auth-helpers-react';
+import { User } from '@supabase/supabase-js';
 
 interface PersonalNotesProps {
   dealId: string;
@@ -14,13 +14,22 @@ export default function PersonalNotes({ dealId }: PersonalNotesProps) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const user = useUser();
+  const [user, setUser] = useState<User | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchNote = async () => {
-      if (!user) return;
+    const fetchUserAndNote = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      setUser(user);
 
       const { data } = await supabase
         .from('personal_notes')
@@ -33,8 +42,8 @@ export default function PersonalNotes({ dealId }: PersonalNotesProps) {
       setLoading(false);
     };
 
-    fetchNote();
-  }, [user, dealId, supabase]);
+    fetchUserAndNote();
+  }, [dealId, supabase]);
 
   const saveNote = async (content: string) => {
     if (!user) return;
@@ -70,7 +79,7 @@ export default function PersonalNotes({ dealId }: PersonalNotesProps) {
         value={note}
         disabled={loading}
         onChange={(e) => saveNote(e.target.value)}
-        placeholder="You can type notes for this deal only you can see..."
+        placeholder="Type notes only you can see..."
       />
     </div>
   );

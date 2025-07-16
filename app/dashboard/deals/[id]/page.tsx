@@ -108,6 +108,7 @@ export default function DealDetailPage() {
     <div className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Deal Details</h1>
 
+      {/* Main Deal Box */}
       <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-6 relative">
         <div className="text-sm space-y-1">
           <div className="bg-gray-800 p-3 rounded text-center text-lg font-semibold text-white">
@@ -164,11 +165,11 @@ export default function DealDetailPage() {
             Deal Completed
           </div>
         )}
+      </div>
 
-       
-        <div className="border-t border-gray-800 pt-4">
-          <PersonalNotes dealId={deal.id} />
-        </div>
+      {/* Personal Notes section outside the deal card */}
+      <div className="mt-6">
+        <PersonalNotes dealId={deal.id} />
       </div>
     </div>
   );

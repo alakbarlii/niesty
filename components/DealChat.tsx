@@ -18,6 +18,7 @@ interface SupabaseMessage {
   is_seen?: boolean;
   profiles?: {
     full_name?: string;
+    avatar_url?: string;
   };
 }
 
@@ -28,6 +29,7 @@ interface Message {
   created_at: string;
   is_seen?: boolean;
   sender_name?: string;
+  sender_avatar?: string | null;
 }
 
 export default function DealChat({ dealId, currentUserId }: DealChatProps) {
@@ -41,12 +43,13 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
   const [loading, setLoading] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [otherUser, setOtherUser] = useState<{ name: string; avatar: string | null } | null>(null);
 
   useEffect(() => {
     const loadMessages = async () => {
       const { data, error } = await supabase
         .from('deal_messages')
-        .select('*, profiles!deal_messages_sender_id_fkey(full_name)')
+        .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
         .eq('deal_id', dealId)
         .order('created_at', { ascending: true });
 
@@ -60,6 +63,7 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
           created_at: msg.created_at,
           is_seen: msg.is_seen,
           sender_name: msg.profiles?.full_name || 'Unknown',
+          sender_avatar: msg.profiles?.avatar_url || null,
         }));
 
         setMessages(mapped);
@@ -73,6 +77,11 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
             .from('deal_messages')
             .update({ is_seen: true })
             .in('id', ids);
+        }
+
+        const other = mapped.find((m) => m.sender_id !== currentUserId);
+        if (other) {
+          setOtherUser({ name: other.sender_name || 'User', avatar: other.sender_avatar || null });
         }
       }
       setLoading(false);
@@ -93,8 +102,19 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
           filter: `deal_id=eq.${dealId}`,
         },
         (payload) => {
-          const msg = payload.new as Message;
-          setMessages((prev) => [...prev, msg]);
+          const msg = payload.new as SupabaseMessage;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: msg.id,
+              content: msg.content,
+              sender_id: msg.sender_id,
+              created_at: msg.created_at,
+              is_seen: msg.is_seen,
+              sender_name: msg.profiles?.full_name || 'Unknown',
+              sender_avatar: msg.profiles?.avatar_url || null,
+            },
+          ]);
         }
       )
       .subscribe();
@@ -164,9 +184,22 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
   };
 
   return (
-    <div className="w-80 h-96 bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden shadow-lg fixed bottom-4 right-4 z-50">
+    <div className="w-96 h-[30rem] bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden shadow-lg fixed bottom-4 right-4 z-50">
       <div className="p-3 border-b border-gray-700 flex justify-between items-center">
-        <span className="text-sm font-semibold text-gray-300">Live Chat</span>
+        <div className="flex items-center gap-2">
+          {otherUser?.avatar && (
+            <Image
+              src={otherUser.avatar}
+              alt="avatar"
+              width={32}
+              height={32}
+              className="rounded-full"
+            />
+          )}
+          <span className="text-sm font-semibold text-gray-300">
+            {otherUser?.name || 'Chat'}
+          </span>
+        </div>
         <button
           onClick={() => window.location.reload()}
           className="text-sm text-gray-400 hover:text-white"

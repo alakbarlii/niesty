@@ -16,6 +16,7 @@ interface SupabaseMessage {
   sender_id: string;
   created_at: string;
   is_seen?: boolean;
+  deal_id: string;
   profiles?: {
     full_name?: string;
     avatar_url?: string;
@@ -99,10 +100,10 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
           event: 'INSERT',
           schema: 'public',
           table: 'deal_messages',
-          filter: `deal_id=eq.${dealId}`,
         },
         (payload) => {
           const msg = payload.new as SupabaseMessage;
+          if (msg.deal_id !== dealId) return; // manually filter
           setMessages((prev) => [
             ...prev,
             {

@@ -16,7 +16,6 @@ interface SupabaseMessage {
   sender_id: string;
   created_at: string;
   is_seen?: boolean;
-  deal_id: string;
   profiles?: {
     full_name?: string;
     avatar_url?: string;
@@ -100,22 +99,28 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
           event: 'INSERT',
           schema: 'public',
           table: 'deal_messages',
+          filter: `deal_id=eq.${dealId}`,
         },
-        (payload) => {
+        async (payload) => {
           const msg = payload.new as SupabaseMessage;
-          if (msg.deal_id !== dealId) return; // manually filter
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: msg.id,
-              content: msg.content,
-              sender_id: msg.sender_id,
-              created_at: msg.created_at,
-              is_seen: msg.is_seen,
-              sender_name: msg.profiles?.full_name || 'Unknown',
-              sender_avatar: msg.profiles?.avatar_url || null,
-            },
-          ]);
+
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url')
+            .eq('id', msg.sender_id)
+            .single();
+
+          const newMsg: Message = {
+            id: msg.id,
+            content: msg.content,
+            sender_id: msg.sender_id,
+            created_at: msg.created_at,
+            is_seen: msg.is_seen,
+            sender_name: profile?.full_name || 'Unknown',
+            sender_avatar: profile?.avatar_url || null,
+          };
+
+          setMessages((prev) => [...prev, newMsg]);
         }
       )
       .subscribe();
@@ -219,8 +224,8 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
               <div
                 className={`max-w-[75%] p-2 rounded-md text-sm whitespace-pre-line break-words ${
                   msg.sender_id === currentUserId
-                    ? 'ml-auto bg-[#3B82F6] text-white'
-                    : 'mr-auto bg-gray-700 text-gray-200'
+                    ? 'ml-auto bg-gray-700 text-white'
+                    : 'mr-auto bg-gray-800 text-gray-200'
                 }`}
               >
                 {isImage(msg.content) ? (

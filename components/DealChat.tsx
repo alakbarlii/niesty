@@ -215,15 +215,10 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
         ) : (
           messages.map((msg, i) => (
             <div key={msg.id}>
-              {msg.sender_id !== currentUserId && (
-                <p className="text-xs text-gray-400 mb-0.5">
-                  {msg.sender_name}
-                </p>
-              )}
               <div
                 className={`max-w-[75%] p-2 rounded-md text-sm whitespace-pre-line break-words ${
                   msg.sender_id === currentUserId
-                    ? 'ml-auto bg-blue-600 text-white'
+                    ? 'ml-auto bg-[#3B82F6] text-white'
                     : 'mr-auto bg-gray-700 text-gray-200'
                 }`}
               >
@@ -254,7 +249,7 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
       <div className="border-t border-gray-700 p-2 flex flex-col gap-2">
         <div className="flex gap-2">
           <input
-            className="flex-1 text-sm bg-gray-800 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 text-sm bg-gray-800 text-white px-3 py-2 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
             placeholder="Type a message..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
@@ -262,7 +257,7 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
           />
           <button
             onClick={sendMessage}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-semibold"
+            className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md text-sm font-semibold"
           >
             Send
           </button>
@@ -270,7 +265,7 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
         <div className="flex items-center gap-2">
           <label
             htmlFor="file-upload"
-            className="cursor-pointer text-sm text-blue-400 hover:underline flex items-center gap-1"
+            className="cursor-pointer text-sm text-gray-400 hover:underline flex items-center gap-1"
           >
             <ImageIcon className="w-4 h-4" /> Upload image
           </label>

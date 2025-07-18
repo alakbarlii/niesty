@@ -112,14 +112,14 @@ export default function DealsPage() {
       <h1 className="text-2xl font-bold mb-6 text-white">Your Deals</h1>
 
       {loading ? (
-        <div className="text-center text-gray-500 flex items-center justify-center gap-2">
+        <div className="text-center text-white/60 flex items-center justify-center gap-2">
           <Loader className="animate-spin w-4 h-4" />
           Loading deals...
         </div>
       ) : error ? (
         <div className="text-center text-red-500">{error}</div>
       ) : deals.length === 0 ? (
-        <div className="text-center text-gray-400">No deals yet.</div>
+        <div className="text-center text-white/50">No deals yet.</div>
       ) : (
         <ul className="space-y-5">
           {deals.map((deal) => {
@@ -130,17 +130,17 @@ export default function DealsPage() {
 
             const statusIcon =
               deal.status === 'accepted' ? (
-                <CheckCircle className="text-green-500 w-4 h-4 mr-1" />
+                <CheckCircle className="text-green-400 w-4 h-4 mr-1" />
               ) : deal.status === 'pending' ? (
-                <Clock className="text-yellow-500 w-4 h-4 mr-1" />
+                <Clock className="text-yellow-400 w-4 h-4 mr-1" />
               ) : (
-                <XCircle className="text-red-500 w-4 h-4 mr-1" />
+                <XCircle className="text-red-400 w-4 h-4 mr-1" />
               );
 
             return (
               <li
                 key={deal.id}
-                className="bg-gray-900 text-white border border-gray-700 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200"
+                className="bg-white/5 border border-white/10 backdrop-blur-xl text-white rounded-2xl p-5 shadow-[0_0_30px_rgba(255,255,255,0.05)] hover:shadow-lg transition-all duration-300"
               >
                 <a href={`/dashboard/deals/${deal.id}`} className="block">
                   <div className="flex justify-between items-center mb-2">
@@ -153,28 +153,28 @@ export default function DealsPage() {
                     <span
                       className={`text-xs font-semibold px-2 py-1 rounded capitalize border ${
                         deal.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                          ? 'bg-yellow-400 text-black border-yellow-400'
                           : deal.status === 'accepted'
-                          ? 'bg-green-100 text-green-800 border-green-300'
-                          : 'bg-red-100 text-red-800 border-red-300'
+                          ? 'bg-green-400 text-black border-green-400'
+                          : 'bg-red-400 text-black border-red-400'
                       }`}
                     >
                       {deal.status}
                     </span>
                   </div>
 
-                  <p className="text-sm text-gray-300 line-clamp-2 mb-2">
+                  <p className="text-sm text-white/70 line-clamp-2 mb-2">
                     {deal.message}
                   </p>
 
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-white/50">
                     Sent on: {new Date(deal.created_at).toLocaleDateString()} ·{' '}
-                    Stage: <span className="text-gray-300">{deal.deal_stage}</span>
+                    Stage: <span className="text-white/80">{deal.deal_stage}</span>
                   </div>
 
-                  <div className="relative mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="relative mt-3 h-2 bg-white/10 rounded-full overflow-hidden">
                     <div
-                      className="absolute top-0 left-0 h-full bg-blue-500 transition-all duration-500"
+                      className="absolute top-0 left-0 h-full bg-yellow-400 transition-all duration-500"
                       style={{ width: `${stageProgress}%` }}
                     />
                   </div>
@@ -184,13 +184,13 @@ export default function DealsPage() {
                   <div className="flex gap-3 mt-4">
                     <button
                       onClick={() => handleUpdateStatus(deal.id, 'accepted')}
-                      className="text-xs font-semibold px-4 py-1 rounded bg-green-600 hover:bg-green-700 transition"
+                      className="text-xs font-semibold px-4 py-1 rounded bg-green-400 text-black hover:bg-green-300 transition"
                     >
                       Accept
                     </button>
                     <button
                       onClick={() => handleUpdateStatus(deal.id, 'rejected')}
-                      className="text-xs font-semibold px-4 py-1 rounded bg-red-600 hover:bg-red-700 transition"
+                      className="text-xs font-semibold px-4 py-1 rounded bg-red-400 text-black hover:bg-red-300 transition"
                     >
                       Reject
                     </button>
@@ -204,4 +204,3 @@ export default function DealsPage() {
     </div>
   );
 }
-

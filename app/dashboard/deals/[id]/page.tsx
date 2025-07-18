@@ -95,12 +95,12 @@ export default function DealDetailPage() {
 
   if (loading)
     return (
-      <div className="p-6 flex items-center gap-2 text-gray-500">
+      <div className="p-6 flex items-center gap-2 text-gray-400">
         <Loader className="w-4 h-4 animate-spin" /> Loading deal...
       </div>
     );
   if (error) return <div className="p-6 text-red-500">{error}</div>;
-  if (!deal) return <div className="p-6 text-gray-500">Deal not found.</div>;
+  if (!deal) return <div className="p-6 text-gray-400">Deal not found.</div>;
 
   const isSender = userId === deal.sender_id;
   const otherUser = isSender ? deal.receiver_info : deal.sender_info;
@@ -108,12 +108,12 @@ export default function DealDetailPage() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto relative">
-      <h1 className="text-2xl font-bold mb-4">Deal Details</h1>
+      <h1 className="text-3xl font-bold mb-6 text-white">Deal Details</h1>
 
       {/* Main Deal Box */}
-      <div className="border rounded-xl p-5 bg-gray-900 text-white shadow-sm space-y-6 relative">
-        <div className="text-sm space-y-1">
-          <div className="bg-gray-800 p-3 rounded flex items-center justify-between text-lg font-semibold text-white">
+      <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-6 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)] space-y-6">
+        <div className="space-y-4 text-sm">
+          <div className="bg-white/10 p-4 rounded-xl flex items-center justify-between text-base font-semibold">
             <span>
               {isSender
                 ? `Your offer to ${otherUser?.full_name}`
@@ -121,7 +121,7 @@ export default function DealDetailPage() {
             </span>
             <button
               onClick={() => setShowChat(!showChat)}
-              className="text-gray-300 hover:text-white"
+              className="text-white/60 hover:text-yellow-400 transition"
               aria-label="Open chat"
             >
               <MessageSquare className="w-5 h-5" />
@@ -129,21 +129,21 @@ export default function DealDetailPage() {
           </div>
 
           <p>
-            <span className="font-medium">Current Stage:</span>{' '}
-            <span className="text-blue-300 font-semibold">
+            <span className="font-medium text-white/70">Current Stage:</span>{' '}
+            <span className="text-yellow-400 font-semibold">
               {DEAL_STAGES[currentStageIndex] || 'Unknown'}
             </span>
           </p>
 
           <p>
-            <span className="font-medium">Sent on:</span>{' '}
+            <span className="font-medium text-white/70">Sent on:</span>{' '}
             {new Date(deal.created_at).toLocaleString()}
           </p>
         </div>
 
         <div>
-          <p className="text-sm font-medium mb-1 text-gray-300">Description</p>
-          <p className="bg-gray-800 p-3 rounded text-sm text-gray-200">
+          <p className="text-sm font-medium mb-1 text-white/60">Description</p>
+          <p className="bg-white/10 p-4 rounded-xl text-sm text-white/90">
             {deal.message}
           </p>
         </div>
@@ -151,7 +151,7 @@ export default function DealDetailPage() {
         <DealProgress currentStage={currentStageIndex} />
 
         {currentStageIndex < DEAL_STAGES.length - 1 ? (
-          <div className="pt-2 border-t border-gray-800">
+          <div className="pt-2 border-t border-white/10">
             <button
               onClick={async () => {
                 const nextStage = DEAL_STAGES[currentStageIndex + 1];
@@ -166,13 +166,13 @@ export default function DealDetailPage() {
                   alert('Failed to advance stage.');
                 }
               }}
-              className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150"
+              className="w-full mt-4 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
             >
               Advance to Next Stage
             </button>
           </div>
         ) : (
-          <div className="pt-2 border-t border-gray-800 text-center text-green-400 font-semibold text-sm">
+          <div className="pt-2 border-t border-white/10 text-center text-green-400 font-semibold text-sm">
             Deal Completed
           </div>
         )}

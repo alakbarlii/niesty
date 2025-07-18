@@ -93,7 +93,9 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
     };
 
     loadMessages();
+  }, [dealId, supabase, currentUserId]);
 
+  useEffect(() => {
     const channel = supabase
       .channel(`realtime-deal-${dealId}`)
       .on(
@@ -107,7 +109,25 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
         async (payload) => {
           const msg = payload.new as SupabaseMessage;
           if (msg.sender_id !== currentUserId) {
-            await loadMessages();
+            const { data, error } = await supabase
+              .from('deal_messages')
+              .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
+              .eq('deal_id', dealId)
+              .order('created_at', { ascending: true });
+
+            if (!error && data) {
+              const mapped = data.map((msg: SupabaseMessage) => ({
+                id: msg.id,
+                content: msg.content,
+                sender_id: msg.sender_id,
+                created_at: msg.created_at,
+                is_seen: msg.is_seen,
+                sender_name: msg.profiles?.full_name || 'Unknown',
+                sender_avatar: msg.profiles?.avatar_url || null,
+              }));
+
+              setMessages(mapped);
+            }
           }
         }
       )
@@ -129,12 +149,12 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
     let uploadedUrl = '';
     if (file) {
       const filename = `${Date.now()}-${file.name}`;
-      const { error: uploadError } = await supabase.storage
+      const { error } = await supabase.storage
         .from('chat-files')
         .upload(filename, file);
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
+      if (error) {
+        console.error('Upload error:', error);
         return;
       }
 
@@ -145,14 +165,14 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
       uploadedUrl = urlData?.publicUrl || '';
     }
 
-    const { error: insertError } = await supabase.from('deal_messages').insert({
+    const { error } = await supabase.from('deal_messages').insert({
       deal_id: dealId,
       sender_id: currentUserId,
       content: uploadedUrl || content,
     });
 
-    if (insertError) {
-      console.error('Error sending message:', insertError);
+    if (error) {
+      console.error('Error sending message:', error);
       return;
     }
 

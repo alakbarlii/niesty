@@ -53,44 +53,47 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
         .eq('deal_id', dealId)
         .order('created_at', { ascending: true });
 
-      if (error) {
+      if (error || !data) {
         console.error('Error loading messages:', error);
-      } else if (data) {
-        const mapped: Message[] = data.map((msg: SupabaseMessage) => ({
-          id: msg.id,
-          content: msg.content,
-          sender_id: msg.sender_id,
-          created_at: msg.created_at,
-          is_seen: msg.is_seen,
-          sender_name: msg.profiles?.full_name || 'Unknown',
-          sender_avatar: msg.profiles?.avatar_url || null,
-        }));
-
-        setMessages(mapped);
-
-        const unseen = mapped.filter(
-          (msg) => !msg.is_seen && msg.sender_id !== currentUserId
-        );
-        if (unseen.length > 0) {
-          const ids = unseen.map((msg) => msg.id);
-          await supabase
-            .from('deal_messages')
-            .update({ is_seen: true })
-            .in('id', ids);
-        }
-
-        const other = mapped.find((m) => m.sender_id !== currentUserId);
-        if (other) {
-          setOtherUser({ name: other.sender_name || 'User', avatar: other.sender_avatar || null });
-        }
+        return;
       }
+
+      const mapped: Message[] = data.map((msg: SupabaseMessage) => ({
+        id: msg.id,
+        content: msg.content,
+        sender_id: msg.sender_id,
+        created_at: msg.created_at,
+        is_seen: msg.is_seen,
+        sender_name: msg.profiles?.full_name || 'Unknown',
+        sender_avatar: msg.profiles?.avatar_url || null,
+      }));
+
+      setMessages(mapped);
+
+      const unseen = mapped.filter(
+        (msg) => !msg.is_seen && msg.sender_id !== currentUserId
+      );
+      if (unseen.length > 0) {
+        const ids = unseen.map((msg) => msg.id);
+        await supabase
+          .from('deal_messages')
+          .update({ is_seen: true })
+          .in('id', ids);
+      }
+
+      const other = mapped.find((m) => m.sender_id !== currentUserId);
+      if (other) {
+        setOtherUser({
+          name: other.sender_name || 'User',
+          avatar: other.sender_avatar || null,
+        });
+      }
+
       setLoading(false);
     };
 
     loadMessages();
-  }, [dealId, supabase, currentUserId]);
 
-  useEffect(() => {
     const channel = supabase
       .channel(`realtime-deal-${dealId}`)
       .on(
@@ -103,24 +106,9 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
         },
         async (payload) => {
           const msg = payload.new as SupabaseMessage;
-
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name, avatar_url')
-            .eq('id', msg.sender_id)
-            .single();
-
-          const newMsg: Message = {
-            id: msg.id,
-            content: msg.content,
-            sender_id: msg.sender_id,
-            created_at: msg.created_at,
-            is_seen: msg.is_seen,
-            sender_name: profile?.full_name || 'Unknown',
-            sender_avatar: profile?.avatar_url || null,
-          };
-
-          setMessages((prev) => [...prev, newMsg]);
+          if (msg.sender_id !== currentUserId) {
+            await loadMessages();
+          }
         }
       )
       .subscribe();
@@ -128,7 +116,7 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [dealId, supabase]);
+  }, [dealId, supabase, currentUserId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -141,12 +129,12 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
     let uploadedUrl = '';
     if (file) {
       const filename = `${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('chat-files')
         .upload(filename, file);
 
-      if (error) {
-        console.error('Upload error:', error);
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
         return;
       }
 
@@ -157,14 +145,14 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
       uploadedUrl = urlData?.publicUrl || '';
     }
 
-    const { error } = await supabase.from('deal_messages').insert({
+    const { error: insertError } = await supabase.from('deal_messages').insert({
       deal_id: dealId,
       sender_id: currentUserId,
       content: uploadedUrl || content,
     });
 
-    if (error) {
-      console.error('Error sending message:', error);
+    if (insertError) {
+      console.error('Error sending message:', insertError);
       return;
     }
 
@@ -185,9 +173,7 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
     return `${diffDays}d ago`;
   };
 
-  const isImage = (url: string) => {
-    return url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
-  };
+  const isImage = (url: string) => /\.(jpeg|jpg|gif|png|webp)$/i.test(url);
 
   return (
     <div className="w-96 h-[30rem] bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden shadow-lg fixed bottom-4 right-4 z-50">

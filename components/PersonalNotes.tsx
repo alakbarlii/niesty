@@ -9,16 +9,16 @@ interface PersonalNotesProps {
 }
 
 export default function PersonalNotes({ dealId }: PersonalNotesProps) {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   const [user, setUser] = useState<User | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
     const fetchUserAndNote = async () => {
       const {
         data: { user },
@@ -43,12 +43,17 @@ export default function PersonalNotes({ dealId }: PersonalNotesProps) {
     };
 
     fetchUserAndNote();
-  }, [dealId, supabase]);
+  }, [dealId]);
 
   const saveNote = async (content: string) => {
     if (!user) return;
 
     setNote(content);
+
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
     const { data: existing } = await supabase
       .from('personal_notes')
@@ -72,10 +77,10 @@ export default function PersonalNotes({ dealId }: PersonalNotesProps) {
   };
 
   return (
-    <div className="mt-6 bg-gray-800 border border-gray-700 rounded-xl p-4">
-      <h3 className="text-sm font-medium text-gray-300 mb-2">Your Private Notes</h3>
+    <div className="mt-6 bg-white/5 border border-white/10 rounded-xl p-4 shadow-[0_0_20px_rgba(255,255,255,0.03)]">
+      <h3 className="text-sm font-medium text-white/70 mb-2">Your Private Notes</h3>
       <textarea
-        className="w-full h-32 bg-gray-900 text-gray-200 border border-gray-600 rounded-md p-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full min-h-[100px] px-4 py-3 text-white bg-transparent border-2 border-yellow-400 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 transition resize-none"
         value={note}
         disabled={loading}
         onChange={(e) => saveNote(e.target.value)}

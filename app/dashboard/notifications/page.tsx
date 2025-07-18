@@ -1,30 +1,73 @@
 'use client';
 
-import { BellRing } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
+import { BellRing } from 'lucide-react';
 
 interface Notification {
   id: string;
-  message: string;
+  content: string;
   created_at: string;
+  recipient_id: string | null;
+  target_role: string | null;
 }
 
 export default function Page() {
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchNotifications = async () => {
-      // Replace with real Supabase call in production
       setLoading(true);
-      setTimeout(() => {
-        setNotifications([]); // Set to array of mock notifications if needed
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        console.error('User not found:', userError?.message);
         setLoading(false);
-      }, 500);
+        return;
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || !profileData) {
+        console.error('User role not found:', profileError?.message);
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .or(
+          `recipient_id.eq.${user.id},target_role.eq.${profileData.role}`
+        )
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching notifications:', error.message);
+        setLoading(false);
+        return;
+      }
+
+      setNotifications(data || []);
+      setLoading(false);
     };
 
     fetchNotifications();
-  }, []);
+  }, [supabase]);
 
   return (
     <section className="p-6 md:p-10 max-w-4xl mx-auto">
@@ -47,7 +90,7 @@ export default function Page() {
               key={note.id}
               className="bg-white/5 border border-white/10 rounded-xl p-4 text-white shadow-sm hover:shadow-md transition"
             >
-              <p className="text-sm text-white/90">{note.message}</p>
+              <p className="text-sm text-white/90">{note.content}</p>
               <span className="text-xs text-white/50">
                 {new Date(note.created_at).toLocaleString()}
               </span>

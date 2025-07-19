@@ -51,9 +51,7 @@ export default function Page() {
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .or(
-          `recipient_id.eq.${user.id},target_role.eq.${profileData.role}`
-        )
+        .or(`recipient_id.eq.${user.id},target_role.eq.${profileData.role}`)
         .order('created_at', { ascending: false });
 
       if (error) {

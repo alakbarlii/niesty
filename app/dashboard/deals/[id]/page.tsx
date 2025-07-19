@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import { Loader } from 'lucide-react';
+import { Loader, MessageSquare } from 'lucide-react';
 import DealProgress from '@/components/DealProgress';
 import PersonalNotes from '@/components/PersonalNotes';
 import DealChat from '@/components/DealChat';
@@ -34,11 +34,6 @@ const DEAL_STAGES = [
   'Payment Released',
 ];
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 export default function DealDetailPage() {
   const params = useParams();
   const dealId = params?.id as string;
@@ -48,11 +43,15 @@ export default function DealDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submissionUrl, setSubmissionUrl] = useState('');
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
-    const fetchDeal = async () => {
-      setLoading(true);
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
+    const fetchDeal = async () => {
       const {
         data: { user },
         error: userError,
@@ -106,22 +105,19 @@ export default function DealDetailPage() {
     if (dealId) fetchDeal();
   }, [dealId]);
 
-  if (loading)
-    return (
-      <div className="p-6 flex items-center gap-2 text-gray-400">
-        <Loader className="w-4 h-4 animate-spin" /> Loading deal...
-      </div>
-    );
-  if (error) return <div className="p-6 text-red-500">{error}</div>;
-  if (!deal) return <div className="p-6 text-gray-400">Deal not found.</div>;
-
-  const isSender = userId === deal.sender_id;
-  const isReceiver = userId === deal.receiver_id;
-  const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
-  const hasAgreed = isSender ? deal.agreed_by_sender : deal.agreed_by_receiver;
-  const hasApproved = isSender ? deal.approved_by_sender : deal.approved_by_receiver;
+  const isSender = userId === deal?.sender_id;
+  const isReceiver = userId === deal?.receiver_id;
+  const otherUser = isSender ? deal?.receiver_info : deal?.sender_info;
+  const currentStageIndex = deal ? DEAL_STAGES.indexOf(deal.deal_stage) : -1;
+  const hasAgreed = isSender ? deal?.agreed_by_sender : deal?.agreed_by_receiver;
+  const hasApproved = isSender ? deal?.approved_by_sender : deal?.approved_by_receiver;
 
   const handleSubmitContent = async () => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
     if (!submissionUrl.trim()) return alert('Please enter a valid URL.');
     const confirm = window.confirm('Are you sure you want to submit this content?');
     if (!confirm) return;
@@ -129,7 +125,7 @@ export default function DealDetailPage() {
     const { error } = await supabase
       .from('deals')
       .update({ submission_url: submissionUrl, deal_stage: 'Content Submitted' })
-      .eq('id', deal.id);
+      .eq('id', deal?.id);
 
     if (error) return alert('Failed to submit content.');
 
@@ -138,8 +134,13 @@ export default function DealDetailPage() {
   };
 
   const handleApproval = async () => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
     const confirm = window.confirm('Are you sure you approve the submitted content?');
-    if (!confirm) return;
+    if (!confirm || !deal) return;
 
     const columnToUpdate = isSender ? 'approved_by_sender' : 'approved_by_receiver';
     const { error } = await supabase.from('deals').update({ [columnToUpdate]: true }).eq('id', deal.id);
@@ -160,9 +161,43 @@ export default function DealDetailPage() {
     setDeal(updatedDeal);
   };
 
+  if (loading)
+    return (
+      <div className="p-6 flex items-center gap-2 text-gray-400">
+        <Loader className="w-4 h-4 animate-spin" /> Loading deal...
+      </div>
+    );
+  if (error) return <div className="p-6 text-red-500">{error}</div>;
+  if (!deal) return <div className="p-6 text-gray-400">Deal not found.</div>;
+
   return (
     <div className="p-6 max-w-3xl mx-auto relative">
       <h1 className="text-3xl font-bold mb-6 text-white">Deal Details</h1>
+
+      <div className="bg-white/10 p-4 rounded-xl flex items-center justify-between text-base font-semibold text-white mb-4">
+        <span>
+          {isSender
+            ? `Your offer to ${otherUser?.full_name}`
+            : `${otherUser?.full_name}'s offer to you`}
+        </span>
+        <button
+          onClick={() => setShowChat(!showChat)}
+          className="text-white/60 hover:text-yellow-400 transition"
+          aria-label="Open chat"
+        >
+          <MessageSquare className="w-5 h-5" />
+        </button>
+      </div>
+
+      <p className="text-white/70 text-sm mb-2">
+        <span className="font-medium">Sent on:</span>{' '}
+        {new Date(deal.created_at).toLocaleString()}
+      </p>
+
+      <p className="text-white/70 text-sm mb-6">
+        <span className="font-medium">Description:</span> {deal.message}
+      </p>
+
       <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-6 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)] space-y-6">
         <DealProgress currentStage={currentStageIndex} />
 
@@ -173,6 +208,11 @@ export default function DealDetailPage() {
               <button
                 className="w-full mt-2 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
                 onClick={async () => {
+                  const supabase = createBrowserClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                  );
+
                   const columnToUpdate = isSender ? 'agreed_by_sender' : 'agreed_by_receiver';
                   const { error: updateError } = await supabase
                     .from('deals')
@@ -180,11 +220,20 @@ export default function DealDetailPage() {
                     .eq('id', deal.id);
                   if (updateError) return alert('Failed to confirm agreement.');
 
-                  const { data: refreshedDeal } = await supabase.from('deals').select('*').eq('id', deal.id).single();
-                  const bothAgreed = refreshedDeal?.agreed_by_sender && refreshedDeal?.agreed_by_receiver;
+                  const { data: refreshedDeal } = await supabase
+                    .from('deals')
+                    .select('*')
+                    .eq('id', deal.id)
+                    .single();
+
+                  const bothAgreed =
+                    refreshedDeal?.agreed_by_sender && refreshedDeal?.agreed_by_receiver;
 
                   if (bothAgreed) {
-                    await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', deal.id);
+                    await supabase
+                      .from('deals')
+                      .update({ deal_stage: 'Platform Escrow' })
+                      .eq('id', deal.id);
                     refreshedDeal.deal_stage = 'Platform Escrow';
                   }
 
@@ -249,10 +298,14 @@ export default function DealDetailPage() {
           </div>
         )}
       </div>
+
       <div className="mt-6">
         <PersonalNotes dealId={deal.id} />
       </div>
-      {userId && <DealChat dealId={deal.id} currentUserId={userId} />}
+
+      {showChat && userId && (
+        <DealChat dealId={deal.id} currentUserId={userId} />
+      )}
     </div>
   );
 }

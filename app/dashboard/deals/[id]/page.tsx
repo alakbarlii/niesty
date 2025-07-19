@@ -75,6 +75,15 @@ export default function DealDetailPage() {
         return;
       }
 
+      // Auto-advance from Waiting for Response to Negotiating Terms if accepted
+      if (data.status === 'accepted' && data.deal_stage === 'Waiting for Response') {
+        await supabase
+          .from('deals')
+          .update({ deal_stage: 'Negotiating Terms' })
+          .eq('id', data.id);
+        data.deal_stage = 'Negotiating Terms';
+      }
+
       const { data: users } = await supabase
         .from('profiles')
         .select('id, full_name, username')

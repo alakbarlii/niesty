@@ -54,55 +54,59 @@ export default function BusinessProfileView() {
   }
 
   return (
-    <div className="p-6 flex justify-center text-white">
-      <div className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl shadow-md p-6 max-w-3xl w-full">
-        <div className="flex flex-col items-center gap-4">
+    <div className="p-6 max-w-4xl mx-auto text-white">
+      <div className="flex flex-col md:flex-row gap-6 bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl shadow-md p-6 w-full">
+        {/* Left: Image */}
+        <div className="w-full md:w-[160px] h-[160px] flex-shrink-0">
           <Image
             src={profile.profile_url || '/default-avatar.png'}
             alt="Profile Avatar"
-            width={120}
-            height={120}
-            className="rounded-xl border border-white/20 object-cover w-30 h-30"
+            width={160}
+            height={160}
+            className="rounded-xl border border-white/20 object-cover w-full h-full"
           />
-          <h1 className="text-2xl font-bold">{profile.full_name}</h1>
-
-          <div className="flex flex-wrap justify-center gap-4 text-sm text-gray-300 mt-2">
-            <div className="bg-white/5 px-4 py-1.5 rounded-full border border-white/10">
-              <span className="font-semibold text-white">Role:</span> {profile.role}
-            </div>
-            <div className="bg-white/5 px-4 py-1.5 rounded-full border border-white/10">
-              <span className="font-semibold text-white">Username:</span> @{profile.username}
-            </div>
-            <div className="bg-white/5 px-4 py-1.5 rounded-full border border-white/10">
-              <span className="font-semibold text-white">Deals Completed:</span> 0
-            </div>
-          </div>
-
-          <p className="text-white/80 text-center max-w-xl whitespace-pre-line mt-4">{profile.description}</p>
-
-          <div className="mt-6 w-full">
-            <h2 className="text-lg font-semibold mb-2 text-white">Social Platforms</h2>
-            {profile.platforms && profile.platforms.length > 0 ? (
-              <ul className="text-white/80 space-y-1">
-                {profile.platforms.map((platform, idx) => (
-                  <li key={idx}>
-                    <span className="font-medium text-yellow-400">{platform.name}:</span>{' '}
-                    <a
-                      href={platform.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:text-yellow-300"
-                    >
-                      {platform.link}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-400">No platforms added.</p>
-            )}
-          </div>
         </div>
+
+        {/* Right: Info */}
+        <div className="flex-1 flex flex-col gap-2">
+          <h1 className="text-2xl font-bold">{profile.full_name}</h1>
+          <div className="flex flex-wrap gap-2 text-sm text-white">
+            <span className="px-3 py-1 bg-white/10 rounded-full border border-white/20">
+              Role: {profile.role}
+            </span>
+            <span className="px-3 py-1 bg-white/10 rounded-full border border-white/20">
+              @{profile.username}
+            </span>
+            <span className="px-3 py-1 bg-white/10 rounded-full border border-white/20">
+              Deals Completed: 0
+            </span>
+          </div>
+          <p className="text-white/80 text-sm whitespace-pre-line mt-2">{profile.description}</p>
+        </div>
+      </div>
+
+      {/* Platforms */}
+      <div className="mt-6">
+        <h2 className="text-lg font-semibold mb-2 text-white">Social Platforms</h2>
+        {profile.platforms && profile.platforms.length > 0 ? (
+          <ul className="text-white/80 space-y-1">
+            {profile.platforms.map((platform, idx) => (
+              <li key={idx}>
+                <span className="font-medium text-yellow-400">{platform.name}:</span>{' '}
+                <a
+                  href={platform.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-yellow-300"
+                >
+                  {platform.link}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-400">No platform is added.</p>
+        )}
       </div>
     </div>
   );

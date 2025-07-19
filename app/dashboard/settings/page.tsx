@@ -35,11 +35,10 @@ export default function SettingsPage() {
         setUserEmail(email ?? null);
 
         const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('user_id', userId)
-        .single();
-      
+          .from('profiles')
+          .select('role')
+          .eq('user_id', userId)
+          .single();
 
         if (error) {
           console.error('Role fetch error:', error);
@@ -72,22 +71,26 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 max-w-xl mx-auto text-white">
-      <h1 className="text-3xl font-bold mb-6">Settings</h1>
+    <div className="p-4 sm:p-6 max-w-xl mx-auto text-white">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-6">Settings</h1>
 
       {userEmail && (
-        <p className="text-sm text-gray-300 mb-4">Logged in as: <span className="font-medium">{userEmail}</span></p>
+        <p className="text-sm sm:text-base text-gray-300 mb-4">
+          Logged in as: <span className="font-medium">{userEmail}</span>
+        </p>
       )}
 
       {loading ? (
-        <div className="text-center py-10 text-gray-400 animate-pulse">Loading settings...</div>
+        <div className="text-center py-10 text-gray-400 animate-pulse">
+          Loading settings...
+        </div>
       ) : (
         <>
           {editHref && (
             <div className="mb-4">
               <button
                 onClick={() => router.push(editHref)}
-                className="w-full bg-black hover:bg-gray-800 text-white font-semibold py-3 px-4 rounded-lg transition"
+                className="w-full bg-black hover:bg-gray-800 text-white font-semibold py-3 px-4 rounded-lg transition text-sm sm:text-base"
               >
                 Edit Profile
               </button>
@@ -97,7 +100,7 @@ export default function SettingsPage() {
           <div className="mt-2">
             <button
               onClick={handleLogout}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-4 rounded-lg transition"
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-4 rounded-lg transition text-sm sm:text-base"
             >
               Log Out
             </button>

@@ -68,16 +68,17 @@ export default function Page() {
   }, [supabase]);
 
   return (
-    <section className="p-6 md:p-10 max-w-4xl mx-auto">
-      <h1 className="text-2xl md:text-3xl font-bold text-white mb-6 flex items-center gap-2">
-        <BellRing className="w-6 h-6 text-yellow-400" /> Notifications
+    <section className="p-4 sm:p-6 md:p-10 max-w-3xl mx-auto">
+      <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-6 flex items-center gap-2">
+        <BellRing className="w-5 sm:w-6 h-5 sm:h-6 text-yellow-400" />
+        Notifications
       </h1>
 
       {loading ? (
-        <p className="text-white/60">Loading notifications...</p>
+        <p className="text-white/60 text-sm sm:text-base">Loading notifications...</p>
       ) : notifications.length === 0 ? (
-        <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-6 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
-          <p className="text-white/60 text-base md:text-lg">
+        <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-5 sm:p-6 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+          <p className="text-white/60 text-sm sm:text-base">
             When you have a notification, you will see it here.
           </p>
         </div>
@@ -86,10 +87,10 @@ export default function Page() {
           {notifications.map((note) => (
             <li
               key={note.id}
-              className="bg-white/5 border border-white/10 rounded-xl p-4 text-white shadow-sm hover:shadow-md transition"
+              className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 sm:px-5 sm:py-4 text-white shadow-sm hover:shadow-md transition-all"
             >
-              <p className="text-sm text-white/90">{note.content}</p>
-              <span className="text-xs text-white/50">
+              <p className="text-sm sm:text-base text-white/90 leading-snug mb-1">{note.content}</p>
+              <span className="text-xs text-white/50 block">
                 {new Date(note.created_at).toLocaleString()}
               </span>
             </li>

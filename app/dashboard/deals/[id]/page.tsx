@@ -171,10 +171,10 @@ export default function DealDetailPage() {
   if (!deal) return <div className="p-6 text-gray-400">Deal not found.</div>;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto relative">
-      <h1 className="text-3xl font-bold mb-6 text-white">Deal Details</h1>
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto relative">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Deal Details</h1>
 
-      <div className="bg-white/10 p-4 rounded-xl flex items-center justify-between text-base font-semibold text-white mb-4">
+      <div className="bg-white/10 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-base font-semibold text-white mb-4 gap-3 sm:gap-0">
         <span>
           {isSender
             ? `Your offer to ${otherUser?.full_name}`
@@ -182,7 +182,7 @@ export default function DealDetailPage() {
         </span>
         <button
           onClick={() => setShowChat(!showChat)}
-          className="text-white/60 hover:text-yellow-400 transition"
+          className="text-white/60 hover:text-yellow-400 transition self-start sm:self-auto"
           aria-label="Open chat"
         >
           <MessageSquare className="w-5 h-5" />
@@ -198,7 +198,7 @@ export default function DealDetailPage() {
         <span className="font-normal">Description:</span> {deal.message}
       </p>
 
-      <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-6 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)] space-y-6">
+      <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-6 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)] space-y-6">
         <DealProgress currentStage={currentStageIndex} />
 
         {deal.deal_stage === 'Negotiating Terms' && (

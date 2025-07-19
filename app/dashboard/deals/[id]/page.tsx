@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import { Loader, MessageSquare } from 'lucide-react';
+import { Loader } from 'lucide-react';
 import DealProgress from '@/components/DealProgress';
 import PersonalNotes from '@/components/PersonalNotes';
 import DealChat from '@/components/DealChat';
@@ -18,6 +18,9 @@ interface Deal {
   created_at: string;
   agreed_by_sender?: boolean;
   agreed_by_receiver?: boolean;
+  approved_by_sender?: boolean;
+  approved_by_receiver?: boolean;
+  submission_url?: string;
   sender_info?: { full_name: string; username: string };
   receiver_info?: { full_name: string; username: string };
 }
@@ -44,7 +47,7 @@ export default function DealDetailPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showChat, setShowChat] = useState(false);
+  const [submissionUrl, setSubmissionUrl] = useState('');
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -75,7 +78,6 @@ export default function DealDetailPage() {
         return;
       }
 
-      // Auto-advance from Waiting for Response to Negotiating Terms if accepted
       if (data.status === 'accepted' && data.deal_stage === 'Waiting for Response') {
         await supabase
           .from('deals')
@@ -114,107 +116,75 @@ export default function DealDetailPage() {
   if (!deal) return <div className="p-6 text-gray-400">Deal not found.</div>;
 
   const isSender = userId === deal.sender_id;
-  const otherUser = isSender ? deal.receiver_info : deal.sender_info;
+  const isReceiver = userId === deal.receiver_id;
   const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
   const hasAgreed = isSender ? deal.agreed_by_sender : deal.agreed_by_receiver;
+  const hasApproved = isSender ? deal.approved_by_sender : deal.approved_by_receiver;
+
+  const handleSubmitContent = async () => {
+    if (!submissionUrl.trim()) return alert('Please enter a valid URL.');
+    const confirm = window.confirm('Are you sure you want to submit this content?');
+    if (!confirm) return;
+
+    const { error } = await supabase
+      .from('deals')
+      .update({ submission_url: submissionUrl, deal_stage: 'Content Submitted' })
+      .eq('id', deal.id);
+
+    if (error) return alert('Failed to submit content.');
+
+    setDeal((prev) => prev && { ...prev, submission_url: submissionUrl, deal_stage: 'Content Submitted' });
+    setSubmissionUrl('');
+  };
+
+  const handleApproval = async () => {
+    const confirm = window.confirm('Are you sure you approve the submitted content?');
+    if (!confirm) return;
+
+    const columnToUpdate = isSender ? 'approved_by_sender' : 'approved_by_receiver';
+    const { error } = await supabase.from('deals').update({ [columnToUpdate]: true }).eq('id', deal.id);
+    if (error) return alert('Failed to approve content.');
+
+    const { data: updatedDeal } = await supabase.from('deals').select('*').eq('id', deal.id).single();
+    const bothApproved = updatedDeal?.approved_by_sender && updatedDeal?.approved_by_receiver;
+
+    if (bothApproved) {
+      const { error: releaseError } = await supabase
+        .from('deals')
+        .update({ deal_stage: 'Payment Released' })
+        .eq('id', deal.id);
+      if (releaseError) return alert('Failed to release payment.');
+      updatedDeal.deal_stage = 'Payment Released';
+    }
+
+    setDeal(updatedDeal);
+  };
 
   return (
     <div className="p-6 max-w-3xl mx-auto relative">
       <h1 className="text-3xl font-bold mb-6 text-white">Deal Details</h1>
-
       <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-6 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)] space-y-6">
-        <div className="space-y-4 text-sm">
-          <div className="bg-white/10 p-4 rounded-xl flex items-center justify-between text-base font-semibold">
-            <span>
-              {isSender
-                ? `Your offer to ${otherUser?.full_name}`
-                : `${otherUser?.full_name}'s offer to you`}
-            </span>
-            <button
-              onClick={() => setShowChat(!showChat)}
-              className="text-white/60 hover:text-yellow-400 transition"
-              aria-label="Open chat"
-            >
-              <MessageSquare className="w-5 h-5" />
-            </button>
-          </div>
-
-          <p>
-            <span className="font-medium text-white/70">Current Stage:</span>{' '}
-            <span className="text-yellow-400 font-semibold">
-              {DEAL_STAGES[currentStageIndex] || 'Unknown'}
-            </span>
-          </p>
-
-          <p>
-            <span className="font-medium text-white/70">Sent on:</span>{' '}
-            {new Date(deal.created_at).toLocaleString()}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-sm font-medium mb-1 text-white/60">Description</p>
-          <p className="bg-white/10 p-4 rounded-xl text-sm text-white/90">
-            {deal.message}
-          </p>
-        </div>
-
         <DealProgress currentStage={currentStageIndex} />
 
         {deal.deal_stage === 'Negotiating Terms' && (
           <div className="pt-4 border-t border-white/10 space-y-3">
-            <p className="text-white/70 text-sm">
-              Both parties must confirm the agreed terms to proceed.
-            </p>
-            {hasAgreed ? (
-              <p className="text-green-400 font-medium text-sm">
-                You have agreed to the terms. Waiting for the other party.
-              </p>
-            ) : (
+            <p className="text-white/70 text-sm">Both parties must confirm the agreed terms to proceed.</p>
+            {!hasAgreed ? (
               <button
                 className="w-full mt-2 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
                 onClick={async () => {
-                  const columnToUpdate = isSender
-                    ? 'agreed_by_sender'
-                    : 'agreed_by_receiver';
-
+                  const columnToUpdate = isSender ? 'agreed_by_sender' : 'agreed_by_receiver';
                   const { error: updateError } = await supabase
                     .from('deals')
                     .update({ [columnToUpdate]: true })
                     .eq('id', deal.id);
+                  if (updateError) return alert('Failed to confirm agreement.');
 
-                  if (updateError) {
-                    alert('Failed to confirm agreement.');
-                    return;
-                  }
-
-                  const { data: refreshedDeal, error: fetchError } =
-                    await supabase
-                      .from('deals')
-                      .select('*')
-                      .eq('id', deal.id)
-                      .single();
-
-                  if (fetchError || !refreshedDeal) {
-                    alert('Error fetching updated deal.');
-                    return;
-                  }
-
-                  const bothAgreed =
-                    refreshedDeal.agreed_by_sender &&
-                    refreshedDeal.agreed_by_receiver;
+                  const { data: refreshedDeal } = await supabase.from('deals').select('*').eq('id', deal.id).single();
+                  const bothAgreed = refreshedDeal?.agreed_by_sender && refreshedDeal?.agreed_by_receiver;
 
                   if (bothAgreed) {
-                    const { error: stageError } = await supabase
-                      .from('deals')
-                      .update({ deal_stage: 'Platform Escrow' })
-                      .eq('id', deal.id);
-
-                    if (stageError) {
-                      alert('Failed to advance to Platform Escrow.');
-                      return;
-                    }
-
+                    await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', deal.id);
                     refreshedDeal.deal_stage = 'Platform Escrow';
                   }
 
@@ -223,7 +193,53 @@ export default function DealDetailPage() {
               >
                 I Agree to Terms
               </button>
+            ) : (
+              <p className="text-green-400 font-medium text-sm">
+                You have agreed to the terms. Waiting for the other party.
+              </p>
             )}
+          </div>
+        )}
+
+        {deal.deal_stage === 'Platform Escrow' && isSender && (
+          <div className="pt-4 border-t border-white/10 space-y-3">
+            <p className="text-white/70 text-sm">Submit your content URL to proceed.</p>
+            <input
+              type="text"
+              placeholder="e.g. https://youtube.com/..."
+              className="w-full p-3 rounded-xl bg-white/10 text-white placeholder:text-white/50"
+              value={submissionUrl}
+              onChange={(e) => setSubmissionUrl(e.target.value)}
+            />
+            <button
+              onClick={handleSubmitContent}
+              className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
+            >
+              Submit Content
+            </button>
+          </div>
+        )}
+
+        {deal.deal_stage === 'Content Submitted' && isReceiver && (
+          <div className="pt-4 border-t border-white/10 space-y-3">
+            <p className="text-white/70 text-sm">Submitted URL:</p>
+            <a
+              href={deal.submission_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-yellow-400 underline break-words"
+            >
+              {deal.submission_url}
+            </a>
+            {!hasApproved && (
+              <button
+                onClick={handleApproval}
+                className="w-full mt-3 bg-green-500 hover:bg-green-400 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
+              >
+                Approve Content
+              </button>
+            )}
+            {hasApproved && <p className="text-green-400 font-medium">You have approved the content.</p>}
           </div>
         )}
 
@@ -233,14 +249,10 @@ export default function DealDetailPage() {
           </div>
         )}
       </div>
-
       <div className="mt-6">
         <PersonalNotes dealId={deal.id} />
       </div>
-
-      {showChat && userId && (
-        <DealChat dealId={deal.id} currentUserId={userId} />
-      )}
+      {userId && <DealChat dealId={deal.id} currentUserId={userId} />}
     </div>
   );
 }

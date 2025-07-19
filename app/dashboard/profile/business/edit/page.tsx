@@ -9,9 +9,10 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
-  const [description, setDescription] = useState('');
-  const [website, setWebsite] = useState('');
+  const [bio, setBio] = useState('');
+  const [platforms, setPlatforms] = useState([{ name: '', url: '' }]);
   const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [profileUrl, setProfileUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -37,19 +38,28 @@ export default function Page() {
         .eq('user_id', userId)
         .single();
 
-      if (!profileData || profileError) {
-        const { data: waitlistData } = await supabase
+      if (profileError || !profileData) {
+        const { data: waitlistData, error: waitlistError } = await supabase
           .from('waitlist')
           .select('full_name')
           .eq('email', userEmail)
           .single();
 
-        if (waitlistData?.full_name) setFullName(waitlistData.full_name);
+        if (!waitlistError && waitlistData?.full_name) {
+          setFullName(waitlistData.full_name);
+        }
       } else {
         setUsername(profileData.username || '');
         setFullName(profileData.full_name || '');
-        setDescription(profileData.description || '');
-        setWebsite(profileData.website || '');
+        setBio(profileData.bio || '');
+        setProfileUrl(profileData.profile_url || null);
+
+        try {
+          const parsedLinks = JSON.parse(profileData.social_links || '[]');
+          setPlatforms(parsedLinks);
+        } catch (e) {
+          console.error('Error parsing social links:', e);
+        }
 
         if (!profileData.full_name) {
           const { data: waitlistData } = await supabase
@@ -68,6 +78,18 @@ export default function Page() {
     fetchProfile();
   }, [supabase]);
 
+  const handlePlatformChange = (index: number, field: 'name' | 'url', value: string) => {
+    const updated = [...platforms];
+    updated[index][field] = value;
+    setPlatforms(updated);
+  };
+
+  const addPlatform = () => {
+    if (platforms.length < 10) {
+      setPlatforms([...platforms, { name: '', url: '' }]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -80,7 +102,7 @@ export default function Page() {
     const userEmail = session?.user?.email;
     if (!userId || !userEmail) return;
 
-    let uploadedProfileUrl: string | null = null;
+    let uploadedProfileUrl = profileUrl;
 
     if (profileFile) {
       const fileExt = profileFile.name.split('.').pop();
@@ -94,8 +116,7 @@ export default function Page() {
       if (uploadError) {
         console.error('Profile picture upload failed:', uploadError);
       } else {
-        const { data: publicUrlData } = supabase
-          .storage
+        const { data: publicUrlData } = supabase.storage
           .from('profiles')
           .getPublicUrl(filePath);
 
@@ -105,13 +126,13 @@ export default function Page() {
 
     const { error } = await supabase.from('profiles').upsert({
       user_id: userId,
-      email: userEmail,
-      username,
       full_name: fullName,
-      description,
-      website,
+      username,
+      bio,
+      social_links: JSON.stringify(platforms),
       profile_url: uploadedProfileUrl,
-      role: 'business',
+      role: 'creator',
+      email: userEmail,
     });
 
     if (error) console.error('Profile update error:', error);
@@ -120,8 +141,8 @@ export default function Page() {
   };
 
   return (
-    <div className="text-white p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Edit Business Profile</h1>
+    <div className="text-white p-6 md:p-10 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Edit Profile</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label className="block mb-1">Full Name</label>
@@ -135,7 +156,7 @@ export default function Page() {
         </div>
 
         <div>
-          <label className="block mb-1">Brand / Company Name</label>
+          <label className="block mb-1">Username</label>
           <input
             type="text"
             className="w-full p-2 rounded bg-white/10 border border-white/20"
@@ -146,27 +167,17 @@ export default function Page() {
         </div>
 
         <div>
-          <label className="block mb-1">Company Description</label>
+          <label className="block mb-1">Bio (optional)</label>
           <textarea
             className="w-full p-2 rounded bg-white/10 border border-white/20"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
             rows={4}
           />
         </div>
 
         <div>
-          <label className="block mb-1">Website</label>
-          <input
-            type="url"
-            className="w-full p-2 rounded bg-white/10 border border-white/20"
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block mb-1">Logo / Profile Picture (optional)</label>
+          <label className="block mb-1">Profile Picture (optional)</label>
           <input
             type="file"
             accept="image/*"
@@ -175,8 +186,41 @@ export default function Page() {
                 setProfileFile(e.target.files[0]);
               }
             }}
-            className="w-full p-2 rounded bg-white/10 border border-white/20"
+            className="block w-full text-sm text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-400 file:text-black hover:file:bg-yellow-300"
           />
+        </div>
+
+        <div>
+          <label className="block mb-1">Social Links</label>
+          {platforms.map((platform, index) => (
+            <div key={index} className="flex flex-col sm:flex-row gap-2 mb-2">
+              <input
+                type="text"
+                className="flex-1 p-2 rounded bg-white/10 border border-white/20"
+                placeholder="Platform (e.g. YouTube)"
+                value={platform.name}
+                onChange={(e) => handlePlatformChange(index, 'name', e.target.value)}
+                required={index === 0}
+              />
+              <input
+                type="url"
+                className="flex-1 p-2 rounded bg-white/10 border border-white/20"
+                placeholder="Link (e.g. https://youtube.com/@channel)"
+                value={platform.url}
+                onChange={(e) => handlePlatformChange(index, 'url', e.target.value)}
+                required={index === 0}
+              />
+            </div>
+          ))}
+          {platforms.length < 10 && (
+            <button
+              type="button"
+              onClick={addPlatform}
+              className="text-sm text-yellow-400 hover:underline"
+            >
+              + Add another platform
+            </button>
+          )}
         </div>
 
         <button

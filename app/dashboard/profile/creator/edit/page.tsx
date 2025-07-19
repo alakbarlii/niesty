@@ -141,8 +141,8 @@ export default function Page() {
   };
 
   return (
-    <div className="text-white p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Edit Profile</h1>
+    <div className="text-white p-6 md:p-10 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Edit Profile</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label className="block mb-1">Full Name</label>
@@ -193,7 +193,7 @@ export default function Page() {
         <div>
           <label className="block mb-1">Social Links</label>
           {platforms.map((platform, index) => (
-            <div key={index} className="flex gap-2 mb-2">
+            <div key={index} className="flex flex-col sm:flex-row gap-2 mb-2">
               <input
                 type="text"
                 className="flex-1 p-2 rounded bg-white/10 border border-white/20"

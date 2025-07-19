@@ -80,7 +80,7 @@ export default function PersonalNotes({ dealId }: PersonalNotesProps) {
     <div className="mt-6 bg-white/5 border border-white/10 rounded-xl p-4 shadow-[0_0_20px_rgba(255,255,255,0.03)]">
       <h3 className="text-sm font-medium text-white/70 mb-2">Your Private Notes</h3>
       <textarea
-        className="w-full min-h-[100px] px-4 py-3 text-white bg-transparent border-2 border-yellow-400 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 transition resize-none"
+        className="w-full min-h-[100px] px-4 py-3 text-white placeholder-white/50 bg-white/10 border border-yellow-400 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition resize-none"
         value={note}
         disabled={loading}
         onChange={(e) => saveNote(e.target.value)}

@@ -12,6 +12,7 @@ interface Profile {
   role: 'creator' | 'business';
   description: string;
   profile_url?: string;
+  platforms?: { name: string; link: string }[];
 }
 
 export default function BusinessProfileView() {
@@ -66,6 +67,24 @@ export default function BusinessProfileView() {
         <p className="text-yellow-400 font-semibold capitalize">{profile.role}</p>
         <p className="text-white/80 text-center max-w-xl whitespace-pre-line">{profile.description}</p>
         <p className="text-gray-400 text-sm mt-2">@{profile.username}</p>
+
+        <div className="mt-6 w-full">
+          <h2 className="text-lg font-semibold mb-2">Social Platforms</h2>
+          {profile.platforms && profile.platforms.length > 0 ? (
+            <ul className="text-white/80 space-y-1">
+              {profile.platforms.map((platform, idx) => (
+                <li key={idx}>
+                  <span className="font-medium text-yellow-400">{platform.name}:</span>{' '}
+                  <a href={platform.link} target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-300">
+                    {platform.link}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-400">No platforms added.</p>
+          )}
+        </div>
       </div>
     </div>
   );

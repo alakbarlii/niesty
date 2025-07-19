@@ -124,6 +124,7 @@ export default function DealsPage() {
         <ul className="space-y-5">
           {deals.map((deal) => {
             const isSender = userId === deal.sender_id;
+            const isReceiver = userId === deal.receiver_id;
             const otherParty = isSender ? deal.receiver_info : deal.sender_info;
             const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
             const stageProgress = ((currentStageIndex + 1) / DEAL_STAGES.length) * 100;
@@ -180,7 +181,7 @@ export default function DealsPage() {
                   </div>
                 </a>
 
-                {!isSender && deal.status === 'pending' && (
+                {isReceiver && deal.status === 'pending' && (
                   <div className="flex gap-3 mt-4">
                     <button
                       onClick={() => handleUpdateStatus(deal.id, 'accepted')}

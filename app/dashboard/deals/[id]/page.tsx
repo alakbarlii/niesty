@@ -16,6 +16,8 @@ interface Deal {
   status: 'pending' | 'accepted' | 'rejected';
   deal_stage: string;
   created_at: string;
+  agreed_by_sender?: boolean;
+  agreed_by_receiver?: boolean;
   sender_info?: { full_name: string; username: string };
   receiver_info?: { full_name: string; username: string };
 }
@@ -110,7 +112,6 @@ export default function DealDetailPage() {
     <div className="p-6 max-w-3xl mx-auto relative">
       <h1 className="text-3xl font-bold mb-6 text-white">Deal Details</h1>
 
-      {/* Main Deal Box */}
       <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-6 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)] space-y-6">
         <div className="space-y-4 text-sm">
           <div className="bg-white/10 p-4 rounded-xl flex items-center justify-between text-base font-semibold">
@@ -150,40 +151,103 @@ export default function DealDetailPage() {
 
         <DealProgress currentStage={currentStageIndex} />
 
-        {currentStageIndex < DEAL_STAGES.length - 1 ? (
-          <div className="pt-2 border-t border-white/10">
+        {/* Terms Agreement Section */}
+        {deal.deal_stage === 'Negotiating Terms' && (
+          <div className="pt-4 border-t border-white/10 space-y-3">
+            <p className="text-white/70 text-sm">
+              Both parties must confirm the agreed terms to proceed.
+            </p>
             <button
+              className="w-full mt-2 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
               onClick={async () => {
-                const nextStage = DEAL_STAGES[currentStageIndex + 1];
-                const { error } = await supabase
+                const columnToUpdate = isSender
+                  ? 'agreed_by_sender'
+                  : 'agreed_by_receiver';
+
+                const { error: updateError } = await supabase
                   .from('deals')
-                  .update({ deal_stage: nextStage })
+                  .update({ [columnToUpdate]: true })
                   .eq('id', deal.id);
 
-                if (!error) {
-                  setDeal({ ...deal, deal_stage: nextStage });
-                } else {
-                  alert('Failed to advance stage.');
+                if (updateError) {
+                  alert('Failed to confirm agreement.');
+                  return;
                 }
+
+                const { data: refreshedDeal, error: fetchError } =
+                  await supabase
+                    .from('deals')
+                    .select('*')
+                    .eq('id', deal.id)
+                    .single();
+
+                if (fetchError || !refreshedDeal) {
+                  alert('Error fetching updated deal.');
+                  return;
+                }
+
+                const bothAgreed =
+                  refreshedDeal.agreed_by_sender &&
+                  refreshedDeal.agreed_by_receiver;
+
+                if (bothAgreed) {
+                  const { error: stageError } = await supabase
+                    .from('deals')
+                    .update({ deal_stage: 'Platform Escrow' })
+                    .eq('id', deal.id);
+
+                  if (stageError) {
+                    alert('Failed to advance to Platform Escrow.');
+                    return;
+                  }
+
+                  refreshedDeal.deal_stage = 'Platform Escrow';
+                }
+
+                setDeal(refreshedDeal);
               }}
-              className="w-full mt-4 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
             >
-              Advance to Next Stage
+              ✅ I Agree to Terms
             </button>
           </div>
-        ) : (
+        )}
+
+        {/* Manual Advance Button (Optional fallback) */}
+        {currentStageIndex < DEAL_STAGES.length - 1 &&
+          deal.deal_stage !== 'Negotiating Terms' && (
+            <div className="pt-2 border-t border-white/10">
+              <button
+                onClick={async () => {
+                  const nextStage = DEAL_STAGES[currentStageIndex + 1];
+                  const { error } = await supabase
+                    .from('deals')
+                    .update({ deal_stage: nextStage })
+                    .eq('id', deal.id);
+
+                  if (!error) {
+                    setDeal({ ...deal, deal_stage: nextStage });
+                  } else {
+                    alert('Failed to advance stage.');
+                  }
+                }}
+                className="w-full mt-4 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
+              >
+                Advance to Next Stage
+              </button>
+            </div>
+          )}
+
+        {currentStageIndex === DEAL_STAGES.length - 1 && (
           <div className="pt-2 border-t border-white/10 text-center text-green-400 font-semibold text-sm">
             Deal Completed
           </div>
         )}
       </div>
 
-      {/* Personal Notes */}
       <div className="mt-6">
         <PersonalNotes dealId={deal.id} />
       </div>
 
-      {/* Chat Window */}
       {showChat && userId && (
         <DealChat dealId={deal.id} currentUserId={userId} />
       )}

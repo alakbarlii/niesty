@@ -27,7 +27,7 @@ export default function DealProgress({ currentStage }: DealProgressProps) {
           const isCurrent = index === currentStage;
 
           const showCheck =
-            isCompleted || (isCurrent && isLastStage); // ✅ Tick if completed OR last current
+            isCompleted || (isCurrent && isLastStage); 
           const showClock =
             isCurrent && !isLastStage; // ⏳ Clock only if current and not last
 

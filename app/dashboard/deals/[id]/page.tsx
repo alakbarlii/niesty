@@ -107,6 +107,7 @@ export default function DealDetailPage() {
   const isSender = userId === deal.sender_id;
   const otherUser = isSender ? deal.receiver_info : deal.sender_info;
   const currentStageIndex = DEAL_STAGES.indexOf(deal.deal_stage);
+  const hasAgreed = isSender ? deal.agreed_by_sender : deal.agreed_by_receiver;
 
   return (
     <div className="p-6 max-w-3xl mx-auto relative">
@@ -151,91 +152,71 @@ export default function DealDetailPage() {
 
         <DealProgress currentStage={currentStageIndex} />
 
-        {/* Terms Agreement Section */}
         {deal.deal_stage === 'Negotiating Terms' && (
           <div className="pt-4 border-t border-white/10 space-y-3">
             <p className="text-white/70 text-sm">
               Both parties must confirm the agreed terms to proceed.
             </p>
-            <button
-              className="w-full mt-2 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
-              onClick={async () => {
-                const columnToUpdate = isSender
-                  ? 'agreed_by_sender'
-                  : 'agreed_by_receiver';
+            {hasAgreed ? (
+              <p className="text-green-400 font-medium text-sm">
+                You have agreed to the terms. Waiting for the other party.
+              </p>
+            ) : (
+              <button
+                className="w-full mt-2 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
+                onClick={async () => {
+                  const columnToUpdate = isSender
+                    ? 'agreed_by_sender'
+                    : 'agreed_by_receiver';
 
-                const { error: updateError } = await supabase
-                  .from('deals')
-                  .update({ [columnToUpdate]: true })
-                  .eq('id', deal.id);
-
-                if (updateError) {
-                  alert('Failed to confirm agreement.');
-                  return;
-                }
-
-                const { data: refreshedDeal, error: fetchError } =
-                  await supabase
+                  const { error: updateError } = await supabase
                     .from('deals')
-                    .select('*')
-                    .eq('id', deal.id)
-                    .single();
-
-                if (fetchError || !refreshedDeal) {
-                  alert('Error fetching updated deal.');
-                  return;
-                }
-
-                const bothAgreed =
-                  refreshedDeal.agreed_by_sender &&
-                  refreshedDeal.agreed_by_receiver;
-
-                if (bothAgreed) {
-                  const { error: stageError } = await supabase
-                    .from('deals')
-                    .update({ deal_stage: 'Platform Escrow' })
+                    .update({ [columnToUpdate]: true })
                     .eq('id', deal.id);
 
-                  if (stageError) {
-                    alert('Failed to advance to Platform Escrow.');
+                  if (updateError) {
+                    alert('Failed to confirm agreement.');
                     return;
                   }
 
-                  refreshedDeal.deal_stage = 'Platform Escrow';
-                }
+                  const { data: refreshedDeal, error: fetchError } =
+                    await supabase
+                      .from('deals')
+                      .select('*')
+                      .eq('id', deal.id)
+                      .single();
 
-                setDeal(refreshedDeal);
-              }}
-            >
-              ✅ I Agree to Terms
-            </button>
+                  if (fetchError || !refreshedDeal) {
+                    alert('Error fetching updated deal.');
+                    return;
+                  }
+
+                  const bothAgreed =
+                    refreshedDeal.agreed_by_sender &&
+                    refreshedDeal.agreed_by_receiver;
+
+                  if (bothAgreed) {
+                    const { error: stageError } = await supabase
+                      .from('deals')
+                      .update({ deal_stage: 'Platform Escrow' })
+                      .eq('id', deal.id);
+
+                    if (stageError) {
+                      alert('Failed to advance to Platform Escrow.');
+                      return;
+                    }
+
+                    refreshedDeal.deal_stage = 'Platform Escrow';
+                  }
+
+                  setDeal(refreshedDeal);
+                }}
+              >
+                I Agree to Terms
+              </button>
+            )}
           </div>
         )}
-
-        {/* Manual Advance Button (Optional fallback) */}
-        {currentStageIndex < DEAL_STAGES.length - 1 &&
-          deal.deal_stage !== 'Negotiating Terms' && (
-            <div className="pt-2 border-t border-white/10">
-              <button
-                onClick={async () => {
-                  const nextStage = DEAL_STAGES[currentStageIndex + 1];
-                  const { error } = await supabase
-                    .from('deals')
-                    .update({ deal_stage: nextStage })
-                    .eq('id', deal.id);
-
-                  if (!error) {
-                    setDeal({ ...deal, deal_stage: nextStage });
-                  } else {
-                    alert('Failed to advance stage.');
-                  }
-                }}
-                className="w-full mt-4 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
-              >
-                Advance to Next Stage
-              </button>
-            </div>
-          )}
 
         {currentStageIndex === DEAL_STAGES.length - 1 && (
           <div className="pt-2 border-t border-white/10 text-center text-green-400 font-semibold text-sm">

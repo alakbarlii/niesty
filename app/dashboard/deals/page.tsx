@@ -131,11 +131,11 @@ export default function DealsPage() {
 
             const statusIcon =
               deal.status === 'accepted' ? (
-                <CheckCircle className="text-green-400 w-4 h-4 mr-1" />
+                <CheckCircle className="text-emerald-400 w-4 h-4 mr-1" />
               ) : deal.status === 'pending' ? (
                 <Clock className="text-yellow-400 w-4 h-4 mr-1" />
               ) : (
-                <XCircle className="text-red-400 w-4 h-4 mr-1" />
+                <XCircle className="text-red-500 w-4 h-4 mr-1" />
               );
 
             return (
@@ -156,8 +156,8 @@ export default function DealsPage() {
                         deal.status === 'pending'
                           ? 'bg-yellow-400 text-black border-yellow-400'
                           : deal.status === 'accepted'
-                          ? 'bg-green-400 text-black border-green-400'
-                          : 'bg-red-400 text-black border-red-400'
+                          ? 'bg-emerald-500 text-white border-emerald-500'
+                          : 'bg-red-600 text-white border-red-600'
                       }`}
                     >
                       {deal.status}
@@ -182,18 +182,18 @@ export default function DealsPage() {
                 </a>
 
                 {isReceiver && deal.status === 'pending' && (
-                  <div className="flex gap-3 mt-4">
+                  <div className="mt-5 flex justify-center gap-4">
                     <button
                       onClick={() => handleUpdateStatus(deal.id, 'accepted')}
-                      className="text-xs font-semibold px-4 py-1 rounded bg-green-400 text-black hover:bg-green-300 transition"
+                      className="text-sm font-semibold px-6 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white shadow-sm transition"
                     >
-                      Accept
+                      Accept Deal
                     </button>
                     <button
                       onClick={() => handleUpdateStatus(deal.id, 'rejected')}
-                      className="text-xs font-semibold px-4 py-1 rounded bg-red-400 text-black hover:bg-red-300 transition"
+                      className="text-sm font-semibold px-6 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white shadow-sm transition"
                     >
-                      Reject
+                      Reject Deal
                     </button>
                   </div>
                 )}

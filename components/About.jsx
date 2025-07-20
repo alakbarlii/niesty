@@ -37,7 +37,7 @@ const About = () => {
       <div className="flex-1 text-center max-w-[90ch] md:text-center space-y-8 text-[1.2rem] md:text-[2.3rem] leading-relaxed">
 
         <p>
-          <strong className="text-white">Niesty</strong> is designed for connecting small to mid-sized content creators and brands/businesses that are looking for sponsorship deals.
+          <strong className="text-white">Niesty</strong> is designed for connecting small to mid-sized content creators with brands/businesses that are looking for sponsorship deals.
         </p>
         <p>
           Everyone’s here for{' '}

@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 
 export default function Page() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
@@ -17,7 +19,6 @@ export default function Page() {
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
-
       const {
         data: { session },
         error: sessionError,
@@ -152,6 +153,7 @@ export default function Page() {
       console.error('❌ Profile update failed:', updateError.message);
     } else {
       console.log('✅ Profile saved successfully');
+      router.push('/dashboard/profile/creator/view');
     }
 
     setLoading(false);

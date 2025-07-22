@@ -16,7 +16,7 @@ export default function CreatorProfileView() {
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('');
   const [email, setEmail] = useState('');
-  const [bio, setBio] = useState('');
+  const [description, setDescription] = useState('');
   const [platforms, setPlatforms] = useState<{ name: string; url: string }[]>([]);
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,7 +68,7 @@ export default function CreatorProfileView() {
           setRole(data.role || '');
           setEditHref('/dashboard/profile/creator/edit');
           setEmail(data.email || '');
-          setBio(data.bio || '');
+          setDescription(data.description || '');
           setProfileUrl(data.profile_url || null);
 
           try {
@@ -125,7 +125,7 @@ export default function CreatorProfileView() {
               <p className="text-sm text-yellow-400">@{username || 'username'}</p>
               <p className="text-sm text-white/60 capitalize mt-1">{role}</p>
               <p className="text-sm text-white/70 mt-1">Contact: {email}</p>
-              {bio && <p className="text-white/70 max-w-md mt-2">{bio}</p>}
+              {description && <p className="text-white/70 max-w-md mt-2">{description}</p>}
             </div>
             {editHref && (
               <button

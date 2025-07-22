@@ -93,8 +93,19 @@ export default function Page() {
 
     if (profileFile) {
       const fileExt = profileFile.name.split('.').pop();
-      const fileName = `${userId}.${fileExt}`;
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
       const filePath = `profiles/${fileName}`;
+
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('profile_url')
+        .eq('user_id', userId)
+        .single();
+
+      if (existing?.profile_url) {
+        const oldPath = existing.profile_url.split('/storage/v1/object/public/')[1];
+        if (oldPath) await supabase.storage.from('profiles').remove([oldPath]);
+      }
 
       const { error: uploadError } = await supabase.storage
         .from('profiles')
@@ -120,7 +131,7 @@ export default function Page() {
           username,
           description,
           website,
-          profile_url: uploadedProfileUrl,
+          profile_url: uploadedProfileUrl || undefined,
           role: 'business',
           email: userEmail,
         },
@@ -130,7 +141,6 @@ export default function Page() {
     if (updateError) {
       console.error('❌ Profile update failed:', updateError.message);
     } else {
-      console.log('✅ Profile saved successfully');
       router.push('/dashboard/profile/business/view');
     }
 
@@ -188,11 +198,7 @@ export default function Page() {
           <input
             type="file"
             accept="image/*"
-            onChange={(e) => {
-              if (e.target.files?.[0]) {
-                setProfileFile(e.target.files[0]);
-              }
-            }}
+            onChange={(e) => setProfileFile(e.target.files?.[0] || null)}
             className="block w-full text-sm text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-400 file:text-black hover:file:bg-yellow-300"
           />
         </div>

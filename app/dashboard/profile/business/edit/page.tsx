@@ -20,18 +20,18 @@ export default function Page() {
     const fetchProfile = async () => {
       setLoading(true);
       const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
-      if (sessionError || !session) {
-        console.error('Session error or not found', sessionError);
+      if (error || !user) {
+        console.error('User fetch error', error);
         setLoading(false);
         return;
       }
 
-      const userId = session.user.id;
-      const userEmail = session.user.email || '';
+      const userId = user.id;
+      const userEmail = user.email || '';
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -40,15 +40,13 @@ export default function Page() {
         .single();
 
       if (profileError || !profileData) {
-        const { data: waitlistData, error: waitlistError } = await supabase
+        const { data: waitlistData } = await supabase
           .from('waitlist')
           .select('full_name')
           .eq('email', userEmail)
           .single();
 
-        if (!waitlistError && waitlistData?.full_name) {
-          setFullName(waitlistData.full_name);
-        }
+        if (waitlistData?.full_name) setFullName(waitlistData.full_name);
       } else {
         setUsername(profileData.username || '');
         setFullName(profileData.full_name || '');
@@ -78,18 +76,18 @@ export default function Page() {
     setLoading(true);
 
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-    const userId = session?.user?.id;
-    const userEmail = session?.user?.email;
-
-    if (!userId || !userEmail || sessionError) {
-      console.error('❌ User session not found or invalid');
+    if (error || !user) {
+      console.error('❌ User not found or invalid');
       setLoading(false);
       return;
     }
+
+    const userId = user.id;
+    const userEmail = user.email;
 
     let uploadedProfileUrl = profileUrl;
 
@@ -102,14 +100,14 @@ export default function Page() {
         .from('profiles')
         .upload(filePath, profileFile, { upsert: true });
 
-      if (uploadError) {
-        console.error('❌ Profile picture upload failed:', uploadError.message);
-      } else {
+      if (!uploadError) {
         const { data: publicUrlData } = supabase.storage
           .from('profiles')
           .getPublicUrl(filePath);
 
         uploadedProfileUrl = publicUrlData?.publicUrl || null;
+      } else {
+        console.error('❌ Profile picture upload failed:', uploadError.message);
       }
     }
 
@@ -126,9 +124,7 @@ export default function Page() {
           role: 'business',
           email: userEmail,
         },
-        {
-          onConflict: 'user_id',
-        }
+        { onConflict: 'user_id' }
       );
 
     if (updateError) {

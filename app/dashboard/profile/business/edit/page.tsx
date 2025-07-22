@@ -2,22 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 
 export default function Page() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
-  const [bio, setBio] = useState('');
-  const [platforms, setPlatforms] = useState([{ name: '', url: '' }]);
+  const [description, setDescription] = useState('');
+  const [website, setWebsite] = useState('');
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
-
       const {
         data: { session },
         error: sessionError,
@@ -51,15 +52,9 @@ export default function Page() {
       } else {
         setUsername(profileData.username || '');
         setFullName(profileData.full_name || '');
-        setBio(profileData.bio || '');
+        setDescription(profileData.description || '');
+        setWebsite(profileData.website || '');
         setProfileUrl(profileData.profile_url || null);
-
-        try {
-          const parsedLinks = JSON.parse(profileData.social_links || '[]');
-          setPlatforms(parsedLinks);
-        } catch (e) {
-          console.error('Error parsing social links:', e);
-        }
 
         if (!profileData.full_name) {
           const { data: waitlistData } = await supabase
@@ -77,18 +72,6 @@ export default function Page() {
 
     fetchProfile();
   }, [supabase]);
-
-  const handlePlatformChange = (index: number, field: 'name' | 'url', value: string) => {
-    const updated = [...platforms];
-    updated[index][field] = value;
-    setPlatforms(updated);
-  };
-
-  const addPlatform = () => {
-    if (platforms.length < 10) {
-      setPlatforms([...platforms, { name: '', url: '' }]);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,7 +93,6 @@ export default function Page() {
 
     let uploadedProfileUrl = profileUrl;
 
-    // Upload profile image if selected
     if (profileFile) {
       const fileExt = profileFile.name.split('.').pop();
       const fileName = `${userId}.${fileExt}`;
@@ -131,7 +113,6 @@ export default function Page() {
       }
     }
 
-    // Save or update profile
     const { error: updateError } = await supabase
       .from('profiles')
       .upsert(
@@ -139,10 +120,10 @@ export default function Page() {
           user_id: userId,
           full_name: fullName,
           username,
-          bio,
-          social_links: JSON.stringify(platforms),
+          description,
+          website,
           profile_url: uploadedProfileUrl,
-          role: 'creator',
+          role: 'business',
           email: userEmail,
         },
         {
@@ -154,6 +135,7 @@ export default function Page() {
       console.error('❌ Profile update failed:', updateError.message);
     } else {
       console.log('✅ Profile saved successfully');
+      router.push('/dashboard/profile/business/view');
     }
 
     setLoading(false);
@@ -161,7 +143,7 @@ export default function Page() {
 
   return (
     <div className="text-white p-6 md:p-10 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Edit Profile</h1>
+      <h1 className="text-2xl font-bold mb-6">Edit Business Profile</h1>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label className="block mb-1">Full Name</label>
@@ -186,12 +168,22 @@ export default function Page() {
         </div>
 
         <div>
-          <label className="block mb-1">Bio (optional)</label>
+          <label className="block mb-1">Description</label>
           <textarea
             className="w-full p-2 rounded bg-white/10 border border-white/20"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             rows={4}
+          />
+        </div>
+
+        <div>
+          <label className="block mb-1">Website</label>
+          <input
+            type="url"
+            className="w-full p-2 rounded bg-white/10 border border-white/20"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
           />
         </div>
 
@@ -207,39 +199,6 @@ export default function Page() {
             }}
             className="block w-full text-sm text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-400 file:text-black hover:file:bg-yellow-300"
           />
-        </div>
-
-        <div>
-          <label className="block mb-1">Social Links</label>
-          {platforms.map((platform, index) => (
-            <div key={index} className="flex flex-col sm:flex-row gap-2 mb-2">
-              <input
-                type="text"
-                className="flex-1 p-2 rounded bg-white/10 border border-white/20"
-                placeholder="Platform (e.g. YouTube)"
-                value={platform.name}
-                onChange={(e) => handlePlatformChange(index, 'name', e.target.value)}
-                required={index === 0}
-              />
-              <input
-                type="url"
-                className="flex-1 p-2 rounded bg-white/10 border border-white/20"
-                placeholder="Link (e.g. https://youtube.com/@channel)"
-                value={platform.url}
-                onChange={(e) => handlePlatformChange(index, 'url', e.target.value)}
-                required={index === 0}
-              />
-            </div>
-          ))}
-          {platforms.length < 10 && (
-            <button
-              type="button"
-              onClick={addPlatform}
-              className="text-sm text-yellow-400 hover:underline"
-            >
-              + Add another platform
-            </button>
-          )}
         </div>
 
         <button

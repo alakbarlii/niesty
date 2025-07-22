@@ -101,15 +101,15 @@ export default function BusinessProfileView() {
 
   return (
     <section className="p-6 md:p-10 max-w-5xl mx-auto">
-      <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
+      <div className="flex flex-col md:flex-row gap-6 items-start">
         {profileUrl && (
-          <div className="w-[140px] h-[140px] rounded-full overflow-hidden border border-white/20 relative">
+          <div className="w-[140px] h-[140px] rounded-full overflow-hidden border border-white/20">
             <Image
               src={profileUrl}
               alt="Profile Picture"
               width={140}
               height={140}
-              className="object-cover w-full h-full"
+              className="rounded-full object-cover w-full h-full"
             />
           </div>
         )}

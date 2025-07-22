@@ -1,235 +1,179 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
 
-export default function Page() {
-  const supabase = createClient();
+export default function CreatorProfileEdit() {
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
   const [description, setDescription] = useState('');
   const [platforms, setPlatforms] = useState([{ name: '', url: '' }]);
-  const [profileFile, setProfileFile] = useState<File | null>(null);
-  const [profileUrl, setProfileUrl] = useState<string | null>(null);
+  const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
+
       const userId = session?.user?.id;
-      const userEmail = session?.user?.email || '';
 
-      if (!userId) return setLoading(false);
+      if (!userId) return;
 
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
 
-      if (!error && profile) {
-        setUsername(profile.username || '');
+      if (profile) {
         setFullName(profile.full_name || '');
+        setUsername(profile.username || '');
         setDescription(profile.description || '');
-        setProfileUrl(profile.profile_url || null);
-
         try {
-          const links = JSON.parse(profile.social_links || '[]');
-          setPlatforms(Array.isArray(links) ? links : []);
+          const parsed = JSON.parse(profile.social_links || '[]');
+          setPlatforms(Array.isArray(parsed) ? parsed : [{ name: '', url: '' }]);
         } catch {
           setPlatforms([{ name: '', url: '' }]);
         }
-      } else {
-        const { data: waitlist } = await supabase
-          .from('waitlist')
-          .select('full_name')
-          .eq('email', userEmail)
-          .single();
-        if (waitlist?.full_name) setFullName(waitlist.full_name);
       }
-
-      setLoading(false);
     };
 
     fetchProfile();
   }, [supabase]);
 
-  const handlePlatformChange = (index: number, field: 'name' | 'url', value: string) => {
-    const updated = [...platforms];
-    updated[index][field] = value;
-    setPlatforms(updated);
-  };
-
-  const addPlatform = () => {
-    if (platforms.length < 10) {
-      setPlatforms([...platforms, { name: '', url: '' }]);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
+  const handleSave = async () => {
     const {
       data: { session },
     } = await supabase.auth.getSession();
+
     const userId = session?.user?.id;
-    const userEmail = session?.user?.email || '';
+    const userEmail = session?.user?.email;
 
-    if (!userId || !userEmail) {
-      setLoading(false);
-      return;
-    }
+    if (!userId || !userEmail) return;
 
-    let uploadedProfileUrl = profileUrl;
+    let uploadedProfileUrl = null;
 
-    if (profileFile) {
-      const ext = profileFile.name.split('.').pop();
-      const filePath = `profiles/${userId}.${ext}`;
+    if (profilePicFile) {
+      const fileExt = profilePicFile.name.split('.').pop();
+      const filePath = `${userId}.${fileExt}`;
 
-      const { data: existingFiles } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('profiles')
-        .list('profiles', { search: `${userId}.${ext}` });
+        .upload(filePath, profilePicFile, { upsert: true });
 
-      if (existingFiles && existingFiles.length > 0) {
-        const { error: updateError } = await supabase.storage
-          .from('profiles')
-          .update(filePath, profileFile);
-
-        if (updateError) {
-          console.error('❌ Profile picture update failed:', updateError.message);
-        }
-      } else {
-        const { error: uploadError } = await supabase.storage
-          .from('profiles')
-          .upload(filePath, profileFile);
-
-        if (uploadError) {
-          console.error('❌ Profile picture upload failed:', uploadError.message);
-        }
+      if (uploadError) {
+        console.error('Upload error:', uploadError.message);
+        return;
       }
 
-      const { data: urlData } = supabase.storage.from('profiles').getPublicUrl(filePath);
-      uploadedProfileUrl = urlData.publicUrl;
+      // ✅ Use direct public URL access
+      uploadedProfileUrl = supabase.storage
+        .from('profiles')
+        .getPublicUrl(filePath).data.publicUrl;
     }
 
-    const { error: updateError } = await supabase.from('profiles').upsert(
-      {
-        user_id: userId,
-        full_name: fullName,
-        username,
-        description,
-        profile_url: uploadedProfileUrl,
-        social_links: JSON.stringify(platforms),
-        role: 'creator',
-        email: userEmail,
-      },
-      {
-        onConflict: 'user_id',
-      }
-    );
+    const updates = {
+      user_id: userId,
+      email: userEmail,
+      full_name: fullName,
+      username,
+      description,
+      social_links: JSON.stringify(platforms),
+      ...(uploadedProfileUrl && { profile_url: uploadedProfileUrl }),
+    };
 
-    if (!updateError) {
+    const { error } = await supabase.from('profiles').upsert(updates, { onConflict: 'user_id' });
+
+    if (error) {
+      console.error('Update error:', error.message);
+    } else {
       router.push('/dashboard/profile/creator/view');
     }
-
-    setLoading(false);
   };
 
   return (
-    <div className="text-white p-6 md:p-10 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Edit Profile</h1>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block mb-1">Full Name</label>
-          <input
-            type="text"
-            className="w-full p-2 rounded bg-white/10 border border-white/20"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            required
-          />
-        </div>
+    <section className="p-6 md:p-10 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6 text-white">Edit Profile</h1>
 
-        <div>
-          <label className="block mb-1">Username</label>
-          <input
-            type="text"
-            className="w-full p-2 rounded bg-white/10 border border-white/20"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-          />
-        </div>
+      <input
+        type="text"
+        placeholder="Full Name"
+        className="w-full p-2 rounded mb-4"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+      />
 
-        <div>
-          <label className="block mb-1">Description (optional)</label>
-          <textarea
-            className="w-full p-2 rounded bg-white/10 border border-white/20"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-          />
-        </div>
+      <input
+        type="text"
+        placeholder="Username"
+        className="w-full p-2 rounded mb-4"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+      />
 
-        <div>
-          <label className="block mb-1">Profile Picture (optional)</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              if (e.target.files?.[0]) setProfileFile(e.target.files[0]);
-            }}
-            className="block w-full text-sm text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-400 file:text-black hover:file:bg-yellow-300"
-          />
-        </div>
+      <textarea
+        placeholder="Description (optional)"
+        className="w-full p-2 rounded mb-4"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
 
-        <div>
-          <label className="block mb-1">Social Links</label>
-          {platforms.map((platform, index) => (
-            <div key={index} className="flex flex-col sm:flex-row gap-2 mb-2">
-              <input
-                type="text"
-                className="flex-1 p-2 rounded bg-white/10 border border-white/20"
-                placeholder="Platform (e.g. YouTube)"
-                value={platform.name}
-                onChange={(e) => handlePlatformChange(index, 'name', e.target.value)}
-                required={index === 0}
-              />
-              <input
-                type="url"
-                className="flex-1 p-2 rounded bg-white/10 border border-white/20"
-                placeholder="Link (e.g. https://youtube.com/@channel)"
-                value={platform.url}
-                onChange={(e) => handlePlatformChange(index, 'url', e.target.value)}
-                required={index === 0}
-              />
-            </div>
-          ))}
-          {platforms.length < 10 && (
-            <button
-              type="button"
-              onClick={addPlatform}
-              className="text-sm text-yellow-400 hover:underline"
-            >
-              + Add another platform
-            </button>
-          )}
-        </div>
+      <div className="mb-4">
+        <label className="block text-white mb-2">Profile Picture (optional)</label>
+        <input type="file" accept="image/*" onChange={(e) => setProfilePicFile(e.target.files?.[0] || null)} />
+      </div>
 
+      <div className="mb-4">
+        <label className="block text-white mb-2">Social Links</label>
+        {platforms.map((p, i) => (
+          <div key={i} className="flex gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="Platform"
+              className="flex-1 p-2 rounded"
+              value={p.name}
+              onChange={(e) => {
+                const updated = [...platforms];
+                updated[i].name = e.target.value;
+                setPlatforms(updated);
+              }}
+            />
+            <input
+              type="text"
+              placeholder="URL"
+              className="flex-1 p-2 rounded"
+              value={p.url}
+              onChange={(e) => {
+                const updated = [...platforms];
+                updated[i].url = e.target.value;
+                setPlatforms(updated);
+              }}
+            />
+          </div>
+        ))}
         <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-3 bg-yellow-400 text-black font-semibold rounded hover:bg-yellow-300"
+          className="text-yellow-400 mt-2 text-sm"
+          onClick={() => setPlatforms([...platforms, { name: '', url: '' }])}
         >
-          {loading ? 'Saving...' : 'Save Profile'}
+          + Add another platform
         </button>
-      </form>
-    </div>
+      </div>
+
+      <button
+        onClick={handleSave}
+        className="bg-yellow-400 text-black px-6 py-3 rounded-lg font-bold hover:bg-yellow-300"
+      >
+        Save Profile
+      </button>
+    </section>
   );
 }

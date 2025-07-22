@@ -103,7 +103,7 @@ export default function BusinessProfileView() {
     <section className="p-6 md:p-10 max-w-5xl mx-auto">
       <div className="flex flex-col md:flex-row gap-6">
         {profileUrl && (
-          <div className="flex-shrink-0">
+          <div className="w-[120px] h-[120px] rounded-full overflow-hidden border border-white/20">
             <Image
               src={profileUrl}
               alt="Profile Picture"

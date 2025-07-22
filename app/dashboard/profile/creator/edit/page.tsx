@@ -11,7 +11,7 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
-  const [bio, setBio] = useState('');
+  const [description, setDescription] = useState('');
   const [platforms, setPlatforms] = useState([{ name: '', url: '' }]);
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export default function Page() {
       } else {
         setUsername(profileData.username || '');
         setFullName(profileData.full_name || '');
-        setBio(profileData.bio || '');
+        setDescription(profileData.description || '');
         setProfileUrl(profileData.profile_url || null);
 
         try {
@@ -138,7 +138,7 @@ export default function Page() {
           user_id: userId,
           full_name: fullName,
           username,
-          bio,
+          description,
           social_links: JSON.stringify(platforms),
           profile_url: uploadedProfileUrl,
           role: 'creator',
@@ -186,11 +186,11 @@ export default function Page() {
         </div>
 
         <div>
-          <label className="block mb-1">Bio (optional)</label>
+          <label className="block mb-1">Description (optional)</label>
           <textarea
             className="w-full p-2 rounded bg-white/10 border border-white/20"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             rows={4}
           />
         </div>

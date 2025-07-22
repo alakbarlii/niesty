@@ -34,9 +34,10 @@ export default function CreatorProfileView() {
 
         const userId = session?.user?.id;
         const userEmail = session?.user?.email;
+
         if (!userId || !userEmail) throw new Error('No user session found');
 
-        const { data, error } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('user_id', userId)
@@ -50,41 +51,38 @@ export default function CreatorProfileView() {
 
         setDealCount(count || 0);
 
-        if (error || !data) {
-          const { data: waitlistData, error: waitlistError } = await supabase
+        if (!profile || profileError) {
+          const { data: waitlistData } = await supabase
             .from('waitlist')
             .select('full_name')
             .eq('email', userEmail)
             .single();
 
-          if (!waitlistError && waitlistData?.full_name) {
-            setFullName(waitlistData.full_name);
-          }
-
+          if (waitlistData?.full_name) setFullName(waitlistData.full_name);
           setUsername('');
+          setPlatforms([]);
         } else {
-          setUsername(data.username || '');
-          setFullName(data.full_name || '');
-          setRole(data.role || '');
+          setUsername(profile.username || '');
+          setFullName(profile.full_name || '');
+          setRole(profile.role || '');
+          setEmail(profile.email || '');
+          setDescription(profile.description || '');
+          setProfileUrl(profile.profile_url || null);
           setEditHref('/dashboard/profile/creator/edit');
-          setEmail(data.email || '');
-          setDescription(data.description || '');
-          setProfileUrl(data.profile_url || null);
 
           try {
-            const parsed = JSON.parse(data.social_links || '[]');
-            setPlatforms(parsed);
+            const parsed = JSON.parse(profile.social_links || '[]');
+            setPlatforms(Array.isArray(parsed) ? parsed : []);
           } catch {
             setPlatforms([]);
           }
 
-          if (!data.full_name) {
+          if (!profile.full_name) {
             const { data: waitlistData } = await supabase
               .from('waitlist')
               .select('full_name')
               .eq('email', userEmail)
               .single();
-
             if (waitlistData?.full_name) setFullName(waitlistData.full_name);
           }
         }

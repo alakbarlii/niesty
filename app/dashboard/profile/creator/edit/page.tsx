@@ -45,7 +45,6 @@ export default function Page() {
           setPlatforms([{ name: '', url: '' }]);
         }
       } else {
-        // fallback to waitlist name
         const { data: waitlist } = await supabase
           .from('waitlist')
           .select('full_name')
@@ -100,6 +99,8 @@ export default function Page() {
       if (!uploadError) {
         const { data } = supabase.storage.from('profiles').getPublicUrl(filePath);
         uploadedProfileUrl = data.publicUrl;
+      } else {
+        console.error('❌ Profile picture upload failed:', uploadError.message);
       }
     }
 

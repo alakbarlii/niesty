@@ -87,12 +87,12 @@ export default function PublicProfile() {
     <section className="p-6 md:p-12">
       <div className="relative max-w-4xl mx-auto">
         <div className="flex items-start gap-4">
-          <div className="w-[96px] h-[96px] rounded-full overflow-hidden border-2 border-white/20 -ml-16 mt-10 bg-white/10">
+          <div className="w-[140px] h-[140px] rounded-full overflow-hidden border-2 border-white/20 -ml-16 mt-10 bg-white/10">
             <Image
               src={profile.profile_url || '/default-avatar.png'}
               alt="Profile Picture"
-              width={96}
-              height={96}
+              width={140}
+              height={140}
               className="object-cover w-full h-full"
             />
           </div>

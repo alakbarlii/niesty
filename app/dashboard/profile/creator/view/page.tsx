@@ -112,6 +112,9 @@ export default function CreatorProfileView() {
               width={140}
               height={140}
               className="rounded-full object-cover"
+              onError={(e) => {
+                e.currentTarget.src = '/default-profile.png';
+              }}
             />
           </div>
         ) : (

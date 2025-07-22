@@ -61,8 +61,20 @@ export default function CreatorProfileEdit() {
 
     if (profileFile) {
       const fileExt = profileFile.name.split('.').pop();
-      const fileName = `${userId}.${fileExt}`;
+      const fileName = `${userId}-${Date.now()}.${fileExt}`; // Unique name
       const filePath = `profiles/${fileName}`;
+
+      // Delete previous profile image if it exists
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('profile_url')
+        .eq('user_id', userId)
+        .single();
+
+      if (profile?.profile_url) {
+        const oldPath = profile.profile_url.split('/storage/v1/object/public/')[1];
+        if (oldPath) await supabase.storage.from('profiles').remove([oldPath]);
+      }
 
       const { error: uploadError } = await supabase.storage
         .from('profiles')

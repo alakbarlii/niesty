@@ -97,10 +97,8 @@ export default function Page() {
         .upload(filePath, profileFile, { upsert: true });
 
       if (!uploadError) {
-        const { data } = supabase.storage.from('profiles').getPublicUrl(filePath);
-        uploadedProfileUrl = data.publicUrl;
-      } else {
-        console.error('❌ Profile picture upload failed:', uploadError.message);
+        const { data: publicUrlData } = supabase.storage.from('profiles').getPublicUrl(filePath);
+        uploadedProfileUrl = publicUrlData.publicUrl;
       }
     }
 
@@ -120,10 +118,7 @@ export default function Page() {
       }
     );
 
-    if (updateError) {
-      console.error('❌ Profile update failed:', updateError.message);
-    } else {
-      console.log('✅ Profile saved');
+    if (!updateError) {
       router.push('/dashboard/profile/creator/view');
     }
 

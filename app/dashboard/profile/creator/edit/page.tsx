@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function CreatorProfileEdit() {
   const supabase = createClient();
@@ -13,6 +14,7 @@ export default function CreatorProfileEdit() {
   const [description, setDescription] = useState('');
   const [platforms, setPlatforms] = useState([{ name: '', url: '' }]);
   const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [profileUrl, setProfileUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -33,6 +35,7 @@ export default function CreatorProfileEdit() {
         setFullName(profile.full_name || '');
         setUsername(profile.username || '');
         setDescription(profile.description || '');
+        setProfileUrl(profile.profile_url || null);
         try {
           const parsed = JSON.parse(profile.social_links || '[]');
           setPlatforms(Array.isArray(parsed) ? parsed : [{ name: '', url: '' }]);
@@ -57,7 +60,7 @@ export default function CreatorProfileEdit() {
     const userId = user.id;
     const userEmail = user.email;
 
-    let uploadedProfileUrl = null;
+    let uploadedProfileUrl = profileUrl;
 
     if (profileFile) {
       const fileExt = profileFile.name.split('.').pop();
@@ -184,6 +187,17 @@ export default function CreatorProfileEdit() {
             onChange={(e) => setProfileFile(e.target.files?.[0] || null)}
             className="block w-full text-sm text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-400 file:text-black hover:file:bg-yellow-300"
           />
+
+          {profileUrl && (
+            <div className="mt-3 rounded-full w-28 h-28 relative border border-white/20 overflow-hidden">
+              <Image
+                src={profileUrl}
+                alt="Current profile"
+                fill
+                className="object-cover rounded-full"
+              />
+            </div>
+          )}
         </div>
 
         <button

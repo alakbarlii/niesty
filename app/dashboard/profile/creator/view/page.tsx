@@ -107,12 +107,12 @@ export default function CreatorProfileView() {
     <section className="p-6 md:p-10 max-w-5xl mx-auto">
       <div className="flex flex-col md:flex-row gap-6">
         {profileUrl && (
-          <div className="flex-shrink-0">
+          <div className="w-[140px] h-[140px] rounded-full overflow-hidden border border-white/20">
             <Image
               src={profileUrl}
               alt="Profile Picture"
-              width={120}
-              height={120}
+              width={140}
+              height={140}
               className="rounded-xl border border-white/20 object-cover"
             />
           </div>

@@ -96,11 +96,17 @@ export default function Page() {
 
     const {
       data: { session },
+      error: sessionError,
     } = await supabase.auth.getSession();
 
     const userId = session?.user?.id;
     const userEmail = session?.user?.email;
-    if (!userId || !userEmail) return;
+
+    if (!userId || !userEmail || sessionError) {
+      console.error('❌ User session not found or invalid');
+      setLoading(false);
+      return;
+    }
 
     let uploadedProfileUrl = profileUrl;
 
@@ -114,7 +120,7 @@ export default function Page() {
         .upload(filePath, profileFile, { upsert: true });
 
       if (uploadError) {
-        console.error('Profile picture upload failed:', uploadError);
+        console.error('❌ Profile picture upload failed:', uploadError.message);
       } else {
         const { data: publicUrlData } = supabase.storage
           .from('profiles')
@@ -124,18 +130,29 @@ export default function Page() {
       }
     }
 
-    const { error } = await supabase.from('profiles').upsert({
-      user_id: userId,
-      full_name: fullName,
-      username,
-      bio,
-      social_links: JSON.stringify(platforms),
-      profile_url: uploadedProfileUrl,
-      role: 'creator',
-      email: userEmail,
-    });
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .upsert(
+        {
+          user_id: userId,
+          full_name: fullName,
+          username,
+          bio,
+          social_links: JSON.stringify(platforms),
+          profile_url: uploadedProfileUrl,
+          role: 'creator',
+          email: userEmail,
+        },
+        {
+          onConflict: 'user_id',
+        }
+      );
 
-    if (error) console.error('Profile update error:', error);
+    if (updateError) {
+      console.error('❌ Profile update failed:', updateError.message);
+    } else {
+      console.log('✅ Profile saved successfully');
+    }
 
     setLoading(false);
   };

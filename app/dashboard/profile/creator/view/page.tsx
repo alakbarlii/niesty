@@ -1,9 +1,9 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import StatBadge from '@/components/StatBadge';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 export default function CreatorProfileView() {
@@ -68,8 +68,6 @@ export default function CreatorProfileView() {
           setEmail(profile.email || '');
           setDescription(profile.description || '');
           setEditHref('/dashboard/profile/creator/edit');
-
-          // 👇 Only store full public URL in DB, not just the path
           setProfileUrl(profile.profile_url || null);
 
           try {
@@ -107,12 +105,10 @@ export default function CreatorProfileView() {
     <section className="p-6 md:p-10 max-w-5xl mx-auto">
       <div className="flex flex-col md:flex-row gap-6">
         <div className="w-[140px] h-[140px] rounded-full overflow-hidden border border-white/20 relative">
-          <Image
+          <img
             src={profileUrl || '/default-profile.png'}
             alt="Profile Picture"
-            width={140}
-            height={140}
-            className="rounded-full object-cover"
+            className="w-[140px] h-[140px] object-cover rounded-full"
             onError={(e) => {
               e.currentTarget.src = '/default-profile.png';
             }}

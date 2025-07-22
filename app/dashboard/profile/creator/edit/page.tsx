@@ -25,7 +25,6 @@ export default function CreatorProfileEdit() {
       } = await supabase.auth.getSession();
 
       const userId = session?.user?.id;
-
       if (!userId) return;
 
       const { data: profile } = await supabase
@@ -60,11 +59,11 @@ export default function CreatorProfileEdit() {
 
     if (!userId || !userEmail) return;
 
-    let uploadedProfileUrl: string | null = null;
+    let uploadedProfileUrl = null;
 
     if (profilePicFile) {
       const fileExt = profilePicFile.name.split('.').pop();
-      const filePath = `${userId}.${fileExt}`;
+      const filePath = `public/${userId}.${fileExt}`; // ✅ fix: public folder required
 
       const { error: uploadError } = await supabase.storage
         .from('profiles')
@@ -75,11 +74,10 @@ export default function CreatorProfileEdit() {
         return;
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from('profiles')
-        .getPublicUrl(filePath);
-
-      uploadedProfileUrl = publicUrlData?.publicUrl ?? null;
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('profiles').getPublicUrl(filePath); // ✅ proper public URL
+      uploadedProfileUrl = publicUrl;
     }
 
     const updates = {

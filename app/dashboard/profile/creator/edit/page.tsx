@@ -92,14 +92,30 @@ export default function Page() {
       const ext = profileFile.name.split('.').pop();
       const filePath = `profiles/${userId}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { data: existingFiles } = await supabase.storage
         .from('profiles')
-        .upload(filePath, profileFile, { upsert: true });
+        .list('profiles', { search: `${userId}.${ext}` });
 
-      if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage.from('profiles').getPublicUrl(filePath);
-        uploadedProfileUrl = publicUrlData.publicUrl;
+      if (existingFiles && existingFiles.length > 0) {
+        const { error: updateError } = await supabase.storage
+          .from('profiles')
+          .update(filePath, profileFile);
+
+        if (updateError) {
+          console.error('❌ Profile picture update failed:', updateError.message);
+        }
+      } else {
+        const { error: uploadError } = await supabase.storage
+          .from('profiles')
+          .upload(filePath, profileFile);
+
+        if (uploadError) {
+          console.error('❌ Profile picture upload failed:', uploadError.message);
+        }
       }
+
+      const { data: urlData } = supabase.storage.from('profiles').getPublicUrl(filePath);
+      uploadedProfileUrl = urlData.publicUrl;
     }
 
     const { error: updateError } = await supabase.from('profiles').upsert(

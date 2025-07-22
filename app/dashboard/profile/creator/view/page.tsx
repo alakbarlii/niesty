@@ -67,8 +67,10 @@ export default function CreatorProfileView() {
           setRole(profile.role || '');
           setEmail(profile.email || '');
           setDescription(profile.description || '');
-          setProfileUrl(profile.profile_url || null);
           setEditHref('/dashboard/profile/creator/edit');
+
+          // 👇 Only store full public URL in DB, not just the path
+          setProfileUrl(profile.profile_url || null);
 
           try {
             const parsed = JSON.parse(profile.social_links || '[]');
@@ -104,24 +106,18 @@ export default function CreatorProfileView() {
   return (
     <section className="p-6 md:p-10 max-w-5xl mx-auto">
       <div className="flex flex-col md:flex-row gap-6">
-        {profileUrl ? (
-          <div className="w-[140px] h-[140px] rounded-full overflow-hidden border border-white/20">
-            <Image
-              src={profileUrl}
-              alt="Profile Picture"
-              width={140}
-              height={140}
-              className="rounded-full object-cover"
-              onError={(e) => {
-                e.currentTarget.src = '/default-profile.png';
-              }}
-            />
-          </div>
-        ) : (
-          <div className="w-[140px] h-[140px] rounded-full bg-white/10 flex items-center justify-center text-white/30 text-sm">
-            No Image
-          </div>
-        )}
+        <div className="w-[140px] h-[140px] rounded-full overflow-hidden border border-white/20 relative">
+          <Image
+            src={profileUrl || '/default-profile.png'}
+            alt="Profile Picture"
+            width={140}
+            height={140}
+            className="rounded-full object-cover"
+            onError={(e) => {
+              e.currentTarget.src = '/default-profile.png';
+            }}
+          />
+        </div>
 
         <div className="flex-1 bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-6 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
           <div className="flex justify-between items-start mb-6">

@@ -60,7 +60,7 @@ export default function CreatorProfileEdit() {
 
     if (!userId || !userEmail) return;
 
-    let uploadedProfileUrl = null;
+    let uploadedProfileUrl: string | null = null;
 
     if (profilePicFile) {
       const fileExt = profilePicFile.name.split('.').pop();
@@ -75,10 +75,11 @@ export default function CreatorProfileEdit() {
         return;
       }
 
-      // ✅ Use direct public URL access
-      uploadedProfileUrl = supabase.storage
+      const { data: publicUrlData } = supabase.storage
         .from('profiles')
-        .getPublicUrl(filePath).data.publicUrl;
+        .getPublicUrl(filePath);
+
+      uploadedProfileUrl = publicUrlData?.publicUrl ?? null;
     }
 
     const updates = {

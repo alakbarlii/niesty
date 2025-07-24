@@ -102,23 +102,23 @@ export default function CreatorProfileView() {
   if (error) return <p className="text-red-500 p-6">Error: {error}</p>;
 
   return (
-    <section className="p-6 md:p-10 max-w-5xl mx-auto">
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="w-[140px] h-[140px] rounded-full overflow-hidden border border-white/20 relative">
+    <section className="p-4 sm:p-6 md:p-10 max-w-5xl mx-auto">
+      <div className="flex flex-col md:flex-row gap-6 md:items-start items-center text-center md:text-left">
+        <div className="w-[120px] h-[120px] sm:w-[130px] sm:h-[130px] md:w-[140px] md:h-[140px] rounded-full overflow-hidden border border-white/20">
           <img
             src={profileUrl || '/default-profile.png'}
             alt="Profile Picture"
-            className="w-[140px] h-[140px] object-cover rounded-full"
+            className="w-full h-full object-cover rounded-full"
             onError={(e) => {
               e.currentTarget.src = '/default-profile.png';
             }}
           />
         </div>
 
-        <div className="flex-1 bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-6 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
-          <div className="flex justify-between items-start mb-6">
+        <div className="flex-1 w-full bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-4 sm:p-6 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+          <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start mb-6 gap-4">
             <div>
-              <h1 className="text-3xl font-bold mb-1 text-white">{fullName || 'Unnamed'}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold mb-1 text-white">{fullName || 'Unnamed'}</h1>
               <p className="text-sm text-yellow-400">@{username || 'username'}</p>
               <p className="text-sm text-white/60 capitalize mt-1">{role}</p>
               <p className="text-sm text-white/70 mt-1">Contact: {email}</p>

@@ -93,11 +93,11 @@ export default function Page() {
   };
 
   return (
-    <section className="p-6 md:p-12">
+    <section className="p-4 sm:p-6 md:p-12">
       <div className="flex flex-col gap-6 max-w-3xl mx-auto">
         <div className="flex flex-col gap-4 pt-3 mb-1">
           <h1 className="text-4xl font-bold text-white tracking-tight mb-6">Search</h1>
-          <div className="relative w-full">
+          <div className="relative w-full max-w-2xl mx-auto">
             <Search className="absolute z-10 left-4.5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white" />
 
             <input
@@ -155,9 +155,9 @@ export default function Page() {
                   }
                   className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.01] transition duration-200 shadow-md hover:shadow-xl"
                 >
-                  <div className="p-4 gap-3 sm:flex-row sm:p-5 sm:gap-4 md:p-6 md:gap-6 flex flex-col items-center">
+                  <div className="p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                     <div className="flex flex-col items-center w-full sm:w-[64px]">
-                      <div className="w-[48px] h-[48px] sm:w-[64px] sm:h-[64px] rounded-full overflow-hidden border border-white/20">
+                      <div className="w-[64px] h-[64px] rounded-full overflow-hidden border border-white/20">
                         <Image
                           src={profile.profile_url || '/default-avatar.png'}
                           alt="avatar"
@@ -169,11 +169,11 @@ export default function Page() {
                       <div className="text-xs text-gray-400 mt-1 truncate sm:hidden">@{profile.username}</div>
                     </div>
                     <div className="flex flex-col justify-start w-full">
-                      <div className="text-white font-extrabold text-xl mb-1 break-words">{profile.full_name}</div>
+                      <div className="text-white font-extrabold text-xl mb-1">{profile.full_name}</div>
                       <div className="text-sm text-gray-400 capitalize mb-1">
                         {profile.role} <span className="text-yellow-400 ml-2">⭐ 5.0</span>
                       </div>
-                      <div className="text-sm text-gray-300 line-clamp-3 pr-2 sm:pr-4 break-words">{profile.description}</div>
+                      <div className="text-sm text-gray-300 line-clamp-3 pr-2 sm:pr-4">{profile.description}</div>
                       <div className="text-xs text-gray-400 mt-1 hidden sm:block">@{profile.username}</div>
                     </div>
                   </div>

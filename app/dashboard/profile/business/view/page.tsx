@@ -144,7 +144,7 @@ export default function BusinessProfileView() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6 ">
           <StatBadge label="Deals Completed" value={dealCount} />
           <StatBadge label="Avg. Rating" value="4.9 / 5" />
           </div>

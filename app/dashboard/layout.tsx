@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Search, Bell, User, DollarSign, Briefcase } from 'lucide-react';
+import {Search, Bell, User, DollarSign, Briefcase } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import { useEffect } from 'react';
 
@@ -14,7 +14,7 @@ export default function DashboardLayout({
   const router = useRouter();
 
   const navItems = [
-    { icon: <Home size={22} />, path: '/dashboard' },
+   
     { icon: <Search size={22} />, path: '/dashboard/search' },
     { icon: <Briefcase size={22} />, path: '/dashboard/deals' },
     { icon: <DollarSign size={22} />, path: '/dashboard/earnings' },

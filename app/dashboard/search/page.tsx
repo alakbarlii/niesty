@@ -122,7 +122,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="flex gap-2 text-sm -mt-2">
+        <div className="flex gap-2 text-sm -mt-2 flex-wrap">
           {[{ label: 'All', value: 'all' }, { label: 'Creators', value: 'creator' }, { label: 'Businesses', value: 'business' }].map(({ label, value }) => (
             <button
               key={value}
@@ -155,7 +155,7 @@ export default function Page() {
                   }
                   className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.01] transition duration-200 shadow-md hover:shadow-xl"
                 >
-                  <div className="p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                  <div className="p-5 flex flex-col sm:flex-row gap-4 items-center">
                     <div className="flex flex-col items-center w-full sm:w-[64px]">
                       <div className="w-[64px] h-[64px] rounded-full overflow-hidden border border-white/20">
                         <Image
@@ -169,11 +169,11 @@ export default function Page() {
                       <div className="text-xs text-gray-400 mt-1 truncate sm:hidden">@{profile.username}</div>
                     </div>
                     <div className="flex flex-col justify-start w-full">
-                      <div className="text-white font-extrabold text-xl mb-1">{profile.full_name}</div>
+                      <div className="text-white font-extrabold text-xl mb-1 break-words">{profile.full_name}</div>
                       <div className="text-sm text-gray-400 capitalize mb-1">
                         {profile.role} <span className="text-yellow-400 ml-2">⭐ 5.0</span>
                       </div>
-                      <div className="text-sm text-gray-300 line-clamp-3 pr-2 sm:pr-4">{profile.description}</div>
+                      <div className="text-sm text-gray-300 line-clamp-3 pr-2 sm:pr-4 break-words">{profile.description}</div>
                       <div className="text-xs text-gray-400 mt-1 hidden sm:block">@{profile.username}</div>
                     </div>
                   </div>

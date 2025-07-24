@@ -84,10 +84,10 @@ export default function PublicProfile() {
   if (!profile) return <div className="text-white p-10">Loading...</div>;
 
   return (
-    <section className="p-6 md:p-12">
+    <section className="p-4 sm:p-6 md:p-12">
       <div className="relative max-w-4xl mx-auto">
-        <div className="flex items-start gap-4">
-          <div className="w-[140px] h-[140px] rounded-full overflow-hidden border-2 border-white/20 -ml-16 mt-10 bg-white/10">
+        <div className="flex flex-col md:flex-row items-start md:items-start gap-6 text-center md:text-left">
+          <div className="w-[120px] h-[120px] sm:w-[130px] sm:h-[130px] md:w-[140px] md:h-[140px] rounded-full overflow-hidden border-2 border-white/20 mx-auto md:mx-0 bg-white/10">
             <Image
               src={profile.profile_url || '/default-avatar.png'}
               alt="Profile Picture"
@@ -97,7 +97,7 @@ export default function PublicProfile() {
             />
           </div>
 
-          <div className="relative bg-white/5 border border-white/10 rounded-2xl p-6 pt-8 w-full">
+          <div className="relative flex-1 w-full bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-6 pt-8 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
             <button
               className="absolute top-4 right-4 text-white hover:text-gray-300"
               onClick={() => setShowMenu(!showMenu)}
@@ -144,8 +144,8 @@ export default function PublicProfile() {
             <div className="text-gray-400 text-sm mt-1 capitalize">{profile.role}</div>
             <div className="text-gray-300 text-sm mt-1">Contact: {profile.email}</div>
 
-            <div className="flex justify-between items-end mt-5">
-              <div className="flex gap-4">
+            <div className="flex flex-col md:flex-row justify-between md:items-end mt-5 gap-4">
+              <div className="flex justify-center md:justify-start gap-4">
                 <div
                   className="bg-black px-4 py-2 rounded-xl text-center text-sm border border-white/10 text-white cursor-pointer"
                   onClick={() =>
@@ -164,7 +164,7 @@ export default function PublicProfile() {
                   <div className="text-xs text-gray-400">Avg. Rating</div>
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex justify-center md:justify-end gap-3">
                 <button
                   onClick={() => setShowDealModal(true)}
                   className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500"

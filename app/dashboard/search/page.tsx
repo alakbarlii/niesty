@@ -157,12 +157,12 @@ export default function Page() {
                 >
                   <div className="p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                     <div className="flex flex-col items-center w-full sm:w-[64px]">
-                      <div className="w-[64px] h-[64px] rounded-full overflow-hidden border border-white/20">
+                      <div className="w-[96px] h-[96px] rounded-full overflow-hidden border border-white/20">
                         <Image
                           src={profile.profile_url || '/default-avatar.png'}
                           alt="avatar"
-                          width={64}
-                          height={64}
+                          width={96}
+                          height={96}
                           className="object-cover w-full h-full"
                         />
                       </div>

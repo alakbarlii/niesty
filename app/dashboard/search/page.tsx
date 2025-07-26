@@ -156,7 +156,7 @@ export default function Page() {
                   className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl overflow-hidden hover:scale-[1.01] transition duration-200 shadow-md hover:shadow-xl"
                 >
                   <div className="p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                    <div className="flex flex-col items-center w-full sm:w-[64px]">
+                    <div className="flex flex-col items-center w-full sm:w-[94px]">
                       <div className="w-[96px] h-[96px] rounded-full overflow-hidden border border-white/20">
                         <Image
                           src={profile.profile_url || '/default-avatar.png'}

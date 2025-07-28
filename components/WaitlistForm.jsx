@@ -111,9 +111,10 @@ export default function WaitlistForm() {
           />
           <h1 className="text-4xl font-extrabold text-white text-center mb-2 tracking-tight">Join Niesty!</h1>
           <p className="text-white/60 text-sm text-center leading-relaxed">
-            Get matched with perfect-fit creators or businesses.<br />
-            Claim your early access now.
+            Where creators and sponsors connect.<br />
+            Every day with new sponsorship deals.
           </p>
+          
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 w-full text-white relative z-10">

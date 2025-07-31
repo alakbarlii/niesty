@@ -42,7 +42,6 @@ export default function DealChat({
   dealId,
   currentUserId,
   otherUser,
-  
 }: DealChatProps) {
   const [messages, setMessages] = useState<SupabaseMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -69,10 +68,7 @@ export default function DealChat({
     const scrollTop = containerRef.current?.scrollTop || 0;
     if (scrollTop < 50 && !loadingMore && messages.length > 0) {
       setLoadingMore(true);
-      const earlier = await fetchMoreMessages(
-        dealId,
-        messages[0].created_at
-      );
+      const earlier = await fetchMoreMessages(dealId, messages[0].created_at);
       setMessages((prev) => [...earlier, ...prev]);
       setLoadingMore(false);
     }
@@ -84,7 +80,6 @@ export default function DealChat({
         setMessages((prev) => [...prev, msg]);
       }
     });
-
     return () => {
       supabase.removeChannel(sub);
     };
@@ -115,8 +110,22 @@ export default function DealChat({
       content: finalContent,
     });
 
+    const tempMsg: SupabaseMessage = {
+      id: `${Date.now()}`,
+      deal_id: dealId,
+      sender_id: currentUserId,
+      content: finalContent,
+      created_at: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, tempMsg]);
+
     setNewMessage('');
     setFile(null);
+
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   const isImage = (text: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
@@ -136,7 +145,6 @@ export default function DealChat({
 
   return (
     <div className="w-96 h-[30rem] bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden shadow-lg fixed bottom-4 right-4 z-50">
-      {/* Chat header */}
       <div className="p-3 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-2">
           {otherUser.avatar && (
@@ -161,7 +169,6 @@ export default function DealChat({
         </button>
       </div>
 
-      {/* Messages */}
       <div
         className="flex-1 overflow-y-auto px-3 py-2 space-y-2"
         ref={containerRef}
@@ -200,7 +207,6 @@ export default function DealChat({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="border-t border-gray-700 p-2 flex flex-col gap-2">
         <div className="flex gap-2">
           <input

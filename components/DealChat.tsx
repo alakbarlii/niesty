@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   fetchRecentMessages,
-  fetchMoreMessages,
   sendMessage,
   subscribeToNewMessages,
 } from '@/lib/supabase/messages';
@@ -42,31 +41,22 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
   const [messages, setMessages] = useState<SupabaseMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const fetchAndSetMessages = async () => {
-      try {
-        const data = await fetchRecentMessages(dealId);
-        setMessages(data);
-      } catch (err) {
-        console.error('Error loading recent messages:', err);
-      } finally {
-        setLoading(false);
-      }
+    const loadMessages = async () => {
+      const data = await fetchRecentMessages(dealId);
+      setMessages(data);
     };
-    fetchAndSetMessages();
+    loadMessages();
   }, [dealId]);
 
   useEffect(() => {
     const sub = subscribeToNewMessages(dealId, (msg) => {
       setMessages((prev) => {
-        const isDuplicate = prev.some((m) => m.id === msg.id);
-        if (!isDuplicate) return [...prev, msg];
-        return prev;
+        const exists = prev.some((m) => m.id === msg.id);
+        return exists ? prev : [...prev, msg];
       });
     });
     return () => {
@@ -75,38 +65,8 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
   }, [dealId]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const fetchAndSetMessages = async () => {
-        try {
-          const data = await fetchRecentMessages(dealId);
-          setMessages(data);
-        } catch (err) {
-          console.error('Error loading recent messages:', err);
-        }
-      };
-      fetchAndSetMessages();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [dealId]);
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  const handleScroll = async () => {
-    const scrollTop = containerRef.current?.scrollTop || 0;
-    if (scrollTop < 50 && !loadingMore && messages.length > 0) {
-      setLoadingMore(true);
-      try {
-        const earlier = await fetchMoreMessages(dealId, messages[0].created_at);
-        setMessages((prev) => [...earlier, ...prev]);
-      } catch (err) {
-        console.error('Error fetching more messages:', err);
-      } finally {
-        setLoadingMore(false);
-      }
-    }
-  };
 
   const handleSend = async () => {
     const content = newMessage.trim();
@@ -122,15 +82,9 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
       finalContent = data?.publicUrl || '';
     }
 
-    try {
-      await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
-      setNewMessage('');
-      setFile(null);
-      const updatedMessages = await fetchRecentMessages(dealId);
-      setMessages(updatedMessages);
-    } catch (err) {
-      console.error('Error sending message:', err);
-    }
+    await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
+    setNewMessage('');
+    setFile(null);
   };
 
   const isImage = (text: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
@@ -164,10 +118,8 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2" ref={containerRef} onScroll={handleScroll}>
-        {loading ? (
-          <p className="text-gray-500 text-sm">Loading messages...</p>
-        ) : messages.length === 0 ? (
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2" ref={containerRef}>
+        {messages.length === 0 ? (
           <p className="text-gray-500 text-sm">No messages yet.</p>
         ) : (
           messages.map((msg) => (

@@ -38,11 +38,7 @@ interface DealChatProps {
   };
 }
 
-export default function DealChat({
-  dealId,
-  currentUserId,
-  otherUser,
-}: DealChatProps) {
+export default function DealChat({ dealId, currentUserId, otherUser }: DealChatProps) {
   const [messages, setMessages] = useState<SupabaseMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -53,9 +49,14 @@ export default function DealChat({
 
   useEffect(() => {
     const load = async () => {
-      const data = await fetchRecentMessages(dealId);
-      setMessages(data);
-      setLoading(false);
+      try {
+        const data = await fetchRecentMessages(dealId);
+        setMessages(data);
+      } catch (err) {
+        console.error('Error loading recent messages:', err);
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, [dealId]);
@@ -68,22 +69,26 @@ export default function DealChat({
     const scrollTop = containerRef.current?.scrollTop || 0;
     if (scrollTop < 50 && !loadingMore && messages.length > 0) {
       setLoadingMore(true);
-      const earlier = await fetchMoreMessages(dealId, messages[0].created_at);
-      setMessages((prev) => [...earlier, ...prev]);
-      setLoadingMore(false);
+      try {
+        const earlier = await fetchMoreMessages(dealId, messages[0].created_at);
+        setMessages((prev) => [...earlier, ...prev]);
+      } catch (err) {
+        console.error('Error fetching more messages:', err);
+      } finally {
+        setLoadingMore(false);
+      }
     }
   };
 
   useEffect(() => {
     const sub = subscribeToNewMessages(dealId, (msg) => {
-      if (msg.sender_id !== currentUserId) {
-        setMessages((prev) => [...prev, msg]);
-      }
+      console.log('New realtime message received:', msg);
+      setMessages((prev) => [...prev, msg]);
     });
     return () => {
       supabase.removeChannel(sub);
     };
-  }, [dealId, currentUserId]);
+  }, [dealId]);
 
   const handleSend = async () => {
     const content = newMessage.trim();
@@ -93,39 +98,26 @@ export default function DealChat({
 
     if (file) {
       const fileName = `${Date.now()}-${file.name}`;
-      const { error: uploadErr } = await supabase.storage
-        .from('chat-files')
-        .upload(fileName, file);
+      const { error: uploadErr } = await supabase.storage.from('chat-files').upload(fileName, file);
       if (uploadErr) return alert('Upload failed');
-
-      const { data } = supabase.storage
-        .from('chat-files')
-        .getPublicUrl(fileName);
+      const { data } = supabase.storage.from('chat-files').getPublicUrl(fileName);
       finalContent = data?.publicUrl || '';
     }
 
-    await sendMessage({
-      dealId,
-      senderId: currentUserId,
-      content: finalContent,
-    });
-
-    const tempMsg: SupabaseMessage = {
-      id: `${Date.now()}`,
-      deal_id: dealId,
-      sender_id: currentUserId,
-      content: finalContent,
-      created_at: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, tempMsg]);
-
-    setNewMessage('');
-    setFile(null);
-
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    try {
+      await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        deal_id: dealId,
+        sender_id: currentUserId,
+        content: finalContent,
+        created_at: new Date().toISOString(),
+      }]);
+      setNewMessage('');
+      setFile(null);
+    } catch (err) {
+      console.error('Error sending message:', err);
+    }
   };
 
   const isImage = (text: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
@@ -148,34 +140,22 @@ export default function DealChat({
       <div className="p-3 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-2">
           {otherUser.avatar && (
-            <Image
-              src={otherUser.avatar}
-              alt="avatar"
-              width={32}
-              height={32}
-              className="rounded-full"
-            />
+            <Image src={otherUser.avatar} alt="avatar" width={32} height={32} className="rounded-full" />
           )}
           <span className="text-sm font-semibold text-gray-300">
             {otherUser.name || 'Chat'}
           </span>
         </div>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-sm text-gray-400 hover:text-white"
-          aria-label="Close chat"
-        >
+        <button onClick={() => window.location.reload()} className="text-sm text-gray-400 hover:text-white" aria-label="Close chat">
           ✕
         </button>
       </div>
 
-      <div
-        className="flex-1 overflow-y-auto px-3 py-2 space-y-2"
-        ref={containerRef}
-        onScroll={handleScroll}
-      >
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2" ref={containerRef} onScroll={handleScroll}>
         {loading ? (
           <p className="text-gray-500 text-sm">Loading messages...</p>
+        ) : messages.length === 0 ? (
+          <p className="text-gray-500 text-sm">No messages yet.</p>
         ) : (
           messages.map((msg) => (
             <div key={msg.id}>
@@ -224,10 +204,7 @@ export default function DealChat({
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <label
-            htmlFor="file-upload"
-            className="cursor-pointer text-sm text-gray-400 hover:underline flex items-center gap-1"
-          >
+          <label htmlFor="file-upload" className="cursor-pointer text-sm text-gray-400 hover:underline flex items-center gap-1">
             <ImageIcon className="w-4 h-4" /> Upload image
           </label>
           <input

@@ -304,7 +304,15 @@ export default function DealDetailPage() {
       </div>
 
       {showChat && userId && (
-        <DealChat dealId={deal.id} currentUserId={userId} />
+        <DealChat
+        dealId={deal.id}
+        currentUserId={userId}
+        otherUser={{
+          name: otherUser?.full_name || 'Unknown User',
+          avatar: null,
+        }}
+      />
+      
       )}
     </div>
   );

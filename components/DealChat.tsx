@@ -1,19 +1,26 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import {
+  fetchRecentMessages,
+  fetchMoreMessages,
+  sendMessage,
+  subscribeToNewMessages,
+} from '@/lib/supabase/messages';
 import { Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
+import { createBrowserClient } from '@supabase/ssr';
 
-interface DealChatProps {
-  dealId: string;
-  currentUserId: string;
-}
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 interface SupabaseMessage {
   id: string;
-  content: string;
+  deal_id: string;
   sender_id: string;
+  content: string;
   created_at: string;
   is_seen?: boolean;
   profiles?: {
@@ -22,184 +29,117 @@ interface SupabaseMessage {
   };
 }
 
-interface Message {
-  id: string;
-  content: string;
-  sender_id: string;
-  created_at: string;
-  is_seen?: boolean;
-  sender_name?: string;
-  sender_avatar?: string | null;
+interface DealChatProps {
+  dealId: string;
+  currentUserId: string;
+  otherUser: {
+    name: string;
+    avatar: string | null;
+  };
 }
 
-export default function DealChat({ dealId, currentUserId }: DealChatProps) {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
-  const [messages, setMessages] = useState<Message[]>([]);
+export default function DealChat({
+  dealId,
+  currentUserId,
+  otherUser,
+  
+}: DealChatProps) {
+  const [messages, setMessages] = useState<SupabaseMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
   const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const [otherUser, setOtherUser] = useState<{ name: string; avatar: string | null } | null>(null);
 
   useEffect(() => {
-    const loadMessages = async () => {
-      const { data, error } = await supabase
-        .from('deal_messages')
-        .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
-        .eq('deal_id', dealId)
-        .order('created_at', { ascending: true });
-
-      if (error || !data) {
-        console.error('Error loading messages:', error);
-        return;
-      }
-
-      const mapped: Message[] = data.map((msg: SupabaseMessage) => ({
-        id: msg.id,
-        content: msg.content,
-        sender_id: msg.sender_id,
-        created_at: msg.created_at,
-        is_seen: msg.is_seen,
-        sender_name: msg.profiles?.full_name || 'Unknown',
-        sender_avatar: msg.profiles?.avatar_url || null,
-      }));
-
-      setMessages(mapped);
-
-      const unseen = mapped.filter(
-        (msg) => !msg.is_seen && msg.sender_id !== currentUserId
-      );
-      if (unseen.length > 0) {
-        const ids = unseen.map((msg) => msg.id);
-        await supabase
-          .from('deal_messages')
-          .update({ is_seen: true })
-          .in('id', ids);
-      }
-
-      const other = mapped.find((m) => m.sender_id !== currentUserId);
-      if (other) {
-        setOtherUser({
-          name: other.sender_name || 'User',
-          avatar: other.sender_avatar || null,
-        });
-      }
-
+    const load = async () => {
+      const data = await fetchRecentMessages(dealId);
+      setMessages(data);
       setLoading(false);
     };
-
-    loadMessages();
-  }, [dealId, supabase, currentUserId]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`realtime-deal-${dealId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'deal_messages',
-          filter: `deal_id=eq.${dealId}`,
-        },
-        async (payload) => {
-          const msg = payload.new as SupabaseMessage;
-          if (msg.sender_id !== currentUserId) {
-            const { data, error } = await supabase
-              .from('deal_messages')
-              .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
-              .eq('deal_id', dealId)
-              .order('created_at', { ascending: true });
-
-            if (!error && data) {
-              const mapped = data.map((msg: SupabaseMessage) => ({
-                id: msg.id,
-                content: msg.content,
-                sender_id: msg.sender_id,
-                created_at: msg.created_at,
-                is_seen: msg.is_seen,
-                sender_name: msg.profiles?.full_name || 'Unknown',
-                sender_avatar: msg.profiles?.avatar_url || null,
-              }));
-
-              setMessages(mapped);
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [dealId, supabase, currentUserId]);
+    load();
+  }, [dealId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = async () => {
+  const handleScroll = async () => {
+    const scrollTop = containerRef.current?.scrollTop || 0;
+    if (scrollTop < 50 && !loadingMore && messages.length > 0) {
+      setLoadingMore(true);
+      const earlier = await fetchMoreMessages(
+        dealId,
+        messages[0].created_at
+      );
+      setMessages((prev) => [...earlier, ...prev]);
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    const sub = subscribeToNewMessages(dealId, (msg) => {
+      if (msg.sender_id !== currentUserId) {
+        setMessages((prev) => [...prev, msg]);
+      }
+    });
+
+    return () => {
+      supabase.removeChannel(sub);
+    };
+  }, [dealId, currentUserId]);
+
+  const handleSend = async () => {
     const content = newMessage.trim();
     if (!content && !file) return;
 
-    let uploadedUrl = '';
+    let finalContent = content;
+
     if (file) {
-      const filename = `${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage
+      const fileName = `${Date.now()}-${file.name}`;
+      const { error: uploadErr } = await supabase.storage
         .from('chat-files')
-        .upload(filename, file);
+        .upload(fileName, file);
+      if (uploadErr) return alert('Upload failed');
 
-      if (error) {
-        console.error('Upload error:', error);
-        return;
-      }
-
-      const { data: urlData } = supabase.storage
+      const { data } = supabase.storage
         .from('chat-files')
-        .getPublicUrl(filename);
-
-      uploadedUrl = urlData?.publicUrl || '';
+        .getPublicUrl(fileName);
+      finalContent = data?.publicUrl || '';
     }
 
-    const { error } = await supabase.from('deal_messages').insert({
-      deal_id: dealId,
-      sender_id: currentUserId,
-      content: uploadedUrl || content,
+    await sendMessage({
+      dealId,
+      senderId: currentUserId,
+      content: finalContent,
     });
-
-    if (error) {
-      console.error('Error sending message:', error);
-      return;
-    }
 
     setNewMessage('');
     setFile(null);
   };
 
-  const formatRelativeTime = (timestamp: string) => {
-    const now = new Date();
-    const date = new Date(timestamp);
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.round(diffMs / 60000);
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.round(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    const diffDays = Math.round(diffHours / 24);
-    return `${diffDays}d ago`;
-  };
+  const isImage = (text: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
 
-  const isImage = (url: string) => /\.(jpeg|jpg|gif|png|webp)$/i.test(url);
+  const formatRelativeTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const mins = Math.round(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.round(hrs / 24);
+    return `${days}d ago`;
+  };
 
   return (
     <div className="w-96 h-[30rem] bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden shadow-lg fixed bottom-4 right-4 z-50">
+      {/* Chat header */}
       <div className="p-3 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          {otherUser?.avatar && (
+          {otherUser.avatar && (
             <Image
               src={otherUser.avatar}
               alt="avatar"
@@ -209,7 +149,7 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
             />
           )}
           <span className="text-sm font-semibold text-gray-300">
-            {otherUser?.name || 'Chat'}
+            {otherUser.name || 'Chat'}
           </span>
         </div>
         <button
@@ -221,11 +161,16 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+      {/* Messages */}
+      <div
+        className="flex-1 overflow-y-auto px-3 py-2 space-y-2"
+        ref={containerRef}
+        onScroll={handleScroll}
+      >
         {loading ? (
           <p className="text-gray-500 text-sm">Loading messages...</p>
         ) : (
-          messages.map((msg, i) => (
+          messages.map((msg) => (
             <div key={msg.id}>
               <div
                 className={`max-w-[75%] p-2 rounded-md text-sm whitespace-pre-line break-words ${
@@ -247,9 +192,6 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
                 )}
                 <div className="text-xs text-gray-400 mt-1 text-right">
                   {formatRelativeTime(msg.created_at)}
-                  {msg.sender_id === currentUserId &&
-                    i === messages.length - 1 &&
-                    msg.is_seen && <span className="ml-1">✓</span>}
                 </div>
               </div>
             </div>
@@ -258,6 +200,7 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Input */}
       <div className="border-t border-gray-700 p-2 flex flex-col gap-2">
         <div className="flex gap-2">
           <input
@@ -265,10 +208,10 @@ export default function DealChat({ dealId, currentUserId }: DealChatProps) {
             placeholder="Type a message..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           />
           <button
-            onClick={sendMessage}
+            onClick={handleSend}
             className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md text-sm font-semibold"
           >
             Send

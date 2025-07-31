@@ -48,7 +48,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const load = async () => {
+    const fetchAndSetMessages = async () => {
       try {
         const data = await fetchRecentMessages(dealId);
         setMessages(data);
@@ -58,7 +58,35 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
         setLoading(false);
       }
     };
-    load();
+    fetchAndSetMessages();
+  }, [dealId]);
+
+  useEffect(() => {
+    const sub = subscribeToNewMessages(dealId, (msg) => {
+      setMessages((prev) => {
+        const isDuplicate = prev.some((m) => m.id === msg.id);
+        if (!isDuplicate) return [...prev, msg];
+        return prev;
+      });
+    });
+    return () => {
+      supabase.removeChannel(sub);
+    };
+  }, [dealId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const fetchAndSetMessages = async () => {
+        try {
+          const data = await fetchRecentMessages(dealId);
+          setMessages(data);
+        } catch (err) {
+          console.error('Error loading recent messages:', err);
+        }
+      };
+      fetchAndSetMessages();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [dealId]);
 
   useEffect(() => {
@@ -80,16 +108,6 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
     }
   };
 
-  useEffect(() => {
-    const sub = subscribeToNewMessages(dealId, (msg) => {
-      console.log('New realtime message received:', msg);
-      setMessages((prev) => [...prev, msg]);
-    });
-    return () => {
-      supabase.removeChannel(sub);
-    };
-  }, [dealId]);
-
   const handleSend = async () => {
     const content = newMessage.trim();
     if (!content && !file) return;
@@ -106,15 +124,10 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
 
     try {
       await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
-      setMessages((prev) => [...prev, {
-        id: Date.now().toString(),
-        deal_id: dealId,
-        sender_id: currentUserId,
-        content: finalContent,
-        created_at: new Date().toISOString(),
-      }]);
       setNewMessage('');
       setFile(null);
+      const updatedMessages = await fetchRecentMessages(dealId);
+      setMessages(updatedMessages);
     } catch (err) {
       console.error('Error sending message:', err);
     }

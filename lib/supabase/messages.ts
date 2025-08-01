@@ -1,9 +1,9 @@
 import { createBrowserClient } from '@supabase/ssr';
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
 
 export interface SupabaseMessage {
   id: string;
@@ -13,8 +13,8 @@ export interface SupabaseMessage {
   created_at: string;
   is_seen?: boolean;
   profiles?: {
-    full_name?: string;
-    avatar_url?: string;
+    full_name: string;
+    avatar_url: string;
   };
 }
 
@@ -23,7 +23,7 @@ export async function fetchAllMessages(dealId: string): Promise<SupabaseMessage[
   console.log('[fetchAllMessages] START', { dealId });
   const { data, error } = await supabase
     .from('deal_messages')
-    .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
+    .select('*') // JOIN REMOVED to avoid FK error
     .eq('deal_id', dealId)
     .order('created_at', { ascending: true });
 
@@ -88,12 +88,12 @@ export function subscribeToNewMessages(dealId: string, onNew: (msg: SupabaseMess
         table: 'deal_messages',
         filter: `deal_id=eq.${dealId}`,
       },
-      async (payload) => {
+      async (payload: { new: { id: string } }) => {
         console.log('[subscribeToNewMessages] PAYLOAD RECEIVED:', payload);
         try {
           const { data, error } = await supabase
             .from('deal_messages')
-            .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
+            .select('*')
             .eq('id', payload.new.id)
             .single();
 

@@ -195,7 +195,7 @@ export default function DealDetailPage() {
       </p>
 
       <p className="text-white/70 text-sm mb-6">
-        <span className="font-normal">Description:</span> {deal.message}
+        <span className="font-normal">Offer:</span> {deal.message}
       </p>
 
       <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-6 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)] space-y-6">

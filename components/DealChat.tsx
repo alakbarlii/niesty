@@ -10,9 +10,12 @@ import {
 } from '@/lib/supabase/messages';
 import { Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
-import { createBrowserClient } from '@/lib/supabase';
+import { createBrowserClient } from '@supabase/ssr';
 
-const supabase = createBrowserClient();
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 interface DealChatProps {
   dealId: string;
@@ -32,9 +35,6 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
 
   const fetchMessages = useCallback(async () => {
     console.log('[DealChat] Fetching messages...');
-    const { data: { user }, error } = await supabase.auth.getUser();
-    console.log('[DealChat] User Auth:', user, 'Error:', error);
-
     setLoading(true);
     try {
       const allMsgs = await fetchAllMessages(dealId);

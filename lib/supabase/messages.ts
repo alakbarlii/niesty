@@ -18,8 +18,9 @@ export interface SupabaseMessage {
   };
 }
 
+// FETCH ALL MESSAGES
 export async function fetchAllMessages(dealId: string): Promise<SupabaseMessage[]> {
-  console.log('[fetchAllMessages] start', { dealId });
+  console.log('[fetchAllMessages] START', { dealId });
   const { data, error } = await supabase
     .from('deal_messages')
     .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
@@ -27,16 +28,17 @@ export async function fetchAllMessages(dealId: string): Promise<SupabaseMessage[
     .order('created_at', { ascending: true });
 
   if (error) {
-    console.error('[fetchAllMessages] error:', error);
+    console.error('[fetchAllMessages] ERROR:', error);
     return [];
   }
 
-  console.log('[fetchAllMessages] result:', data);
+  console.log('[fetchAllMessages] RESULT:', data);
   return data || [];
 }
 
+// MARK AS SEEN
 export async function markMessagesAsSeen(dealId: string, userId: string) {
-  console.log('[markMessagesAsSeen] start', { dealId, userId });
+  console.log('[markMessagesAsSeen] START', { dealId, userId });
   const { error } = await supabase
     .from('deal_messages')
     .update({ is_seen: true })
@@ -45,14 +47,15 @@ export async function markMessagesAsSeen(dealId: string, userId: string) {
     .is('is_seen', false);
 
   if (error) {
-    console.error('[markMessagesAsSeen] error:', error);
+    console.error('[markMessagesAsSeen] ERROR:', error);
   } else {
-    console.log('[markMessagesAsSeen] success');
+    console.log('[markMessagesAsSeen] SUCCESS');
   }
 }
 
+// SEND MESSAGE
 export async function sendMessage({ dealId, senderId, content }: { dealId: string; senderId: string; content: string }) {
-  console.log('[sendMessage] payload:', { dealId, senderId, content });
+  console.log('[sendMessage] PAYLOAD:', { dealId, senderId, content });
   const { data, error } = await supabase
     .from('deal_messages')
     .insert({
@@ -64,16 +67,17 @@ export async function sendMessage({ dealId, senderId, content }: { dealId: strin
     .single();
 
   if (error) {
-    console.error('[sendMessage] error:', error);
+    console.error('[sendMessage] ERROR:', error);
     throw error;
   }
 
-  console.log('[sendMessage] result:', data);
+  console.log('[sendMessage] RESULT:', data);
   return data as SupabaseMessage;
 }
 
+// SUBSCRIBE TO NEW MESSAGES
 export function subscribeToNewMessages(dealId: string, onNew: (msg: SupabaseMessage) => void) {
-  console.log('[subscribeToNewMessages] subscribing to channel', { dealId });
+  console.log('[subscribeToNewMessages] START', { dealId });
   const channel = supabase
     .channel(`chat-${dealId}-${Date.now()}`)
     .on(
@@ -85,7 +89,7 @@ export function subscribeToNewMessages(dealId: string, onNew: (msg: SupabaseMess
         filter: `deal_id=eq.${dealId}`,
       },
       async (payload) => {
-        console.log('[subscribeToNewMessages] new payload:', payload);
+        console.log('[subscribeToNewMessages] PAYLOAD RECEIVED:', payload);
         try {
           const { data, error } = await supabase
             .from('deal_messages')
@@ -94,16 +98,16 @@ export function subscribeToNewMessages(dealId: string, onNew: (msg: SupabaseMess
             .single();
 
           if (error) {
-            console.error('[subscribeToNewMessages] fetch error:', error);
+            console.error('[subscribeToNewMessages] FETCH ERROR:', error);
             return;
           }
 
           if (data) {
-            console.log('[subscribeToNewMessages] fetched full message:', data);
+            console.log('[subscribeToNewMessages] FINAL MESSAGE DATA:', data);
             onNew(data);
           }
-        } catch (e) {
-          console.error('[subscribeToNewMessages] processing failed:', e);
+        } catch (err) {
+          console.error('[subscribeToNewMessages] PROCESSING FAILED:', err);
         }
       }
     )

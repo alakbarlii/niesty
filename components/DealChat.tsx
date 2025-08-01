@@ -9,11 +9,9 @@ import {
 } from '@/lib/supabase/messages';
 import { Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
-
-// Import your supabase client factory
 import { createBrowserClient } from '@/lib/supabase';
 
-const supabase = createBrowserClient(); // Call without arguments
+const supabase = createBrowserClient();
 
 interface SupabaseMessage {
   id: string;
@@ -44,28 +42,25 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch all messages on mount
   const fetchMessages = useCallback(async () => {
+    console.log('[DealChat] Fetching messages...');
     setLoading(true);
     try {
       const allMsgs = await fetchAllMessages(dealId);
-      // sort messages by creation date ascending
       allMsgs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       setMessages(allMsgs);
       await markMessagesAsSeen(dealId, currentUserId);
     } catch (err) {
-      console.error('Error fetching messages:', err);
+      console.error('[DealChat] Error fetching messages:', err);
     } finally {
       setLoading(false);
     }
   }, [dealId, currentUserId]);
 
-  // Load messages on mount
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Mark messages as seen when tab becomes visible
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -78,38 +73,29 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
     };
   }, [fetchMessages]);
 
-  // Subscribe to new messages
   useEffect(() => {
     const channel = subscribeToNewMessages(dealId, (msg) => {
+      console.log('[DealChat] New message from realtime:', msg);
       setMessages((prev) => {
-        // Avoid duplicates
         if (prev.some((m) => m.id === msg.id)) return prev;
-        // Keep messages sorted
         const updated = [...prev, msg];
         updated.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         return updated;
       });
     });
     return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
+      if (channel) supabase.removeChannel(channel);
     };
   }, [dealId]);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Handle send message
   const handleSend = async () => {
     const content = newMessage.trim();
     if (!content && !file) return;
 
-    // Create a temporary message for optimistic UI
     const tempId = `temp-${Date.now()}`;
     const tempMsg: SupabaseMessage = {
       id: tempId,
@@ -123,14 +109,12 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
     const currentFile = file;
     setFile(null);
 
-    // Handle file upload if any
     let finalContent = content;
     if (currentFile) {
       const fileName = `${Date.now()}-${currentFile.name}`;
       const { error: uploadErr } = await supabase.storage.from('chat-files').upload(fileName, currentFile);
       if (uploadErr) {
         alert('File upload failed');
-        // Optionally, remove the temp message or mark it as failed
         setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
         return;
       }
@@ -138,23 +122,16 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
       finalContent = data?.publicUrl || '';
     }
 
-    // Save message to DB
     try {
       const savedMsg = await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
-      // Replace temp message with actual one
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === tempId ? savedMsg : msg))
-      );
+      setMessages((prev) => prev.map((msg) => (msg.id === tempId ? savedMsg : msg)));
     } catch (err) {
-      console.error('Error sending message:', err);
-      // Optionally, handle failed message (e.g., show error, retry)
+      console.error('[DealChat] Error sending message:', err);
     }
   };
 
-  // Check if content is an image URL
   const isImage = (text: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
 
-  // Format timestamp
   const formatRelativeTime = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -170,7 +147,6 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
 
   return (
     <div className="w-96 h-[30rem] bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden shadow-lg fixed bottom-4 right-4 z-50">
-      {/* Header */}
       <div className="p-3 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-2">
           {otherUser.avatar && (
@@ -187,8 +163,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
         </button>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2" ref={messagesEndRef}>
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
         {loading ? (
           <p className="text-gray-500 text-sm">Loading messages...</p>
         ) : messages.length === 0 ? (
@@ -224,7 +199,6 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area */}
       <div className="border-t border-gray-700 p-2 flex flex-col gap-2">
         <div className="flex gap-2">
           <input

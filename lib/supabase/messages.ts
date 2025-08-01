@@ -29,11 +29,14 @@ export async function fetchRecentMessages(dealId: string, limit = 20): Promise<S
     .from('deal_messages')
     .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
     .eq('deal_id', dealId)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: true }) // <- chronological order directly
     .limit(limit);
 
-  if (error) throw error;
-  return data.reverse();
+  if (error) {
+    console.error('fetchRecentMessages error:', error);
+    return [];
+  }
+  return data || [];
 }
 
 export async function fetchMoreMessages(
@@ -46,11 +49,14 @@ export async function fetchMoreMessages(
     .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
     .eq('deal_id', dealId)
     .lt('created_at', beforeDate)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: true })
     .limit(limit);
 
-  if (error) throw error;
-  return data.reverse();
+  if (error) {
+    console.error('fetchMoreMessages error:', error);
+    return [];
+  }
+  return data || [];
 }
 
 export async function sendMessage({ dealId, senderId, content }: SendMessagePayload) {
@@ -60,7 +66,10 @@ export async function sendMessage({ dealId, senderId, content }: SendMessagePayl
     content,
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error('sendMessage error:', error);
+    throw error;
+  }
 }
 
 interface RealtimePayload {
@@ -72,7 +81,7 @@ export function subscribeToNewMessages(
   onNew: (msg: SupabaseMessage) => void
 ) {
   const channel = supabase
-    .channel(`chat-${dealId}-${Date.now()}`) // force fresh channel for each sub
+    .channel(`chat-${dealId}-${Date.now()}`)
     .on(
       'postgres_changes',
       {
@@ -98,7 +107,7 @@ export function subscribeToNewMessages(
             onNew(data);
           }
         } catch (e) {
-          console.error('Realtime processing failure:', e);
+          console.error('Realtime message processing failed:', e);
         }
       }
     )

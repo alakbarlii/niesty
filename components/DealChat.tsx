@@ -35,6 +35,10 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
 
   const fetchMessages = useCallback(async () => {
     console.log('[DealChat] Fetching messages...');
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    console.log('[DealChat] Auth Session:', sessionData, 'Error:', sessionError);
+
     setLoading(true);
     try {
       const allMsgs = await fetchAllMessages(dealId);

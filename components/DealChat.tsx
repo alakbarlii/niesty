@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   fetchRecentMessages,
   sendMessage,
@@ -44,25 +44,38 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
   const containerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const loadMessages = async () => {
+  const fetchAndSetMessages = useCallback(async () => {
+    try {
       const data = await fetchRecentMessages(dealId);
       setMessages(data);
-    };
-    loadMessages();
+    } catch (err) {
+      console.error('Error loading messages:', err);
+    }
   }, [dealId]);
+
+  useEffect(() => {
+    fetchAndSetMessages();
+  }, [fetchAndSetMessages]);
 
   useEffect(() => {
     const sub = subscribeToNewMessages(dealId, (msg) => {
       setMessages((prev) => {
         const exists = prev.some((m) => m.id === msg.id);
-        return exists ? prev : [...prev, msg];
+        if (!exists) return [...prev, msg];
+        return prev;
       });
     });
     return () => {
       supabase.removeChannel(sub);
     };
   }, [dealId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAndSetMessages();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchAndSetMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,6 +98,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
     await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
     setNewMessage('');
     setFile(null);
+    await fetchAndSetMessages(); // refresh after send
   };
 
   const isImage = (text: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(text);

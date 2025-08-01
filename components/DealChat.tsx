@@ -6,25 +6,13 @@ import {
   sendMessage,
   subscribeToNewMessages,
   markMessagesAsSeen,
+  SupabaseMessage,
 } from '@/lib/supabase/messages';
 import { Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
 import { createBrowserClient } from '@/lib/supabase';
 
 const supabase = createBrowserClient();
-
-interface SupabaseMessage {
-  id: string;
-  deal_id: string;
-  sender_id: string;
-  content: string;
-  created_at: string;
-  is_seen?: boolean;
-  profiles?: {
-    full_name?: string;
-    avatar_url?: string;
-  };
-}
 
 interface DealChatProps {
   dealId: string;
@@ -44,6 +32,9 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
 
   const fetchMessages = useCallback(async () => {
     console.log('[DealChat] Fetching messages...');
+    const { data: { user }, error } = await supabase.auth.getUser();
+    console.log('[DealChat] User Auth:', user, 'Error:', error);
+
     setLoading(true);
     try {
       const allMsgs = await fetchAllMessages(dealId);

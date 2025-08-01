@@ -58,23 +58,34 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
   }, [fetchAndSetMessages]);
 
   useEffect(() => {
-    const sub = subscribeToNewMessages(dealId, (msg) => {
-      setMessages((prev) => {
-        const exists = prev.some((m) => m.id === msg.id);
-        if (!exists) return [...prev, msg];
-        return prev;
-      });
+    const sub = subscribeToNewMessages(dealId, async (msg) => {
+      const exists = messages.some((m) => m.id === msg.id);
+      if (!exists) {
+        await fetchAndSetMessages();
+      }
     });
     return () => {
       supabase.removeChannel(sub);
     };
-  }, [dealId]);
+  }, [dealId, messages, fetchAndSetMessages]);
 
   useEffect(() => {
     const interval = setInterval(() => {
       fetchAndSetMessages();
     }, 5000);
     return () => clearInterval(interval);
+  }, [fetchAndSetMessages]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchAndSetMessages();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [fetchAndSetMessages]);
 
   useEffect(() => {
@@ -98,7 +109,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
     await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
     setNewMessage('');
     setFile(null);
-    await fetchAndSetMessages(); // refresh after send
+    await fetchAndSetMessages();
   };
 
   const isImage = (text: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(text);

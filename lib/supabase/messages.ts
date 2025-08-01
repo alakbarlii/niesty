@@ -33,7 +33,7 @@ export async function fetchRecentMessages(dealId: string, limit = 20): Promise<S
     .limit(limit);
 
   if (error) throw error;
-  return data.reverse(); // reverse to chronological order
+  return data.reverse();
 }
 
 export async function fetchMoreMessages(
@@ -71,8 +71,8 @@ export function subscribeToNewMessages(
   dealId: string,
   onNew: (msg: SupabaseMessage) => void
 ) {
-  return supabase
-    .channel(`chat-${dealId}`)
+  const channel = supabase
+    .channel(`chat-${dealId}-${Date.now()}`) // prevent stale channel re-use
     .on(
       'postgres_changes',
       {
@@ -81,9 +81,24 @@ export function subscribeToNewMessages(
         table: 'deal_messages',
         filter: `deal_id=eq.${dealId}`,
       },
-      (payload: RealtimePayload) => {
-        onNew(payload.new);
+      async (payload: RealtimePayload) => {
+        // Fetch full data instead of relying on payload.new
+        try {
+          const { data, error } = await supabase
+            .from('deal_messages')
+            .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
+            .eq('id', payload.new.id)
+            .single();
+
+          if (!error && data) {
+            onNew(data);
+          }
+        } catch (e) {
+          console.error('Failed to fetch full message:', e);
+        }
       }
     )
     .subscribe();
+
+  return channel;
 }

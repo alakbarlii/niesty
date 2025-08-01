@@ -72,7 +72,7 @@ export function subscribeToNewMessages(
   onNew: (msg: SupabaseMessage) => void
 ) {
   const channel = supabase
-    .channel(`chat-${dealId}-${Date.now()}`) // prevent stale channel re-use
+    .channel(`chat-${dealId}-${Date.now()}`) // force fresh channel for each sub
     .on(
       'postgres_changes',
       {
@@ -82,7 +82,6 @@ export function subscribeToNewMessages(
         filter: `deal_id=eq.${dealId}`,
       },
       async (payload: RealtimePayload) => {
-        // Fetch full data instead of relying on payload.new
         try {
           const { data, error } = await supabase
             .from('deal_messages')
@@ -90,11 +89,16 @@ export function subscribeToNewMessages(
             .eq('id', payload.new.id)
             .single();
 
-          if (!error && data) {
+          if (error) {
+            console.error('Realtime fetch error:', error);
+            return;
+          }
+
+          if (data) {
             onNew(data);
           }
         } catch (e) {
-          console.error('Failed to fetch full message:', e);
+          console.error('Realtime processing failure:', e);
         }
       }
     )

@@ -58,16 +58,17 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
   }, [fetchAndSetMessages]);
 
   useEffect(() => {
-    const sub = subscribeToNewMessages(dealId, async (msg) => {
-      const exists = messages.some((m) => m.id === msg.id);
-      if (!exists) {
-        await fetchAndSetMessages();
-      }
+    const sub = subscribeToNewMessages(dealId, (msg) => {
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === msg.id);
+        if (!exists) return [...prev, msg];
+        return prev;
+      });
     });
     return () => {
       supabase.removeChannel(sub);
     };
-  }, [dealId, messages, fetchAndSetMessages]);
+  }, [dealId]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -109,7 +110,6 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
     await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
     setNewMessage('');
     setFile(null);
-    await fetchAndSetMessages();
   };
 
   const isImage = (text: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(text);

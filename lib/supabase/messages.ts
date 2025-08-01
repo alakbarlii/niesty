@@ -5,7 +5,7 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-interface SupabaseMessage {
+export interface SupabaseMessage {
   id: string;
   deal_id: string;
   sender_id: string;
@@ -18,68 +18,51 @@ interface SupabaseMessage {
   };
 }
 
-interface SendMessagePayload {
-  dealId: string;
-  senderId: string;
-  content: string;
-}
-
-export async function fetchRecentMessages(dealId: string, limit = 20): Promise<SupabaseMessage[]> {
+export async function fetchAllMessages(dealId: string): Promise<SupabaseMessage[]> {
   const { data, error } = await supabase
     .from('deal_messages')
     .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
     .eq('deal_id', dealId)
-    .order('created_at', { ascending: true }) // <- chronological order directly
-    .limit(limit);
-
+    .order('created_at', { ascending: true });
   if (error) {
-    console.error('fetchRecentMessages error:', error);
+    console.error('fetchAllMessages error:', error);
     return [];
   }
   return data || [];
 }
 
-export async function fetchMoreMessages(
-  dealId: string,
-  beforeDate: string,
-  limit = 20
-): Promise<SupabaseMessage[]> {
-  const { data, error } = await supabase
+export async function markMessagesAsSeen(dealId: string, userId: string) {
+  const { error } = await supabase
     .from('deal_messages')
-    .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
+    .update({ is_seen: true })
     .eq('deal_id', dealId)
-    .lt('created_at', beforeDate)
-    .order('created_at', { ascending: true })
-    .limit(limit);
-
+    .neq('sender_id', userId)
+    .is('is_seen', false);
   if (error) {
-    console.error('fetchMoreMessages error:', error);
-    return [];
+    console.error('markMessagesAsSeen error:', error);
   }
-  return data || [];
 }
 
-export async function sendMessage({ dealId, senderId, content }: SendMessagePayload) {
-  const { error } = await supabase.from('deal_messages').insert({
-    deal_id: dealId,
-    sender_id: senderId,
-    content,
-  });
+// Note: sendMessage returns a SupabaseMessage directly
+export async function sendMessage({ dealId, senderId, content }: { dealId: string; senderId: string; content: string }) {
+  const { data, error } = await supabase
+    .from('deal_messages')
+    .insert({
+      deal_id: dealId,
+      sender_id: senderId,
+      content,
+    })
+    .select()
+    .single();
 
   if (error) {
     console.error('sendMessage error:', error);
     throw error;
   }
+  return data as SupabaseMessage;
 }
 
-interface RealtimePayload {
-  new: SupabaseMessage;
-}
-
-export function subscribeToNewMessages(
-  dealId: string,
-  onNew: (msg: SupabaseMessage) => void
-) {
+export function subscribeToNewMessages(dealId: string, onNew: (msg: SupabaseMessage) => void) {
   const channel = supabase
     .channel(`chat-${dealId}-${Date.now()}`)
     .on(
@@ -90,22 +73,18 @@ export function subscribeToNewMessages(
         table: 'deal_messages',
         filter: `deal_id=eq.${dealId}`,
       },
-      async (payload: RealtimePayload) => {
+      async (payload) => {
         try {
           const { data, error } = await supabase
             .from('deal_messages')
             .select('*, profiles!deal_messages_sender_id_fkey(full_name, avatar_url)')
             .eq('id', payload.new.id)
             .single();
-
           if (error) {
             console.error('Realtime fetch error:', error);
             return;
           }
-
-          if (data) {
-            onNew(data);
-          }
+          if (data) onNew(data);
         } catch (e) {
           console.error('Realtime message processing failed:', e);
         }

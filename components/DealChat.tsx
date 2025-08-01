@@ -2,18 +2,18 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  fetchRecentMessages,
+  fetchAllMessages,
   sendMessage,
   subscribeToNewMessages,
+  markMessagesAsSeen,
 } from '@/lib/supabase/messages';
 import { Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
-import { createBrowserClient } from '@supabase/ssr';
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Import your supabase client factory
+import { createBrowserClient } from '@/lib/supabase';
+
+const supabase = createBrowserClient(); // Call without arguments
 
 interface SupabaseMessage {
   id: string;
@@ -41,79 +41,120 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
   const [messages, setMessages] = useState<SupabaseMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const fetchAndSetMessages = useCallback(async () => {
+  // Fetch all messages on mount
+  const fetchMessages = useCallback(async () => {
+    setLoading(true);
     try {
-      const data = await fetchRecentMessages(dealId);
-      setMessages(data);
+      const allMsgs = await fetchAllMessages(dealId);
+      // sort messages by creation date ascending
+      allMsgs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      setMessages(allMsgs);
+      await markMessagesAsSeen(dealId, currentUserId);
     } catch (err) {
-      console.error('Error loading messages:', err);
+      console.error('Error fetching messages:', err);
+    } finally {
+      setLoading(false);
     }
-  }, [dealId]);
+  }, [dealId, currentUserId]);
 
+  // Load messages on mount
   useEffect(() => {
-    fetchAndSetMessages();
-  }, [fetchAndSetMessages]);
+    fetchMessages();
+  }, [fetchMessages]);
 
-  useEffect(() => {
-    const sub = subscribeToNewMessages(dealId, (msg) => {
-      setMessages((prev) => {
-        const exists = prev.some((m) => m.id === msg.id);
-        if (!exists) return [...prev, msg];
-        return prev;
-      });
-    });
-    return () => {
-      supabase.removeChannel(sub);
-    };
-  }, [dealId]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchAndSetMessages();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [fetchAndSetMessages]);
-
+  // Mark messages as seen when tab becomes visible
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchAndSetMessages();
+        fetchMessages();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchAndSetMessages]);
+  }, [fetchMessages]);
 
+  // Subscribe to new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const channel = subscribeToNewMessages(dealId, (msg) => {
+      setMessages((prev) => {
+        // Avoid duplicates
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        // Keep messages sorted
+        const updated = [...prev, msg];
+        updated.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        return updated;
+      });
+    });
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [dealId]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
+  // Handle send message
   const handleSend = async () => {
     const content = newMessage.trim();
     if (!content && !file) return;
 
-    let finalContent = content;
+    // Create a temporary message for optimistic UI
+    const tempId = `temp-${Date.now()}`;
+    const tempMsg: SupabaseMessage = {
+      id: tempId,
+      deal_id: dealId,
+      sender_id: currentUserId,
+      content,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+    setNewMessage('');
+    const currentFile = file;
+    setFile(null);
 
-    if (file) {
-      const fileName = `${Date.now()}-${file.name}`;
-      const { error: uploadErr } = await supabase.storage.from('chat-files').upload(fileName, file);
-      if (uploadErr) return alert('Upload failed');
+    // Handle file upload if any
+    let finalContent = content;
+    if (currentFile) {
+      const fileName = `${Date.now()}-${currentFile.name}`;
+      const { error: uploadErr } = await supabase.storage.from('chat-files').upload(fileName, currentFile);
+      if (uploadErr) {
+        alert('File upload failed');
+        // Optionally, remove the temp message or mark it as failed
+        setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
+        return;
+      }
       const { data } = supabase.storage.from('chat-files').getPublicUrl(fileName);
       finalContent = data?.publicUrl || '';
     }
 
-    await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
-    setNewMessage('');
-    setFile(null);
+    // Save message to DB
+    try {
+      const savedMsg = await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
+      // Replace temp message with actual one
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === tempId ? savedMsg : msg))
+      );
+    } catch (err) {
+      console.error('Error sending message:', err);
+      // Optionally, handle failed message (e.g., show error, retry)
+    }
   };
 
+  // Check if content is an image URL
   const isImage = (text: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
 
+  // Format timestamp
   const formatRelativeTime = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -129,22 +170,28 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
 
   return (
     <div className="w-96 h-[30rem] bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden shadow-lg fixed bottom-4 right-4 z-50">
+      {/* Header */}
       <div className="p-3 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-2">
           {otherUser.avatar && (
             <Image src={otherUser.avatar} alt="avatar" width={32} height={32} className="rounded-full" />
           )}
-          <span className="text-sm font-semibold text-gray-300">
-            {otherUser.name || 'Chat'}
-          </span>
+          <span className="text-sm font-semibold text-gray-300">{otherUser.name || 'Chat'}</span>
         </div>
-        <button onClick={() => window.location.reload()} className="text-sm text-gray-400 hover:text-white" aria-label="Close chat">
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm text-gray-400 hover:text-white"
+          aria-label="Close chat"
+        >
           ✕
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2" ref={containerRef}>
-        {messages.length === 0 ? (
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2" ref={messagesEndRef}>
+        {loading ? (
+          <p className="text-gray-500 text-sm">Loading messages...</p>
+        ) : messages.length === 0 ? (
           <p className="text-gray-500 text-sm">No messages yet.</p>
         ) : (
           messages.map((msg) => (
@@ -177,6 +224,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Input area */}
       <div className="border-t border-gray-700 p-2 flex flex-col gap-2">
         <div className="flex gap-2">
           <input
@@ -188,13 +236,16 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
           />
           <button
             onClick={handleSend}
-            className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md text-sm font-semibold"
+            className="bg-yellow-700 hover:bg-yellow-600 text-white px-3 py-2 rounded-md text-sm font-semibold"
           >
             Send
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor="file-upload" className="cursor-pointer text-sm text-gray-400 hover:underline flex items-center gap-1">
+          <label
+            htmlFor="file-upload"
+            className="cursor-pointer text-sm text-gray-400 hover:underline flex items-center gap-1"
+          >
             <ImageIcon className="w-4 h-4" /> Upload image
           </label>
           <input
@@ -205,9 +256,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
             onChange={(e) => setFile(e.target.files?.[0] || null)}
           />
           {file && (
-            <span className="text-xs text-gray-300 truncate max-w-[140px]">
-              {file.name}
-            </span>
+            <span className="text-xs text-gray-300 truncate max-w-[140px]">{file.name}</span>
           )}
         </div>
       </div>

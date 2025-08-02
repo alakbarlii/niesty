@@ -203,7 +203,7 @@ export default function DealDetailPage() {
 
         {deal.deal_stage === 'Negotiating Terms' && (
           <div className="pt-4 border-t border-white/10 space-y-3">
-            <p className="text-white/70 text-sm">Both parties must confirm the agreed terms to proceed.</p>
+            <p className="text-white/70 text-sm">Both parties must confirm the agreed terms to proceed!</p>
             {!hasAgreed ? (
               <button
                 className="w-full mt-2 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"

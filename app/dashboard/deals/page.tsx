@@ -192,18 +192,19 @@ export default function DealsPage() {
 
                 {isReceiver && deal.status === 'pending' && (
                   <div className="mt-5 flex justify-center gap-4">
+                     <button
+                      onClick={() => handleUpdateStatus(deal.id, 'rejected')}
+                      className="text-sm font-semibold px-6 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white shadow-sm transition"
+                    >
+                      Reject Deal
+                    </button>
                     <button
                       onClick={() => handleUpdateStatus(deal.id, 'accepted')}
                       className="text-sm font-semibold px-6 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white shadow-sm transition"
                     >
                       Accept Deal
                     </button>
-                    <button
-                      onClick={() => handleUpdateStatus(deal.id, 'rejected')}
-                      className="text-sm font-semibold px-6 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white shadow-sm transition"
-                    >
-                      Reject Deal
-                    </button>
+                   
                   </div>
                 )}
               </li>

@@ -46,15 +46,19 @@ export default function DealProgress({
     }
   };
 
+  const isDealFrozen = isRejected;
+
   return (
     <div className="space-y-2">
       <h2 className="text-sm font-medium text-gray-300">Deal Progress</h2>
 
       <ol className="relative border-l border-gray-700 ml-3">
         {DEAL_STAGES.map((stage, index) => {
-          const isCompleted = index < currentStage;
+          if (isDealFrozen && index > 3) return null; // Lock stages beyond 'Content Submitted'
+
+          const isCompleted = index < currentStage && !isDealFrozen;
           const isLastStage = index === DEAL_STAGES.length - 1;
-          const isCurrent = index === currentStage;
+          const isCurrent = index === currentStage && !isDealFrozen;
 
           const showCheck = isCompleted || (isCurrent && isLastStage);
           const showClock = isCurrent && !isLastStage;
@@ -89,7 +93,7 @@ export default function DealProgress({
                     href={contentLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 text-xs ml-1 underline"
+                    className="text-blue-400 hover:text-blue-300 text-xs ml-1 underline"
                   >
                     View Content
                   </a>
@@ -135,6 +139,12 @@ export default function DealProgress({
           );
         })}
       </ol>
+
+      {isDealFrozen && (
+        <p className="text-red-400 text-sm mt-2 font-semibold">
+          This deal has been rejected and cannot proceed.
+        </p>
+      )}
     </div>
   );
 }

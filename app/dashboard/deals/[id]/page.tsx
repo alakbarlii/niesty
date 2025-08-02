@@ -43,7 +43,6 @@ export default function DealDetailPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [submissionUrl, setSubmissionUrl] = useState('');
   const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
@@ -112,31 +111,56 @@ export default function DealDetailPage() {
   const currentStageIndex = deal ? DEAL_STAGES.indexOf(deal.deal_stage) : -1;
   const hasApproved = isSender ? deal?.approved_by_sender : deal?.approved_by_receiver;
 
-  const handleSubmitContent = async () => {
+  const handleAgree = async () => {
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    if (!submissionUrl.trim()) return alert('Please enter a valid URL.');
-    const confirm = window.confirm('Are you sure you want to submit this content?');
-    if (!confirm) return;
+    const columnToUpdate = isSender ? 'agreed_by_sender' : 'agreed_by_receiver';
+    const { error } = await supabase
+      .from('deals')
+      .update({ [columnToUpdate]: true })
+      .eq('id', deal?.id);
+    if (error) return alert('Failed to agree to terms.');
+
+    const { data: refreshedDeal } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('id', deal?.id)
+      .single();
+
+    const bothAgreed = refreshedDeal?.agreed_by_sender && refreshedDeal?.agreed_by_receiver;
+    if (bothAgreed) {
+      await supabase
+        .from('deals')
+        .update({ deal_stage: 'Platform Escrow' })
+        .eq('id', deal?.id);
+      refreshedDeal.deal_stage = 'Platform Escrow';
+    }
+
+    setDeal(refreshedDeal);
+  };
+
+  const handleSubmitContent = async (url: string) => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
     const { error } = await supabase
       .from('deals')
-      .update({ submission_url: submissionUrl, deal_stage: 'Content Submitted', rejection_reason: null })
+      .update({ submission_url: url, deal_stage: 'Content Submitted', rejection_reason: null })
       .eq('id', deal?.id);
 
     if (error) return alert('Failed to submit content.');
 
-    setDeal((prev) => prev && { ...prev, submission_url: submissionUrl, deal_stage: 'Content Submitted', rejection_reason: null });
-    setSubmissionUrl('');
+    setDeal((prev) =>
+      prev && { ...prev, submission_url: url, deal_stage: 'Content Submitted', rejection_reason: null }
+    );
   };
 
-  const handleRejectContent = async () => {
-    const reason = window.prompt('Enter reason for rejection:');
-    if (!reason) return;
-
+  const handleRejectContent = async (reason: string) => {
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -159,21 +183,18 @@ export default function DealDetailPage() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const confirm = window.confirm('Are you sure you approve the submitted content?');
-    if (!confirm || !deal) return;
-
     const columnToUpdate = isSender ? 'approved_by_sender' : 'approved_by_receiver';
-    const { error } = await supabase.from('deals').update({ [columnToUpdate]: true }).eq('id', deal.id);
+    const { error } = await supabase.from('deals').update({ [columnToUpdate]: true }).eq('id', deal?.id);
     if (error) return alert('Failed to approve content.');
 
-    const { data: updatedDeal } = await supabase.from('deals').select('*').eq('id', deal.id).single();
+    const { data: updatedDeal } = await supabase.from('deals').select('*').eq('id', deal?.id).single();
     const bothApproved = updatedDeal?.approved_by_sender && updatedDeal?.approved_by_receiver;
 
     if (bothApproved) {
       const { error: releaseError } = await supabase
         .from('deals')
         .update({ deal_stage: 'Payment Released' })
-        .eq('id', deal.id);
+        .eq('id', deal?.id);
       if (releaseError) return alert('Failed to release payment.');
       updatedDeal.deal_stage = 'Payment Released';
     }
@@ -227,27 +248,11 @@ export default function DealDetailPage() {
           rejectionReason={deal.rejection_reason || undefined}
           onApprove={isReceiver && !hasApproved ? handleApproval : undefined}
           onReject={isReceiver && !hasApproved ? handleRejectContent : undefined}
+          onAgree={deal.deal_stage === 'Negotiating Terms' ? handleAgree : undefined}
+          onSubmitContent={isSender && deal.deal_stage === 'Platform Escrow' ? handleSubmitContent : undefined}
           canApprove={isReceiver && !hasApproved}
+          isSender={isSender}
         />
-
-        {deal.deal_stage === 'Platform Escrow' && isSender && (
-          <div className="pt-4 border-t border-white/10 space-y-3">
-            <p className="text-white/70 text-sm">Submit your content URL to proceed.</p>
-            <input
-              type="text"
-              placeholder="e.g. https://youtube.com/..."
-              className="w-full p-3 rounded-xl bg-white/10 text-white placeholder:text-white/50"
-              value={submissionUrl}
-              onChange={(e) => setSubmissionUrl(e.target.value)}
-            />
-            <button
-              onClick={handleSubmitContent}
-              className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3 px-6 rounded-xl transition-all duration-200"
-            >
-              Submit Content
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="mt-6">

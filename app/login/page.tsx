@@ -80,7 +80,7 @@ export default function LoginPage() {
           <h1 className="text-4xl font-extrabold text-white text-center mb-4.5 tracking-tight">Login to your Niesty!</h1>
           <p className="text-white/60 text-sm text-center leading-relaxed">
             Where creators and sponsors connect.<br />
-            Every day with new sponsorship deals.
+            Every day with new sponsorship deals!
           </p>
         </div>
 

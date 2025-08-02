@@ -1,3 +1,5 @@
+'use client';
+
 import { CheckCircle, Clock, XCircle, Loader } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';

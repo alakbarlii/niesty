@@ -1,8 +1,6 @@
-'use client';
-
+import { CheckCircle, Clock, XCircle, Loader } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { CheckCircle, XCircle, Clock, Loader } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -72,8 +70,7 @@ export default function DealsPage() {
     const { data, error: dealsError } = await supabase
       .from('deals')
       .select('*')
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order('created_at', { ascending: false });
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
 
     if (dealsError || !data) {
       setError('Failed to fetch deals.');
@@ -94,7 +91,17 @@ export default function DealsPage() {
       receiver_info: userMap.get(deal.receiver_id),
     }));
 
-    setDeals(dealsWithUsers);
+    // Sort: rejected last, then finished (payment released), then in-progress
+    const sortedDeals = dealsWithUsers.sort((a, b) => {
+      const getSortValue = (deal: Deal) => {
+        if (deal.status === 'rejected') return 2;
+        if (deal.deal_stage === 'Payment Released') return 1;
+        return 0;
+      };
+      return getSortValue(a) - getSortValue(b);
+    });
+
+    setDeals(sortedDeals);
     setLoading(false);
   }, []);
 
@@ -169,8 +176,8 @@ export default function DealsPage() {
                   </p>
 
                   <div className="text-xs text-white/50">
-                    Sent on: {new Date(deal.created_at).toLocaleDateString()} · <br className="md:hidden" />
-                    Stage: <span className="text-white/80">{deal.deal_stage}</span>
+                    Sent on: {new Date(deal.created_at).toLocaleDateString()} ·{' '}
+                    <br className="md:hidden" />Stage: <span className="text-white/80">{deal.deal_stage}</span>
                   </div>
 
                   <div className="relative mt-3 h-2 bg-white/10 rounded-full overflow-hidden">

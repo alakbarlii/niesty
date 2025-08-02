@@ -23,7 +23,7 @@ export async function fetchAllMessages(dealId: string): Promise<SupabaseMessage[
   console.log('[fetchAllMessages] START', { dealId });
   const { data, error } = await supabase
     .from('deal_messages')
-    .select('*') // JOIN REMOVED to avoid FK error
+    .select('*') 
     .eq('deal_id', dealId)
     .order('created_at', { ascending: true });
 

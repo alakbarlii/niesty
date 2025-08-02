@@ -169,8 +169,8 @@ export default function DealsPage() {
                   </p>
 
                   <div className="text-xs text-white/50">
-                    Sent on: {new Date(deal.created_at).toLocaleDateString()} ·{' '}
-                    <br className="md:hidden" />Stage: <span className="text-white/80">{deal.deal_stage}</span>
+                    Sent on: {new Date(deal.created_at).toLocaleDateString()} · <br className="md:hidden" />
+                    Stage: <span className="text-white/80">{deal.deal_stage}</span>
                   </div>
 
                   <div className="relative mt-3 h-2 bg-white/10 rounded-full overflow-hidden">

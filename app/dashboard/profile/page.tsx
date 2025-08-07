@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase'; 
 
 export default function ProfileRedirectPage() {
-  const supabase = createClient();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
 
@@ -17,19 +16,18 @@ export default function ProfileRedirectPage() {
       } = await supabase.auth.getSession();
 
       if (sessionError) {
-        console.error('Session error:', sessionError.message);
+        console.error('❌ Session error:', sessionError.message);
         setLoading(false);
         return;
       }
 
       if (!session) {
-        setTimeout(redirectUser, 300);
+        setTimeout(redirectUser, 300); // Retry until session is restored
         return;
       }
 
       const userId = session.user.id;
 
-      
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
@@ -37,12 +35,13 @@ export default function ProfileRedirectPage() {
         .single();
 
       if (error || !data?.role) {
-        console.error('Profile fetch error:', error?.message);
+        console.error('❌ Profile fetch error:', error?.message);
         setLoading(false);
         return;
       }
 
       const role = data.role;
+
       if (role === 'creator') {
         router.push('/dashboard/profile/creator/view');
       } else if (role === 'business') {
@@ -53,7 +52,7 @@ export default function ProfileRedirectPage() {
     };
 
     redirectUser();
-  }, [router, supabase]);
+  }, [router]);
 
   return (
     <div className="text-white p-6">

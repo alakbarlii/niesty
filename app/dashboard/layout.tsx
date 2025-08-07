@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useHeartbeat } from '@/hooks/useHeartbeat';
-import { supabase } from '@/lib/supabase'; // ✅ shared instance — no duplicate clients
+import { supabase } from '@/lib/supabase'; 
 
 import { usePathname, useRouter } from 'next/navigation';
 import { Search, Bell, User, DollarSign, Briefcase } from 'lucide-react';

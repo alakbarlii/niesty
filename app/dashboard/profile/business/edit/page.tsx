@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase'; 
 
 export default function Page() {
-  const supabase = createClient();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -19,6 +18,7 @@ export default function Page() {
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
+
       const {
         data: { user },
         error,
@@ -69,7 +69,7 @@ export default function Page() {
     };
 
     fetchProfile();
-  }, [supabase]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

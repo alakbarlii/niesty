@@ -6,13 +6,12 @@ import { Search, FileText, User, Settings, BarChart2 } from 'lucide-react';
 import Image from 'next/image';
 import NotificationIcon from '@/components/NotificationIcon';
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase'; 
 
 const ProfileNavItem = () => {
   const pathname = usePathname();
   const [profileHref, setProfileHref] = useState<string | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-  const supabase = createClient();
 
   useEffect(() => {
     const fetchRole = async () => {
@@ -23,7 +22,7 @@ const ProfileNavItem = () => {
       const { data } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', userId)
+        .eq('user_id', userId) // ✅ keep this matching your DB structure
         .single();
 
       if (data?.role === 'creator') {
@@ -38,7 +37,7 @@ const ProfileNavItem = () => {
     };
 
     fetchRole();
-  }, [supabase]);
+  }, []);
 
   if (!sessionLoaded) {
     return (

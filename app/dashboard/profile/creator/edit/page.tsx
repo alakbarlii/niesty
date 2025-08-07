@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase'; 
 
 export default function CreatorProfileEdit() {
-  const supabase = createClient();
   const router = useRouter();
 
   const [fullName, setFullName] = useState('');
@@ -23,6 +22,7 @@ export default function CreatorProfileEdit() {
 
       if (!user) return;
       const userId = user.id;
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -43,7 +43,7 @@ export default function CreatorProfileEdit() {
     };
 
     fetchProfile();
-  }, [supabase]);
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,10 +61,9 @@ export default function CreatorProfileEdit() {
 
     if (profileFile) {
       const fileExt = profileFile.name.split('.').pop();
-      const fileName = `${userId}-${Date.now()}.${fileExt}`; // Unique name
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
       const filePath = `profiles/${fileName}`;
 
-      // Delete previous profile image if it exists
       const { data: profile } = await supabase
         .from('profiles')
         .select('profile_url')

@@ -8,7 +8,7 @@ export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log('🔁 Waiting for auth state...');
+    console.log(' Waiting for auth state...');
 
     const {
       data: { subscription },
@@ -20,7 +20,7 @@ export default function AuthCallbackPage() {
       }
 
       const user = session.user;
-      console.log('✅ Session restored:', user.email, user.id);
+      console.log(' Session restored:', user.email, user.id);
 
       // Check if profile exists
       const { data: existingProfile, error: fetchError } = await supabase
@@ -36,7 +36,7 @@ export default function AuthCallbackPage() {
       }
 
       if (existingProfile) {
-        console.log('✅ Existing profile found. Redirecting to dashboard...');
+        console.log(' Existing profile found. Redirecting to dashboard...');
         router.replace('/dashboard');
         return;
       }
@@ -55,7 +55,7 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      console.log('✅ Waitlist entry found:', waitlistEntry);
+      console.log(' Waitlist entry found:', waitlistEntry);
 
       const { error: insertError } = await supabase
         .from('profiles')
@@ -73,7 +73,7 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      console.log('✅ New profile inserted successfully. Redirecting to dashboard...');
+      console.log(' New profile inserted successfully. Redirecting to dashboard...');
       router.replace('/dashboard');
     });
 

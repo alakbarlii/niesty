@@ -1,4 +1,3 @@
-// ✅ FILE: components/HeartbeatClient.tsx
 'use client';
 
 import { useEffect } from 'react';
@@ -23,7 +22,7 @@ export default function HeartbeatClient() {
           is_online: true,
           last_seen: now,
         })
-        .eq('id', userId);
+        .eq('user_id', userId);
     };
 
     const handleExit = async () => {
@@ -34,7 +33,7 @@ export default function HeartbeatClient() {
       await supabase
         .from('profiles')
         .update({ is_online: false })
-        .eq('id', userId);
+        .eq('user_id', userId);
     };
 
     updateStatus(); // Immediately mark online
@@ -49,4 +48,4 @@ export default function HeartbeatClient() {
   }, []);
 
   return null;
-} //erghgi
+} 

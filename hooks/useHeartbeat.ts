@@ -15,7 +15,7 @@ export function useHeartbeat(userId: string | null) {
           is_online: true,
           last_seen: new Date().toISOString(),
         })
-        .eq('id', userId);
+        .eq('user_id', userId);
 
       if (error) console.error('[HEARTBEAT INIT ERROR]', error.message);
     };
@@ -31,7 +31,7 @@ export function useHeartbeat(userId: string | null) {
           is_online: true,
           last_seen: now.toISOString(),
         })
-        .eq('id', userId);
+        .eq('user_id', userId);
 
       if (error) console.error('[HEARTBEAT INTERVAL ERROR]', error.message);
     }, 30000);
@@ -40,7 +40,7 @@ export function useHeartbeat(userId: string | null) {
       const { error } = await supabase
         .from('profiles')
         .update({ is_online: false })
-        .eq('id', userId);
+        .eq('user_id', userId);
 
       if (error) console.error('[HEARTBEAT EXIT ERROR]', error.message);
     };

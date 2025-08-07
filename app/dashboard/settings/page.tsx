@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
+
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -11,10 +12,7 @@ export default function SettingsPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    
 
     const fetchRole = async () => {
       try {
@@ -61,10 +59,7 @@ export default function SettingsPage() {
   }, []);
 
   const handleLogout = async () => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+   
 
     await supabase.auth.signOut();
     router.push('/login');

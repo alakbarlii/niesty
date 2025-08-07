@@ -2,7 +2,8 @@
 
 import { CheckCircle, Clock, XCircle, Loader } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
+
 
 interface Deal {
   id: string;
@@ -31,10 +32,7 @@ const DEAL_STAGES = [
   'Payment Released',
 ];
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+
 
 export default function DealsPage() {
   const [deals, setDeals] = useState<Deal[]>([]);

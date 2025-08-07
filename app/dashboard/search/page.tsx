@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
@@ -29,10 +29,7 @@ export default function Page() {
 
   const pageSize = 6;
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -41,7 +38,7 @@ export default function Page() {
     };
 
     fetchUser();
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     const fetchProfiles = async () => {
@@ -54,7 +51,7 @@ export default function Page() {
     };
 
     fetchProfiles();
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     if (!initialLoad) {

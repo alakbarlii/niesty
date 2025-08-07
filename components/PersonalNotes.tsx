@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 
 interface PersonalNotesProps {
@@ -14,11 +14,7 @@ export default function PersonalNotes({ dealId }: PersonalNotesProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
+    
     const fetchUserAndNote = async () => {
       const {
         data: { user },
@@ -50,10 +46,7 @@ export default function PersonalNotes({ dealId }: PersonalNotesProps) {
 
     setNote(content);
 
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    
 
     const { data: existing } = await supabase
       .from('personal_notes')

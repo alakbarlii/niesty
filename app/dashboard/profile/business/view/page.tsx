@@ -1,16 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
+
 import StatBadge from '@/components/StatBadge';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 export default function BusinessProfileView() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  
 
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
@@ -94,7 +92,7 @@ export default function BusinessProfileView() {
     };
 
     fetchProfile();
-  }, [supabase]);
+  }, []);
 
   if (loading) return <p className="text-white p-6">Loading...</p>;
   if (error) return <p className="text-red-500 p-6">Error: {error}</p>;

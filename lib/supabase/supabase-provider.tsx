@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 
 const SupabaseContext = createContext<Session | null>(null);
@@ -10,10 +10,7 @@ export const SupabaseProvider = ({ children }: { children: React.ReactNode }) =>
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);

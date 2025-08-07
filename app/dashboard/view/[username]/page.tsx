@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
 import { MoreVertical, Flag } from 'lucide-react';
 import { sendDealRequest } from '@/lib/supabase/deals';
@@ -30,10 +30,7 @@ export default function PublicProfile() {
   const [dealMessage, setDealMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  
 
   useEffect(() => {
     const fetchProfileAndDeals = async () => {
@@ -62,7 +59,7 @@ export default function PublicProfile() {
     };
 
     fetchProfileAndDeals();
-  }, [username, supabase]);
+  }, [username]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(window.location.href);

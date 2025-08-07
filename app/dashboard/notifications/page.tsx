@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
 import { BellRing } from 'lucide-react';
 
 interface Notification {
@@ -13,10 +13,7 @@ interface Notification {
 }
 
 export default function Page() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,7 +62,7 @@ export default function Page() {
     };
 
     fetchNotifications();
-  }, [supabase]);
+  }, []);
 
   return (
     <section className="p-4 sm:p-6 md:p-10 max-w-3xl mx-auto">

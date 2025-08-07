@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
 import { Loader, MessageSquare } from 'lucide-react';
 import DealProgress from '@/components/DealProgress';
 import PersonalNotes from '@/components/PersonalNotes';
@@ -46,10 +46,7 @@ export default function DealDetailPage() {
   const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    
 
     const fetchDeal = async () => {
       const {
@@ -112,10 +109,7 @@ export default function DealDetailPage() {
   const hasApproved = isSender ? deal?.approved_by_sender : deal?.approved_by_receiver;
 
   const handleAgree = async () => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    
 
     const columnToUpdate = isSender ? 'agreed_by_sender' : 'agreed_by_receiver';
     const { error } = await supabase
@@ -143,10 +137,7 @@ export default function DealDetailPage() {
   };
 
   const handleSubmitContent = async (url: string) => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    
 
     const { error } = await supabase
       .from('deals')
@@ -161,10 +152,7 @@ export default function DealDetailPage() {
   };
 
   const handleRejectContent = async (reason: string) => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    
 
     const { error } = await supabase
       .from('deals')
@@ -178,10 +166,7 @@ export default function DealDetailPage() {
   };
 
   const handleApproval = async () => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    
 
     const columnToUpdate = isSender ? 'approved_by_sender' : 'approved_by_receiver';
     const { error } = await supabase.from('deals').update({ [columnToUpdate]: true }).eq('id', deal?.id);

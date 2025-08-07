@@ -21,7 +21,7 @@ export function useHeartbeat(userId: string | null) {
       if (error) console.error('[HEARTBEAT INIT ERROR]', error.message);
     };
 
-    updateStatus(); // mark online immediately
+    updateStatus(); 
 
     const interval = setInterval(() => {
       updateStatus();

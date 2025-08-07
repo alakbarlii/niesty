@@ -1,3 +1,4 @@
+// ✅ FILE: components/HeartbeatClient.tsx
 'use client';
 
 import { useEffect } from 'react';
@@ -5,43 +6,39 @@ import { supabase } from '@/lib/supabase';
 
 export default function HeartbeatClient() {
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    const interval: NodeJS.Timeout = setInterval(() => {
+      updateStatus();
+    }, 30000); // Every 30s
 
-    const updateOnlineStatus = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+    const updateStatus = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) return;
 
-      // Mark user as online
+      const userId = session.user.id;
+      const now = new Date().toISOString();
+
       await supabase
         .from('profiles')
         .update({
           is_online: true,
-          last_seen: new Date().toISOString(),
+          last_seen: now,
         })
-        .eq('id', session.user.id);
-
-      // Repeat every 30 seconds
-      interval = setInterval(async () => {
-        await supabase
-          .from('profiles')
-          .update({
-            last_seen: new Date().toISOString(),
-          })
-          .eq('id', session.user.id);
-      }, 30000);
+        .eq('id', userId);
     };
 
     const handleExit = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) return;
 
+      const userId = session.user.id;
       await supabase
         .from('profiles')
         .update({ is_online: false })
-        .eq('id', session.user.id);
+        .eq('id', userId);
     };
 
-    updateOnlineStatus();
+    updateStatus(); // Immediately mark online
+
     window.addEventListener('beforeunload', handleExit);
 
     return () => {

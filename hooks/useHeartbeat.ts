@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -7,8 +8,7 @@ export function useHeartbeat(userId: string | null) {
   useEffect(() => {
     if (!userId) return;
 
-    const markOnline = async () => {
-      console.log('[HEARTBEAT] Marking user online:', userId);
+    const updateStatus = async () => {
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -17,35 +17,34 @@ export function useHeartbeat(userId: string | null) {
         })
         .eq('id', userId);
 
-      if (error) {
-        console.error('[HEARTBEAT INIT ERROR]', error.message);
-      }
+      if (error) console.error('[HEARTBEAT INIT ERROR]', error.message);
     };
 
+    updateStatus();
+
     const interval = setInterval(async () => {
-      console.log('[HEARTBEAT] Updating last_seen for:', userId);
+      const now = new Date();
 
       const { error } = await supabase
         .from('profiles')
-        .update({ last_seen: new Date().toISOString() })
+        .update({
+          is_online: true,
+          last_seen: now.toISOString(),
+        })
         .eq('id', userId);
 
-      if (error) {
-        console.error('[HEARTBEAT INTERVAL ERROR]', error.message);
-      } else {
-        console.log('[HEARTBEAT] Success');
-      }
-    }, 30000); // every 30s like layout.
+      if (error) console.error('[HEARTBEAT INTERVAL ERROR]', error.message);
+    }, 30000);
 
     const handleExit = async () => {
-      console.log('[HEARTBEAT] Marking user offline:', userId);
-      await supabase
+      const { error } = await supabase
         .from('profiles')
         .update({ is_online: false })
         .eq('id', userId);
+
+      if (error) console.error('[HEARTBEAT EXIT ERROR]', error.message);
     };
 
-    markOnline();
     window.addEventListener('beforeunload', handleExit);
 
     return () => {

@@ -1,9 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useHeartbeat } from '@/hooks/useHeartbeat';
+import { createBrowserClient } from '@/lib/supabase';
+
 import { usePathname, useRouter } from 'next/navigation';
-import {Search, Bell, User, DollarSign, Briefcase } from 'lucide-react';
+import { Search, Bell, User, DollarSign, Briefcase } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
-import { useEffect } from 'react';
 
 export default function DashboardLayout({
   children,
@@ -12,9 +15,22 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user?.id) {
+        setUserId(data.user.id);
+      }
+    };
+    getUser();
+  }, []);
+
+  useHeartbeat(userId);
 
   const navItems = [
-   
     { icon: <Search size={22} />, path: '/dashboard/search' },
     { icon: <Briefcase size={22} />, path: '/dashboard/deals' },
     { icon: <DollarSign size={22} />, path: '/dashboard/earnings' },
@@ -23,8 +39,7 @@ export default function DashboardLayout({
   ];
 
   useEffect(() => {
-    // Scroll to top on route change (helps mobile UX)
-    window.scrollTo(0, 0);
+    window.scrollTo(0, 0); // Mobile UX fix
   }, [pathname]);
 
   return (

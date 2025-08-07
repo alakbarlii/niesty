@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -6,8 +7,6 @@ import { supabase } from '@/lib/supabase';
 export function useHeartbeat(userId: string | null) {
   useEffect(() => {
     if (!userId) return;
-
-    let isMounted = true;
 
     const updateStatus = async () => {
       const now = new Date().toISOString();
@@ -22,13 +21,11 @@ export function useHeartbeat(userId: string | null) {
       if (error) console.error('[HEARTBEAT INIT ERROR]', error.message);
     };
 
-    updateStatus();
+    updateStatus(); // mark online immediately
 
     const interval = setInterval(() => {
-      if (!isMounted) return;
-
       updateStatus();
-    }, 30000);
+    }, 30000); // update every 30s
 
     const handleExit = async () => {
       const { error } = await supabase
@@ -42,7 +39,6 @@ export function useHeartbeat(userId: string | null) {
     window.addEventListener('beforeunload', handleExit);
 
     return () => {
-      isMounted = false;
       clearInterval(interval);
       window.removeEventListener('beforeunload', handleExit);
       handleExit();

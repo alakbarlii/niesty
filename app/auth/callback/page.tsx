@@ -2,14 +2,12 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const supabase = createClient();
-
     const handleLogin = async () => {
       console.log('🔁 Starting auth callback logic');
 
@@ -36,8 +34,8 @@ export default function AuthCallbackPage() {
       // Check if profile exists
       const { data: existingProfile, error: fetchError } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('id', user.id)
+        .select('user_id')
+        .eq('user_id', user.id)
         .maybeSingle();
 
       if (fetchError) {
@@ -71,15 +69,14 @@ export default function AuthCallbackPage() {
 
       // Insert new profile
       const { error: insertError } = await supabase
-      .from('profiles')
-      .insert({
-        user_id: user.id,
-        email: user.email,
-        role: waitlistEntry.role,
-        name: user.user_metadata?.name || '',
-        created_at: new Date().toISOString(),
-      });
-    
+        .from('profiles')
+        .insert({
+          user_id: user.id, // ✅ Your primary key
+          email: user.email,
+          role: waitlistEntry.role,
+          name: user.user_metadata?.name || '',
+          created_at: new Date().toISOString(),
+        });
 
       if (insertError) {
         console.error('❌ Profile insert error:', insertError.message);

@@ -13,7 +13,7 @@ export function useHeartbeat(userId: string | null) {
       const { error } = await supabase
         .from('profiles')
         .update({ last_active: new Date().toISOString() })
-        .eq('id', userId);
+        .eq('user_id', userId);
 
       if (error) {
         console.error('[HEARTBEAT ERROR]', error.message);

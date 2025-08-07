@@ -1,3 +1,4 @@
+'use client';
 export default function StatBadge({ label, value }: { label: string, value: string | number }) {
     return (
       <div className="bg-white/10 border border-white/20 px-4 py-2 rounded-xl text-center">

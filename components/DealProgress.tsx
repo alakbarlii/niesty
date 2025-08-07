@@ -1,3 +1,4 @@
+'use client';
 import { CheckCircle, Clock, XCircle } from 'lucide-react';
 import { useState } from 'react';
 

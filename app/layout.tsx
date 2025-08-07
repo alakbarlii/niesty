@@ -1,5 +1,3 @@
-'use client';
-
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { SupabaseProvider } from '@/lib/supabase/supabase-provider';
@@ -8,10 +6,7 @@ import { supabase } from '@/lib/supabase';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata = {
-  title: 'Niesty',
-  description: 'Sponsor deals made simple',
-};
+
 
 export default function RootLayout({
   children,
@@ -25,7 +20,7 @@ export default function RootLayout({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      // Mark user as online + update last_seen immediately
+      // Mark user as online immediately
       await supabase
         .from('profiles')
         .update({
@@ -34,7 +29,7 @@ export default function RootLayout({
         })
         .eq('id', session.user.id);
 
-      // Then update last_seen every 30 seconds
+      // Then update every 30 seconds
       interval = setInterval(async () => {
         await supabase
           .from('profiles')
@@ -59,8 +54,8 @@ export default function RootLayout({
     window.addEventListener('beforeunload', handleExit);
 
     return () => {
-      window.removeEventListener('beforeunload', handleExit);
       clearInterval(interval);
+      window.removeEventListener('beforeunload', handleExit);
       handleExit();
     };
   }, []);

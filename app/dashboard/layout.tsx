@@ -34,6 +34,8 @@ export default function DashboardLayout({
       const { error } = await supabase.rpc('fix_stale_online_flags');
       if (error) {
         console.error('[❌ RPC ERROR] fix_stale_online_flags:', error.message);
+      } else {
+        console.log('[✅ RPC CALLED] fix_stale_online_flags');
       }
     };
   

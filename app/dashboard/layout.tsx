@@ -29,6 +29,18 @@ export default function DashboardLayout({
 
   useHeartbeat(userId);
 
+  useEffect(() => {
+    const cleanupStaleUsers = async () => {
+      await supabase.rpc('fix_stale_online_flags');
+    };
+  
+    cleanupStaleUsers(); // Run immediately
+    const interval = setInterval(cleanupStaleUsers, 60000); // Run every 60s
+  
+    return () => clearInterval(interval);
+  }, []);
+  
+
   const navItems = [
     { icon: <Search size={22} />, path: '/dashboard/search' },
     { icon: <Briefcase size={22} />, path: '/dashboard/deals' },

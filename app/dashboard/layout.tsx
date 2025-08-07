@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useHeartbeat } from '@/hooks/useHeartbeat';
-import { createBrowserClient } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase'; // ✅ shared instance — no duplicate clients
 
 import { usePathname, useRouter } from 'next/navigation';
 import { Search, Bell, User, DollarSign, Briefcase } from 'lucide-react';
@@ -18,7 +18,6 @@ export default function DashboardLayout({
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    const supabase = createBrowserClient();
     const getUser = async () => {
       const { data } = await supabase.auth.getUser();
       if (data?.user?.id) {

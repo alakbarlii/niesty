@@ -8,28 +8,19 @@ export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const handleLogin = async () => {
-      console.log('🔁 Starting auth callback logic');
+    console.log('🔁 Waiting for auth state...');
 
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) {
-        console.error('❌ Session error:', sessionError.message);
-        router.replace('/login');
-        return;
-      }
-
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!session) {
-        console.warn('⚠️ No session found.');
+        console.warn('⚠️ No session found after redirect.');
         router.replace('/login');
         return;
       }
 
       const user = session.user;
-      console.log('✅ Session found:', user.email, user.id);
+      console.log('✅ Session restored:', user.email, user.id);
 
       // Check if profile exists
       const { data: existingProfile, error: fetchError } = await supabase
@@ -52,7 +43,6 @@ export default function AuthCallbackPage() {
 
       console.log('ℹ️ No profile found. Checking waitlist...');
 
-      // Get waitlist data
       const { data: waitlistEntry, error: waitlistError } = await supabase
         .from('waitlist')
         .select('email, role')
@@ -67,11 +57,10 @@ export default function AuthCallbackPage() {
 
       console.log('✅ Waitlist entry found:', waitlistEntry);
 
-      // Insert new profile
       const { error: insertError } = await supabase
         .from('profiles')
         .insert({
-          user_id: user.id, // ✅ Your primary key
+          user_id: user.id,
           email: user.email,
           role: waitlistEntry.role,
           name: user.user_metadata?.name || '',
@@ -86,9 +75,11 @@ export default function AuthCallbackPage() {
 
       console.log('✅ New profile inserted successfully. Redirecting to dashboard...');
       router.replace('/dashboard');
-    };
+    });
 
-    handleLogin();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   return <div className="text-white text-center p-10">Logging you in...</div>;

@@ -35,7 +35,7 @@ export function useHeartbeat(userId: string | null) {
       } else {
         console.log('[HEARTBEAT] Success');
       }
-    }, 30000); // every 30s like layout
+    }, 30000); // every 30s like layout.
 
     const handleExit = async () => {
       console.log('[HEARTBEAT] Marking user offline:', userId);

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect } from 'react';
@@ -8,12 +7,15 @@ export function useHeartbeat(userId: string | null) {
   useEffect(() => {
     if (!userId) return;
 
+    let isMounted = true;
+
     const updateStatus = async () => {
+      const now = new Date().toISOString();
       const { error } = await supabase
         .from('profiles')
         .update({
           is_online: true,
-          last_seen: new Date().toISOString(),
+          last_seen: now,
         })
         .eq('user_id', userId);
 
@@ -22,18 +24,10 @@ export function useHeartbeat(userId: string | null) {
 
     updateStatus();
 
-    const interval = setInterval(async () => {
-      const now = new Date();
+    const interval = setInterval(() => {
+      if (!isMounted) return;
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          is_online: true,
-          last_seen: now.toISOString(),
-        })
-        .eq('user_id', userId);
-
-      if (error) console.error('[HEARTBEAT INTERVAL ERROR]', error.message);
+      updateStatus();
     }, 30000);
 
     const handleExit = async () => {
@@ -48,6 +42,7 @@ export function useHeartbeat(userId: string | null) {
     window.addEventListener('beforeunload', handleExit);
 
     return () => {
+      isMounted = false;
       clearInterval(interval);
       window.removeEventListener('beforeunload', handleExit);
       handleExit();

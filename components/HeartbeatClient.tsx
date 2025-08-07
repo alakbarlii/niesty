@@ -5,9 +5,11 @@ import { supabase } from '@/lib/supabase';
 
 export default function HeartbeatClient() {
   useEffect(() => {
-    const interval: NodeJS.Timeout = setInterval(() => {
+    let isMounted = true;
+    const interval = setInterval(() => {
+      if (!isMounted) return;
       updateStatus();
-    }, 30000); // Every 30s
+    }, 30000); // every 30s
 
     const updateStatus = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
@@ -36,11 +38,12 @@ export default function HeartbeatClient() {
         .eq('user_id', userId);
     };
 
-    updateStatus(); // Immediately mark online
-
+    // Initial run
+    updateStatus();
     window.addEventListener('beforeunload', handleExit);
 
     return () => {
+      isMounted = false;
       clearInterval(interval);
       window.removeEventListener('beforeunload', handleExit);
       handleExit();
@@ -48,4 +51,4 @@ export default function HeartbeatClient() {
   }, []);
 
   return null;
-} 
+}

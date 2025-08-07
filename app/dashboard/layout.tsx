@@ -31,11 +31,14 @@ export default function DashboardLayout({
 
   useEffect(() => {
     const cleanupStaleUsers = async () => {
-      await supabase.rpc('fix_stale_online_flags');
+      const { error } = await supabase.rpc('fix_stale_online_flags');
+      if (error) {
+        console.error('[❌ RPC ERROR] fix_stale_online_flags:', error.message);
+      }
     };
   
     cleanupStaleUsers(); // Run immediately
-    const interval = setInterval(cleanupStaleUsers, 60000); // Run every 60s
+    const interval = setInterval(cleanupStaleUsers, 60000); // Repeat every 60s
   
     return () => clearInterval(interval);
   }, []);

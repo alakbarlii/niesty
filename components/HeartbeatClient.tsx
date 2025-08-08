@@ -30,7 +30,14 @@ export default function HeartbeatClient() {
         .from('profiles')
         .update({ is_online: false })
         .eq('user_id', userId);
+        
     };
+
+    supabase.auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_OUT') {
+          markOffline();
+        }
+      });
 
     updateStatus(); // Mark active immediately
 

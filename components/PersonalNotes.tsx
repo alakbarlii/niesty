@@ -77,7 +77,7 @@ export default function PersonalNotes({ dealId }: PersonalNotesProps) {
         value={note}
         disabled={loading}
         onChange={(e) => saveNote(e.target.value)}
-        placeholder="Type notes only you can see..."
+        placeholder="Type..."
       />
     </div>
   );

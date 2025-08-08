@@ -311,7 +311,7 @@ export default function PublicProfile() {
               <div className="text-yellow-400 font-semibold mb-2">Describe your sponsorship offer</div>
 
               {/* Short guidance */}
-              <div className="text-xs text-gray-300 bg-black/30 border rounded p-2 mb-3">
+              <div className="text-xs text-gray-300 bg-black/30 border border-white/10 rounded p-2 mb-3">
                 Be precise and short. This is your <b>initial</b> offer — the final price will be agreed during
                 <b> Deal Agreement</b>. Choose <b>Fixed</b> to suggest a budget (numbers only) or pick
                 <b> Negotiate</b> and align on price later.
@@ -339,16 +339,6 @@ export default function PublicProfile() {
                 </label>
               </div>
 
-              
-
-              {/* Offer message */}
-              <textarea
-                value={dealMessage}
-                onChange={(e) => setDealMessage(e.target.value)}
-                placeholder="Example: Promote my product on your YouTube video for 1minute. We can negotiate the price."
-                className="w-full bg-black/20 text-white p-2 rounded border border-white/10 focus:outline-none"
-                rows={3}
-              />
               {/* Fixed amount input (numbers only) */}
               {pricingMode === 'fixed' && (
                 <div className="flex items-center gap-3 mb-3">
@@ -371,6 +361,15 @@ export default function PublicProfile() {
                   />
                 </div>
               )}
+
+              {/* Offer message */}
+              <textarea
+                value={dealMessage}
+                onChange={(e) => setDealMessage(e.target.value)}
+                placeholder="Example: Promote my product on your YouTube video for 1minute. We can negotiate the price."
+                className="w-full bg-black/20 text-white p-2 rounded border border-white/10 focus:outline-none"
+                rows={3}
+              />
 
               <div className="mt-3 flex gap-3 justify-end">
                 <button

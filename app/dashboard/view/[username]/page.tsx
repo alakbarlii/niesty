@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
 import { MoreVertical, Flag } from 'lucide-react';
 import { sendDealRequest } from '@/lib/supabase/deals';
+// NOTE: do NOT import PricingMode from deals.ts (backend has no 'range' now)
 
 interface Profile {
   id: string;
@@ -34,11 +35,14 @@ export default function PublicProfile() {
   const [dealMessage, setDealMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
 
-  // pricing state
+  // pricing state (UI still supports 'range' visually; backend will coerce)
   const [pricingMode, setPricingMode] = useState<'negotiable' | 'fixed' | 'range'>('negotiable');
   const [amountMin, setAmountMin] = useState<string>('');
   const [amountMax, setAmountMax] = useState<string>('');
   const [currency, setCurrency] = useState<string>('USD');
+
+  // single-number budget field you requested (kept in addition to old UI)
+  const [budget2, setBudget2] = useState<string>('');
 
   useEffect(() => {
     const fetchProfileAndDeals = async () => {
@@ -108,10 +112,23 @@ export default function PublicProfile() {
     !!viewerRole &&
     (viewerRole === (profile.role === 'creator' ? 'creator' : profile.role === 'business' ? 'business' : 'x'));
 
-  const canSendDeal = !isSelf && !!viewerRole && (sameRole ? false : (viewerRole === 'creator' || viewerRole === 'business'));
+  const canSendDeal =
+    !isSelf && !!viewerRole && (sameRole ? false : viewerRole === 'creator' || viewerRole === 'business');
 
   return (
     <section className="p-4 sm:p-6 md:p-12">
+      {/* hide number input spinners only (no layout change) */}
+      <style jsx global>{`
+        input[type='number']::-webkit-outer-spin-button,
+        input[type='number']::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        input[type='number'] {
+          -moz-appearance: textfield;
+        }
+      `}</style>
+
       <div className="max-w-4xl mx-auto flex flex-col items-center gap-4">
         <div className="w-[120px] h-[120px] sm:w-[130px] sm:h-[130px] md:w-[140px] md:h-[140px] rounded-full overflow-hidden border-2 border-white/20 bg-white/10">
           <Image
@@ -134,7 +151,7 @@ export default function PublicProfile() {
           {showMenu && (
             <div className="absolute right-4 top-12 bg-black border border-white/10 rounded-md shadow-md w-60 z-20 p-3">
               <div
-                className="text-sm text-white font-medium mb-2 cursor-pointer"
+                className="text-sm font-medium mb-2 cursor-pointer text-white"
                 onClick={() => setShowLink(!showLink)}
               >
                 Share this profile
@@ -174,19 +191,13 @@ export default function PublicProfile() {
             <div className="flex gap-4">
               <div
                 className="bg-black px-4 py-2 rounded-xl text-center text-sm border border-white/10 text-white cursor-pointer"
-                onClick={() =>
-                  (window.location.href = `/dashboard/view/${profile.username}/deals`)
-                }
+                onClick={() => (window.location.href = `/dashboard/view/${profile.username}/deals`)}
               >
-                <div className="text-yellow-400 font-semibold text-md">
-                  {profile.deals_completed || 0}
-                </div>
+                <div className="text-yellow-400 font-semibold text-md">{profile.deals_completed || 0}</div>
                 <div className="text-xs text-gray-400">Deals Completed</div>
               </div>
               <div className="bg-black px-4 py-2 rounded-xl text-center text-sm border border-white/10 text-white">
-                <div className="text-yellow-400 font-semibold text-md">
-                  {profile.avg_rating || '⭐ 5.0'}
-                </div>
+                <div className="text-yellow-400 font-semibold text-md">{profile.avg_rating || '⭐ 5.0'}</div>
                 <div className="text-xs text-gray-400">Avg. Rating</div>
               </div>
             </div>
@@ -225,10 +236,7 @@ export default function PublicProfile() {
                 className="w-full bg-black/20 text-white p-2 rounded border border-white/10 focus:outline-none"
                 rows={3}
               />
-              <button
-                onClick={handleReport}
-                className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
-              >
+              <button onClick={handleReport} className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded">
                 Submit Report
               </button>
             </div>
@@ -236,11 +244,9 @@ export default function PublicProfile() {
 
           {showDealModal && (
             <div className="mt-6 bg-black/40 p-4 rounded-xl border border-yellow-500 text-white">
-              <div className="text-yellow-400 font-semibold mb-2">
-                Describe your sponsorship offer
-              </div>
+              <div className="text-yellow-400 font-semibold mb-2">Describe your sponsorship offer</div>
 
-              {/* Pricing mode */}
+              {/* Pricing mode (UI unchanged) */}
               <div className="grid sm:grid-cols-4 gap-3 mb-3">
                 <label className="flex items-center gap-2">
                   <input
@@ -271,7 +277,7 @@ export default function PublicProfile() {
                 </label>
               </div>
 
-              {/* Amount inputs */}
+              {/* Amount inputs (UI unchanged) */}
               {pricingMode === 'fixed' && (
                 <div className="flex items-center gap-3 mb-3">
                   <select
@@ -323,7 +329,7 @@ export default function PublicProfile() {
                 </div>
               )}
 
-              {/* Message */}
+              {/* Message (UNCHANGED) */}
               <textarea
                 value={dealMessage}
                 onChange={(e) => setDealMessage(e.target.value)}
@@ -331,6 +337,24 @@ export default function PublicProfile() {
                 className="w-full bg-black/20 text-white p-2 rounded border border-white/10 focus:outline-none"
                 rows={3}
               />
+
+              {/* Budget (bottom-right) */}
+              <div className="mt-3 flex items-end justify-end">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-300">Budget</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    step="1"
+                    placeholder="e.g. 1000"
+                    value={budget2}
+                    onChange={(e) => setBudget2(e.target.value)}
+                    className="w-36 bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
+                  />
+                  <span className="text-xs text-gray-400">USD</span>
+                </div>
+              </div>
 
               <div className="mt-3 flex gap-3 justify-end">
                 <button
@@ -356,25 +380,47 @@ export default function PublicProfile() {
                       return;
                     }
 
-                    // client-side validation mirroring server
-                    if (pricingMode === 'fixed') {
-                      const v = Number(amountMin);
-                      if (!v || v <= 0) return alert('Enter a valid fixed amount');
-                    }
-                    if (pricingMode === 'range') {
-                      const v1 = Number(amountMin), v2 = Number(amountMax);
-                      if (!v1 || !v2 || v1 <= 0 || v2 <= 0 || v1 > v2) {
-                        return alert('Enter a valid range (min ≤ max)');
+                    // Validation: if budget2 provided, validate that; else validate existing pricing fields
+                    if (budget2 && Number(budget2) > 0) {
+                      // ok
+                    } else {
+                      if (pricingMode === 'fixed') {
+                        const v = Number(amountMin);
+                        if (!v || v <= 0) return alert('Enter a valid fixed amount');
+                      }
+                      if (pricingMode === 'range') {
+                        const v1 = Number(amountMin),
+                          v2 = Number(amountMax);
+                        if (!v1 || !v2 || v1 <= 0 || v2 <= 0 || v1 > v2) {
+                          return alert('Enter a valid range (min ≤ max)');
+                        }
                       }
                     }
+
+                    // Build payload compatible with backend: NO amountMax, NO 'range' mode.
+                    // Decide single number: prefer budget2; else amountMin from UI.
+                    const chosenAmount =
+                      budget2 && Number(budget2) > 0
+                        ? Number(budget2)
+                        : amountMin && Number(amountMin) > 0
+                        ? Number(amountMin)
+                        : null;
+
+                    // Narrow pricing mode to backend accepted union
+                    const finalPricingMode: 'fixed' | 'negotiable' =
+                      chosenAmount && chosenAmount > 0
+                        ? 'fixed'
+                        : pricingMode === 'fixed'
+                        ? 'fixed'
+                        : 'negotiable';
 
                     const { error } = await sendDealRequest({
                       senderId: user.id,
                       receiverId: profile.id,
                       message: dealMessage,
-                      pricingMode,
-                      amountMin: amountMin ? Number(amountMin) : null,
-                      amountMax: amountMax ? Number(amountMax) : null,
+                      pricingMode: finalPricingMode, // backend only accepts fixed|negotiable
+                      amount: chosenAmount ?? undefined, // backend uses amount>0 -> fixed
+                      amountMin: chosenAmount ?? undefined, // compat
                       currency,
                     });
 
@@ -388,6 +434,7 @@ export default function PublicProfile() {
                       setAmountMin('');
                       setAmountMax('');
                       setPricingMode('negotiable');
+                      setBudget2('');
                     }
                   }}
                   className="px-4 py-1.5 bg-yellow-500 text-black rounded hover:bg-yellow-600 disabled:opacity-50"

@@ -2,8 +2,8 @@
 
 import { supabase } from '@/lib/supabase';
 
-/** Pricing modes for initial offers */
-export type PricingMode = 'fixed' | 'range' | 'negotiable';
+/** Pricing modes for initial offers (NO RANGE) */
+export type PricingMode = 'fixed' | 'negotiable';
 
 export type DealStage =
   | 'Waiting for Response'
@@ -17,54 +17,56 @@ type SendDealParams = {
   senderId: string;
   receiverId: string;
   message: string;
-  /** Optional: defaults to 'negotiable' if you haven't wired the pricing UI yet */
+
+  /** Only 'fixed' or 'negotiable'. Ignored in logic; amount decides. */
   pricingMode?: PricingMode;
-  /** Required when pricingMode === 'fixed' or 'range' */
+
+  /** Single amount (budget). If provided > 0 → fixed. */
+  amount?: number | null;
+
+  /** Back-compat: treat legacy amountMin as amount. */
   amountMin?: number | null;
-  /** Required when pricingMode === 'range' */
-  amountMax?: number | null;
-  /** ISO currency; defaults to USD for MVP */
+
+  /** ISO currency; defaults to USD */
   currency?: string;
 };
 
-type RoleRow = { id: string; role: 'creator' | 'business' | null };
+type Role = 'creator' | 'business';
+type RoleRow = { id: string; role: Role | null };
+
+type Ok = { ok: true };
+type Err = { ok: false; error: Error };
 
 /** Ensure sender/receiver roles are opposite (creator <-> business). */
-async function assertOppositeRoles(senderId: string, receiverId: string) {
+async function assertOppositeRoles(senderId: string, receiverId: string): Promise<Ok | Err> {
   const { data: rows, error } = await supabase
     .from('profiles')
     .select('id, role')
     .in('id', [senderId, receiverId]);
 
-  if (error) return { ok: false as const, error };
-  if (!rows || rows.length < 2) {
-    return { ok: false as const, error: new Error('Could not load both user roles') };
-  }
+  if (error) return { ok: false, error: new Error(error.message) };
+  if (!rows || rows.length < 2) return { ok: false, error: new Error('Could not load both user roles') };
 
   const typed = rows as RoleRow[];
   const map = new Map<string, RoleRow['role']>(typed.map((r) => [r.id, r.role]));
   const sRole = map.get(senderId);
   const rRole = map.get(receiverId);
 
-  if (!sRole || !rRole) {
-    return { ok: false as const, error: new Error('Missing role for one of the users') };
-  }
+  if (!sRole || !rRole) return { ok: false, error: new Error('Missing role for one of the users') };
   if ((sRole !== 'creator' && sRole !== 'business') || (rRole !== 'creator' && rRole !== 'business')) {
-    return { ok: false as const, error: new Error('Unsupported role(s)') };
+    return { ok: false, error: new Error('Unsupported role(s)') };
   }
-  if (sRole === rRole) {
-    return { ok: false as const, error: new Error('Deals can only be sent to the opposite role') };
-  }
+  if (sRole === rRole) return { ok: false, error: new Error('Deals can only be sent to the opposite role') };
 
-  return { ok: true as const };
+  return { ok: true };
 }
 
 /**
- * Create a deal request with pricing intent stored separately from final agreement.
- * DB must have:
- *  - offer_pricing_mode text ('fixed'|'range'|'negotiable')
- *  - offer_amount_min numeric
- *  - offer_amount_max numeric
+ * Create a deal request (NO RANGE in DB).
+ * DB columns used:
+ *  - offer_pricing_mode text ('fixed'|'negotiable')
+ *  - offer_amount_min numeric  (single amount when fixed)
+ *  - offer_amount_max numeric  (ALWAYS NULL)
  *  - offer_currency text
  *  - deal_stage text
  */
@@ -72,43 +74,48 @@ export async function sendDealRequest(params: SendDealParams) {
   const {
     senderId,
     receiverId,
-    message,
-    pricingMode = 'negotiable',
-    amountMin,
-    amountMax,
-    currency = 'USD',
+    message: rawMessage,
+    amount,
+    amountMin, // back-compat
+    currency: rawCurrency = 'USD',
   } = params;
 
   if (!senderId || !receiverId) return { data: null, error: new Error('Missing sender/receiver') };
   if (senderId === receiverId) return { data: null, error: new Error('Cannot send a deal to yourself') };
 
-  // Opposite-role check (client guard; RLS should mirror this)
+  // Opposite-role check (client guard; mirror with RLS on DB)
   const rolesCheck = await assertOppositeRoles(senderId, receiverId);
   if (!rolesCheck.ok) return { data: null, error: rolesCheck.error };
 
-  // Pricing validation
-  if (pricingMode === 'fixed') {
-    if (amountMin == null || amountMin <= 0) {
-      return { data: null, error: new Error('Enter a valid fixed amount') };
+  const message = (rawMessage ?? '').trim();
+  if (!message) return { data: null, error: new Error('Message is required') };
+
+  const currency = (rawCurrency ?? 'USD').toUpperCase();
+  if (currency.length !== 3) return { data: null, error: new Error('Currency must be a 3-letter ISO code') };
+
+  // Single amount (prefer amount; fallback to legacy amountMin)
+  const singleAmount = amount ?? amountMin ?? null;
+
+  // Effective 2-mode logic (no range):
+  // - If we have a positive amount => fixed
+  // - Else => negotiable
+  const effectiveMode: PricingMode = singleAmount != null && singleAmount > 0 ? 'fixed' : 'negotiable';
+
+  // Validation
+  if (effectiveMode === 'fixed') {
+    if (singleAmount == null || singleAmount <= 0) {
+      return { data: null, error: new Error('Enter a valid amount') };
     }
-  }
-  if (pricingMode === 'range') {
-    if (
-      amountMin == null ||
-      amountMax == null ||
-      amountMin <= 0 ||
-      amountMax <= 0 ||
-      amountMin > amountMax
-    ) {
-      return { data: null, error: new Error('Enter a valid price range (min ≤ max)') };
+  } else {
+    // negotiable must NOT carry an amount
+    if (singleAmount != null) {
+      return { data: null, error: new Error('Negotiable offers must not include an amount') };
     }
   }
 
-  // Normalize to DB fields
-  const offer_amount_min =
-    pricingMode === 'fixed' ? (amountMin ?? null) : pricingMode === 'range' ? (amountMin ?? null) : null;
-  const offer_amount_max =
-    pricingMode === 'fixed' ? (amountMin ?? null) : pricingMode === 'range' ? (amountMax ?? null) : null;
+  // Map to DB fields (no ranges)
+  const offer_amount_min = effectiveMode === 'fixed' ? singleAmount : null;
+  const offer_amount_max = null;
 
   const { data, error } = await supabase
     .from('deals')
@@ -118,7 +125,7 @@ export async function sendDealRequest(params: SendDealParams) {
         receiver_id: receiverId,
         message,
         deal_stage: 'Waiting for Response' as DealStage,
-        offer_pricing_mode: pricingMode,
+        offer_pricing_mode: effectiveMode,
         offer_amount_min,
         offer_amount_max,
         offer_currency: currency,
@@ -174,9 +181,8 @@ export async function setAgreement(
   return { data, error };
 }
 
-/* ===================== ADDED: Agreement flow helpers ===================== */
+/* ===================== Agreement flow helpers ===================== */
 
-/** Waiting → Negotiating (stamps accepted_at and updates stage) */
 export async function acceptDeal(dealId: string) {
   const { data, error } = await supabase
     .from('deals')
@@ -190,16 +196,15 @@ export async function acceptDeal(dealId: string) {
   return { data, error };
 }
 
-/** Save draft agreement (terms + amount) during Negotiating */
 export async function saveAgreementDraft(
   dealId: string,
-  { terms, amount }: { terms: string; amount: number }
+  { terms, amount: finalAmount }: { terms: string; amount: number }
 ) {
   const { data, error } = await supabase
     .from('deals')
     .update({
       agreement_terms: terms,
-      deal_value: amount,
+      deal_value: finalAmount,
       deal_stage: 'Negotiating Terms',
     })
     .eq('id', dealId)
@@ -208,13 +213,12 @@ export async function saveAgreementDraft(
   return { data, error };
 }
 
-/** Confirm agreement for the current user (creator or business). When both confirm, you're escrow-ready. */
 export async function confirmAgreement(dealId: string) {
-  const { data: me } = await supabase.auth.getUser();
+  const { data: me, error: authErr } = await supabase.auth.getUser();
+  if (authErr) return { data: null, error: new Error(authErr.message) };
   const uid = me?.user?.id;
   if (!uid) return { data: null, error: new Error('Not authenticated') };
 
-  // Determine user's role
   const { data: myProf, error: roleErr } = await supabase
     .from('profiles')
     .select('role')
@@ -222,7 +226,7 @@ export async function confirmAgreement(dealId: string) {
     .maybeSingle();
   if (roleErr || !myProf?.role) return { data: null, error: roleErr || new Error('Role missing') };
 
-  const myRole = myProf.role as 'creator' | 'business';
+  const myRole = myProf.role as Role;
   const patch: Record<string, string> = {};
   if (myRole === 'creator') patch['creator_agreed_at'] = new Date().toISOString();
   if (myRole === 'business') patch['business_agreed_at'] = new Date().toISOString();

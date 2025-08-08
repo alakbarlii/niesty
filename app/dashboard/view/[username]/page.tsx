@@ -11,7 +11,7 @@ interface Profile {
   id: string;
   username: string;
   full_name: string;
-  role: string;
+  role: 'creator' | 'business' | string;
   email: string;
   profile_url?: string;
   deals_completed?: number;
@@ -21,16 +21,24 @@ interface Profile {
 export default function PublicProfile() {
   const { username } = useParams();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
+
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reportMessage, setReportMessage] = useState('');
   const [showLink, setShowLink] = useState(false);
+
   const [showDealModal, setShowDealModal] = useState(false);
   const [dealMessage, setDealMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
 
-  
+  // pricing state
+  const [pricingMode, setPricingMode] = useState<'negotiable' | 'fixed' | 'range'>('negotiable');
+  const [amountMin, setAmountMin] = useState<string>('');
+  const [amountMax, setAmountMax] = useState<string>('');
+  const [currency, setCurrency] = useState<string>('USD');
 
   useEffect(() => {
     const fetchProfileAndDeals = async () => {
@@ -48,14 +56,29 @@ export default function PublicProfile() {
         .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
         .eq('deal_stage', 'Payment Released');
 
-      if (dealError) {
-        console.error('Error counting deals:', dealError);
+      if (!dealError) {
+        setProfile({
+          ...profileData,
+          deals_completed: count ?? 0,
+        });
+      } else {
+        setProfile(profileData);
       }
 
-      setProfile({
-        ...profileData,
-        deals_completed: count ?? 0,
-      });
+      // viewer info (role + id)
+      const { data: me } = await supabase.auth.getUser();
+      const uid = me?.user?.id ?? null;
+      setViewerId(uid);
+
+      if (uid) {
+        const { data: myProf } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', uid)
+          .maybeSingle();
+        const r = myProf?.role;
+        setViewerRole(r === 'creator' || r === 'business' ? r : null);
+      }
     };
 
     fetchProfileAndDeals();
@@ -79,6 +102,13 @@ export default function PublicProfile() {
   };
 
   if (!profile) return <div className="text-white p-10">Loading...</div>;
+
+  const isSelf = !!viewerId && viewerId === profile.id;
+  const sameRole =
+    !!viewerRole &&
+    (viewerRole === (profile.role === 'creator' ? 'creator' : profile.role === 'business' ? 'business' : 'x'));
+
+  const canSendDeal = !isSelf && !!viewerRole && (sameRole ? false : (viewerRole === 'creator' || viewerRole === 'business'));
 
   return (
     <section className="p-4 sm:p-6 md:p-12">
@@ -113,7 +143,7 @@ export default function PublicProfile() {
               {showLink && (
                 <>
                   <div className="bg-gray-800 text-white text-xs px-2 py-1 rounded mb-2 break-all">
-                    {window.location.href}
+                    {typeof window !== 'undefined' ? window.location.href : ''}
                   </div>
                   <button
                     onClick={handleCopy}
@@ -145,7 +175,7 @@ export default function PublicProfile() {
               <div
                 className="bg-black px-4 py-2 rounded-xl text-center text-sm border border-white/10 text-white cursor-pointer"
                 onClick={() =>
-                  window.location.href = `/dashboard/view/${profile.username}/deals`
+                  (window.location.href = `/dashboard/view/${profile.username}/deals`)
                 }
               >
                 <div className="text-yellow-400 font-semibold text-md">
@@ -161,12 +191,24 @@ export default function PublicProfile() {
               </div>
             </div>
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowDealModal(true)}
-                className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500"
-              >
-                Request Deal
-              </button>
+              {!isSelf && (
+                <button
+                  onClick={() => setShowDealModal(true)}
+                  className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500 disabled:opacity-50"
+                  disabled={!canSendDeal}
+                  title={
+                    isSelf
+                      ? 'Cannot send a deal to yourself'
+                      : !viewerRole
+                      ? 'Login required'
+                      : sameRole
+                      ? 'Deals can only be sent to the opposite role'
+                      : undefined
+                  }
+                >
+                  Request Deal
+                </button>
+              )}
               <button className="px-4 py-2 rounded-full bg-gray-700 text-white font-semibold hover:bg-gray-600">
                 Send Message
               </button>
@@ -197,13 +239,99 @@ export default function PublicProfile() {
               <div className="text-yellow-400 font-semibold mb-2">
                 Describe your sponsorship offer
               </div>
+
+              {/* Pricing mode */}
+              <div className="grid sm:grid-cols-4 gap-3 mb-3">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="pmode"
+                    checked={pricingMode === 'negotiable'}
+                    onChange={() => setPricingMode('negotiable')}
+                  />
+                  <span className="text-sm">Negotiate</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="pmode"
+                    checked={pricingMode === 'fixed'}
+                    onChange={() => setPricingMode('fixed')}
+                  />
+                  <span className="text-sm">Fixed</span>
+                </label>
+                <label className="flex items-center gap-2 sm:col-span-2">
+                  <input
+                    type="radio"
+                    name="pmode"
+                    checked={pricingMode === 'range'}
+                    onChange={() => setPricingMode('range')}
+                  />
+                  <span className="text-sm">Range</span>
+                </label>
+              </div>
+
+              {/* Amount inputs */}
+              {pricingMode === 'fixed' && (
+                <div className="flex items-center gap-3 mb-3">
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="bg-black/20 border border-white/10 rounded px-2 py-1 text-sm"
+                  >
+                    <option>USD</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    step="1"
+                    placeholder="Amount"
+                    value={amountMin}
+                    onChange={(e) => setAmountMin(e.target.value)}
+                    className="flex-1 bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
+                  />
+                </div>
+              )}
+
+              {pricingMode === 'range' && (
+                <div className="flex items-center gap-3 mb-3">
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="bg-black/20 border border-white/10 rounded px-2 py-1 text-sm"
+                  >
+                    <option>USD</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    step="1"
+                    placeholder="Min"
+                    value={amountMin}
+                    onChange={(e) => setAmountMin(e.target.value)}
+                    className="w-32 bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    step="1"
+                    placeholder="Max"
+                    value={amountMax}
+                    onChange={(e) => setAmountMax(e.target.value)}
+                    className="w-32 bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
+                  />
+                </div>
+              )}
+
+              {/* Message */}
               <textarea
                 value={dealMessage}
                 onChange={(e) => setDealMessage(e.target.value)}
-                placeholder="Type your offer here..."
+                placeholder="Scope, deliverables, dates, etc."
                 className="w-full bg-black/20 text-white p-2 rounded border border-white/10 focus:outline-none"
                 rows={3}
               />
+
               <div className="mt-3 flex gap-3 justify-end">
                 <button
                   onClick={() => setShowDealModal(false)}
@@ -219,11 +347,35 @@ export default function PublicProfile() {
                       alert('You must be logged in.');
                       return;
                     }
+                    if (isSelf) {
+                      alert('You cannot send a deal to yourself.');
+                      return;
+                    }
+                    if (!canSendDeal) {
+                      alert('Deals can only be sent to the opposite role.');
+                      return;
+                    }
+
+                    // client-side validation mirroring server
+                    if (pricingMode === 'fixed') {
+                      const v = Number(amountMin);
+                      if (!v || v <= 0) return alert('Enter a valid fixed amount');
+                    }
+                    if (pricingMode === 'range') {
+                      const v1 = Number(amountMin), v2 = Number(amountMax);
+                      if (!v1 || !v2 || v1 <= 0 || v2 <= 0 || v1 > v2) {
+                        return alert('Enter a valid range (min ≤ max)');
+                      }
+                    }
 
                     const { error } = await sendDealRequest({
                       senderId: user.id,
                       receiverId: profile.id,
                       message: dealMessage,
+                      pricingMode,
+                      amountMin: amountMin ? Number(amountMin) : null,
+                      amountMax: amountMax ? Number(amountMax) : null,
+                      currency,
                     });
 
                     if (error) {
@@ -233,9 +385,14 @@ export default function PublicProfile() {
                       setTimeout(() => setShowToast(false), 3000);
                       setShowDealModal(false);
                       setDealMessage('');
+                      setAmountMin('');
+                      setAmountMax('');
+                      setPricingMode('negotiable');
                     }
                   }}
-                  className="px-4 py-1.5 bg-yellow-500 text-black rounded hover:bg-yellow-600"
+                  className="px-4 py-1.5 bg-yellow-500 text-black rounded hover:bg-yellow-600 disabled:opacity-50"
+                  disabled={!canSendDeal}
+                  title={!canSendDeal ? 'Opposite role only' : undefined}
                 >
                   Send Deal
                 </button>

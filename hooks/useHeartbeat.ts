@@ -1,6 +1,4 @@
-
 'use client';
-
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
@@ -8,40 +6,39 @@ export function useHeartbeat(userId: string | null) {
   useEffect(() => {
     if (!userId) return;
 
-    const updateStatus = async () => {
+    const markOnline = async () => {
       const now = new Date().toISOString();
-      const { error } = await supabase
+      await supabase
         .from('profiles')
-        .update({
-          is_online: true,
-          last_seen: now,
-        })
+        .update({ is_online: true, last_seen: now })
         .eq('user_id', userId);
-
-      if (error) console.error('[HEARTBEAT INIT ERROR]', error.message);
     };
 
-    updateStatus(); 
-
-    const interval = setInterval(() => {
-      updateStatus();
-    }, 30000); // update every 30s
-
-    const handleExit = async () => {
-      const { error } = await supabase
+    const markOffline = async () => {
+      await supabase
         .from('profiles')
         .update({ is_online: false })
         .eq('user_id', userId);
-
-      if (error) console.error('[HEARTBEAT EXIT ERROR]', error.message);
     };
 
-    window.addEventListener('beforeunload', handleExit);
+    // 1. Mark online instantly
+    markOnline();
+
+    // 2. Keep updating
+    const interval = setInterval(markOnline, 10000); // every 10s
+
+    // 3. Catch tab/browser close
+    window.addEventListener('beforeunload', markOffline);
+
+    // 4. Catch explicit logout
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') markOffline();
+    });
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('beforeunload', handleExit);
-      handleExit();
+      window.removeEventListener('beforeunload', markOffline);
+      markOffline();
     };
   }, [userId]);
 }

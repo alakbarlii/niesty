@@ -156,15 +156,13 @@ export default function PublicProfile() {
       }
 
       // Decide amount (only when fixed)
-      const chosenAmount =
-        pricingMode === 'fixed' ? Number(budget) : null;
+      const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
         senderId: user.id,
         receiverId: profile.id,
         message: dealMessage.trim(),
-        amount: chosenAmount ?? undefined,     // backend: amount>0 => fixed; else negotiable
-        amountMin: chosenAmount ?? undefined,  // legacy compat (harmless)
+        amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
         currency,
       });
 

@@ -152,6 +152,18 @@ export default function DealDetailPage() {
   const hasApproved = isSender ? deal?.approved_by_sender : deal?.approved_by_receiver;
   const bothAgreed = !!deal?.creator_agreed_at && !!deal?.business_agreed_at;
 
+  // helpers
+  const displayAmount = (() => {
+    if (!deal) return '';
+    if (deal.deal_stage === 'Negotiating Terms' && (!deal.deal_value || deal.deal_value <= 0)) {
+      return 'Negotiate';
+    }
+    if (deal.deal_value && deal.deal_value > 0) {
+      return `$${Math.round(deal.deal_value).toLocaleString()} USD`;
+    }
+    return '—';
+  })();
+
   // ========== Actions ==========
 
   const handleAcceptOffer = async () => {
@@ -183,7 +195,7 @@ export default function DealDetailPage() {
     // Pull fresh to check if both sides are done; then advance stage locally
     const { data: refreshed } = await supabase
       .from('deals')
-      .select('id,creator_agreed_at,business_agreed_at,deal_stage')
+      .select('id,creator_agreed_at,business_agreed_at,deal_stage,deal_value,agreement_terms')
       .eq('id', deal.id)
       .maybeSingle();
 
@@ -195,6 +207,8 @@ export default function DealDetailPage() {
         ...prev,
         creator_agreed_at: refreshed?.creator_agreed_at ?? prev.creator_agreed_at,
         business_agreed_at: refreshed?.business_agreed_at ?? prev.business_agreed_at,
+        deal_value: refreshed?.deal_value ?? prev.deal_value,
+        agreement_terms: refreshed?.agreement_terms ?? prev.agreement_terms,
         deal_stage: both ? 'Platform Escrow' : prev.deal_stage,
       };
     });
@@ -276,136 +290,169 @@ export default function DealDetailPage() {
   if (!deal) return <div className="p-6 text-gray-400">Deal not found.</div>;
 
   return (
-    <div className="p-4 sm:p-6 max-w-3xl mx-auto relative">
-      <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Deal Details</h1>
-
-      <div className="bg-white/10 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-base font-semibold text-white mb-4 gap-3 sm:gap-0">
-        <span>
-          {isSender
-            ? `Your offer to ${otherUser?.full_name}`
-            : `${otherUser?.full_name}'s offer to you`}
-        </span>
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto relative">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white">Deal Details</h1>
         <button
           onClick={() => setShowChat(!showChat)}
-          className="text-white/60 hover:text-yellow-400 transition self-start sm:self-auto"
+          className="self-start sm:self-auto inline-flex items-center gap-2 text-white/70 hover:text-yellow-400 transition"
           aria-label="Open chat"
         >
           <MessageSquare className="w-5 h-5" />
+          <span className="text-sm">Chat</span>
         </button>
       </div>
 
-      <p className="text-white/70 text-sm mb-2">
-        <span className="font-medium">Sent on:</span>{' '}
-        {new Date(deal.created_at).toLocaleString()}
-      </p>
+      {/* Meta */}
+      <div className="bg-white/10 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-sm sm:text-base font-semibold text-white mb-4 gap-3 sm:gap-0">
+        <span className="leading-tight">
+          {isSender
+            ? `Your offer to ${otherUser?.full_name ?? '—'}`
+            : `${otherUser?.full_name ?? '—'}'s offer to you`}
+        </span>
+        <span className="text-xs sm:text-sm font-medium text-white/70">
+          Sent: {new Date(deal.created_at).toLocaleString()}
+        </span>
+      </div>
 
-      <p className="text-white text-sm mb-6">
-        <span className="font-semibold">Offer:</span> {deal.message}
-      </p>
-
-      {/* Waiting → receiver accepts the offer to start negotiating */}
-      {!deal.accepted_at && deal.deal_stage === 'Waiting for Response' && isReceiver && (
-        <div className="mb-4 p-4 rounded-xl border border-white/10 bg-black/30 text-white">
-          <p className="font-semibold mb-2">Accept the offer to start negotiating terms</p>
-          <button
-            onClick={handleAcceptOffer}
-            className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600"
-          >
-            Accept Offer
-          </button>
-        </div>
-      )}
-
-      {/* Negotiating → show Agreement editor until both confirm */}
-      {deal.accepted_at && !bothAgreed && deal.deal_stage === 'Negotiating Terms' && (
-        <div className="mb-4 p-4 rounded-xl border border-white/10 bg-black/30 text-white">
-          <p className="font-semibold mb-3">Deal Agreement</p>
-
-          <div className="flex gap-3 mb-3">
-            <input
-              type="number"
-              min={1}
-              step="1"
-              value={draftAmount}
-              onChange={(e) => setDraftAmount(Number(e.target.value))}
-              className="w-40 bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
-              placeholder="Amount (USD)"
-            />
-            <button
-              className="px-3 py-2 bg-gray-700 rounded text-sm"
-              onClick={handleSaveAgreementDraft}
-            >
-              Save Draft
-            </button>
-          </div>
-
-          <textarea
-            value={draftTerms}
-            onChange={(e) => setDraftTerms(e.target.value)}
-            placeholder="Deliverables, dates, rights, posting schedule..."
-            className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
-            rows={4}
-          />
-
-          <div className="flex items-center gap-2 mt-3">
-            <button
-              className="px-4 py-2 bg-emerald-600 rounded text-white"
-              onClick={handleConfirmAgreement}
-            >
-              Confirm Agreement
-            </button>
-            <p className="text-xs text-gray-400">
-              When both sides confirm, the deal moves to escrow.
+      {/* Responsive main area: Progress (left) • Agreement (right) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        {/* LEFT: Progress & notes */}
+        <div className="space-y-4">
+          <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+            <p className="text-white text-sm sm:text-base mb-3">
+              <span className="font-semibold">Offer:</span> {deal.message}
             </p>
+
+            {/* Waiting → receiver accepts the offer to start negotiating */}
+            {!deal.accepted_at && deal.deal_stage === 'Waiting for Response' && isReceiver && (
+              <div className="mb-4 p-3 sm:p-4 rounded-xl border border-white/10 bg-black/30 text-white">
+                <p className="font-semibold mb-2 text-sm sm:text-base">Accept the offer to start negotiating terms</p>
+                <button
+                  onClick={handleAcceptOffer}
+                  className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600 text-sm"
+                >
+                  Accept Offer
+                </button>
+              </div>
+            )}
+
+            <DealProgress
+              currentStage={currentStageIndex}
+              contentLink={deal.submission_url || undefined}
+              isEditable={isSender && deal.deal_stage === 'Platform Escrow'}
+              isRejected={!!deal.rejection_reason}
+              rejectionReason={deal.rejection_reason || undefined}
+              onApprove={isReceiver && !hasApproved ? handleApproval : undefined}
+              onReject={isReceiver && !hasApproved ? handleRejectContent : undefined}
+              onAgree={deal.deal_stage === 'Negotiating Terms' ? handleConfirmAgreement : undefined}
+              onSubmitContent={isSender && deal.deal_stage === 'Platform Escrow' ? handleSubmitContent : undefined}
+              canApprove={isReceiver && !hasApproved}
+              isSender={isSender}
+            />
           </div>
 
-          <div className="mt-2 text-xs text-gray-400">
-            Creator: {deal.creator_agreed_at ? '✔ confirmed' : '— pending'} ·{' '}
-            Business: {deal.business_agreed_at ? '✔ confirmed' : '— pending'}
+          <div className="border border-white/10 bg-white/5 rounded-2xl p-4 sm:p-5">
+            <PersonalNotes dealId={deal.id} />
           </div>
         </div>
-      )}
 
-      {/* Agreement locked summary */}
-      {bothAgreed && (
-        <div className="mb-4 p-4 rounded-xl border border-emerald-700/40 bg-emerald-900/20 text-white">
-          <p className="text-emerald-300 font-semibold mb-1">Agreement Locked</p>
-          <p className="text-sm text-gray-200">Amount: ${deal.deal_value ?? 0} USD</p>
-          <p className="text-sm text-gray-200 mt-1 whitespace-pre-wrap">
-            {deal.agreement_terms || '—'}
-          </p>
+        {/* RIGHT: Agreement card */}
+        <div className="space-y-4">
+          {/* Negotiating editor (unlocked) */}
+          {deal.deal_stage === 'Negotiating Terms' && !bothAgreed && (
+            <div className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black/30 text-white">
+              <div className="flex items-baseline justify-between gap-2 mb-3">
+                <p className="font-semibold text-base sm:text-lg">Deal Agreement</p>
+                <span className="text-xs sm:text-sm text-white/70">
+                  Amount:&nbsp;<span className="font-semibold">{displayAmount}</span>
+                </span>
+              </div>
+
+              <div className="flex items-end gap-3 mb-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-400 mb-1">Amount (USD)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    step="1"
+                    value={draftAmount || 0}
+                    onChange={(e) => setDraftAmount(Number(e.target.value))}
+                    className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
+                    placeholder="Enter agreed amount"
+                  />
+                </div>
+                <button
+                  className="px-3 py-2 bg-gray-700 rounded text-sm"
+                  onClick={handleSaveAgreementDraft}
+                >
+                  Save Draft
+                </button>
+              </div>
+
+              <label className="block text-xs text-gray-400 mb-1">Terms</label>
+              <textarea
+                value={draftTerms}
+                onChange={(e) => setDraftTerms(e.target.value)}
+                placeholder="Deliverables, dates, rights, posting schedule..."
+                className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
+                rows={4}
+              />
+
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  className="px-4 py-2 bg-emerald-600 rounded text-white text-sm sm:text-base"
+                  onClick={handleConfirmAgreement}
+                >
+                  Confirm Agreement
+                </button>
+                <p className="text-xs text-gray-400">
+                  When both sides confirm, the deal moves to escrow.
+                </p>
+              </div>
+
+              <div className="mt-2 text-[11px] sm:text-xs text-gray-400">
+                Creator: {deal.creator_agreed_at ? '✔ confirmed' : '— pending'} ·{' '}
+                Business: {deal.business_agreed_at ? '✔ confirmed' : '— pending'}
+              </div>
+            </div>
+          )}
+
+          {/* Locked summary (after both agree) */}
+          {bothAgreed && (
+            <div className="p-4 sm:p-5 rounded-2xl border border-emerald-700/40 bg-emerald-900/20 text-white">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-emerald-300 font-semibold text-base sm:text-lg">Agreement Locked</p>
+                <span className="text-xs sm:text-sm">
+                  Amount:&nbsp;
+                  <span className="font-semibold">
+                    {deal.deal_value && deal.deal_value > 0
+                      ? `$${Math.round(deal.deal_value).toLocaleString()} USD`
+                      : '—'}
+                  </span>
+                </span>
+              </div>
+              <p className="text-sm text-gray-200 mt-2 whitespace-pre-wrap">
+                {deal.agreement_terms || '—'}
+              </p>
+            </div>
+          )}
         </div>
-      )}
-
-      <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-6 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)] space-y-6">
-        <DealProgress
-          currentStage={currentStageIndex}
-          contentLink={deal.submission_url || undefined}
-          isEditable={isSender && deal.deal_stage === 'Platform Escrow'}
-          isRejected={!!deal.rejection_reason}
-          rejectionReason={deal.rejection_reason || undefined}
-          onApprove={isReceiver && !hasApproved ? handleApproval : undefined}
-          onReject={isReceiver && !hasApproved ? handleRejectContent : undefined}
-          onAgree={deal.deal_stage === 'Negotiating Terms' ? handleConfirmAgreement : undefined}
-          onSubmitContent={isSender && deal.deal_stage === 'Platform Escrow' ? handleSubmitContent : undefined}
-          canApprove={isReceiver && !hasApproved}
-          isSender={isSender}
-        />
       </div>
 
-      <div className="mt-6">
-        <PersonalNotes dealId={deal.id} />
-      </div>
-
+      {/* Chat */}
       {showChat && userId && (
-        <DealChat
-          dealId={deal.id}
-          currentUserId={userId}
-          otherUser={{
-            name: otherUser?.full_name || 'Unknown User',
-            avatar: null,
-          }}
-        />
+        <div className="mt-6">
+          <DealChat
+            dealId={deal.id}
+            currentUserId={userId}
+            otherUser={{
+              name: otherUser?.full_name || 'Unknown User',
+              avatar: null,
+            }}
+          />
+        </div>
       )}
     </div>
   );

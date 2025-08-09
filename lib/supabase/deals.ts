@@ -18,16 +18,13 @@ type SendDealParams = {
   receiverId: string;
   message: string;
 
-  /** Only 'fixed' or 'negotiable'. Ignored in logic; amount decides. */
+  /** Optional hint; if omitted we infer from amount. */
   pricingMode?: PricingMode;
 
-  /** Single amount (budget). If provided > 0 → fixed. */
+  /** Single amount (budget). If > 0 → fixed; if null/0 → negotiable. */
   amount?: number | null;
 
-  /** Back-compat: treat legacy amountMin as amount. */
-  amountMin?: number | null;
-
-  /** ISO currency; defaults to USD */
+  /** 3-letter ISO currency code (kept in DB as offer_currency). Defaults to USD. */
   currency?: string;
 };
 
@@ -62,75 +59,83 @@ async function assertOppositeRoles(senderId: string, receiverId: string): Promis
 }
 
 /**
- * Create a deal request (NO RANGE in DB).
- * DB columns used:
+ * Create a deal request (NO RANGE, only deal_value when fixed).
+ * DB columns used (must exist):
  *  - offer_pricing_mode text ('fixed'|'negotiable')
- *  - offer_amount_min numeric  (single amount when fixed)
- *  - offer_amount_max numeric  (ALWAYS NULL)
- *  - offer_currency text
+ *  - offer_currency text (3-letter ISO)
  *  - deal_stage text
+ *  - deal_value numeric (ONLY set for fixed at creation)
+ *  - message, sender_id, receiver_id
  */
 export async function sendDealRequest(params: SendDealParams) {
   const {
     senderId,
     receiverId,
     message: rawMessage,
+    pricingMode,
     amount,
-    amountMin, // back-compat
     currency: rawCurrency = 'USD',
   } = params;
 
   if (!senderId || !receiverId) return { data: null, error: new Error('Missing sender/receiver') };
   if (senderId === receiverId) return { data: null, error: new Error('Cannot send a deal to yourself') };
 
-  // Opposite-role check (client guard; mirror with RLS on DB)
+  // Opposite-role check (client guard; mirror with RLS)
   const rolesCheck = await assertOppositeRoles(senderId, receiverId);
   if (!rolesCheck.ok) return { data: null, error: rolesCheck.error };
 
   const message = (rawMessage ?? '').trim();
   if (!message) return { data: null, error: new Error('Message is required') };
 
+  // currency: normalize & validate
   const currency = (rawCurrency ?? 'USD').toUpperCase();
-  if (currency.length !== 3) return { data: null, error: new Error('Currency must be a 3-letter ISO code') };
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    return { data: null, error: new Error('Currency must be a 3-letter ISO code') };
+  }
 
-  // Single amount (prefer amount; fallback to legacy amountMin)
-  const singleAmount = amount ?? amountMin ?? null;
-
-  // Effective 2-mode logic (no range):
-  // - If we have a positive amount => fixed
-  // - Else => negotiable
-  const effectiveMode: PricingMode = singleAmount != null && singleAmount > 0 ? 'fixed' : 'negotiable';
+  // Determine mode from amount unless explicitly provided
+  const inferredMode: PricingMode = amount != null && amount > 0 ? 'fixed' : 'negotiable';
+  const effectiveMode: PricingMode = pricingMode ?? inferredMode;
 
   // Validation
   if (effectiveMode === 'fixed') {
-    if (singleAmount == null || singleAmount <= 0) {
-      return { data: null, error: new Error('Enter a valid amount') };
+    if (amount == null || amount <= 0) {
+      return { data: null, error: new Error('Enter a valid amount for fixed offers') };
     }
   } else {
-    // negotiable must NOT carry an amount
-    if (singleAmount != null) {
+    // negotiable must NOT carry an amount at creation time
+    if (amount != null && amount > 0) {
       return { data: null, error: new Error('Negotiable offers must not include an amount') };
     }
   }
 
-  // Map to DB fields (no ranges)
-  const offer_amount_min = effectiveMode === 'fixed' ? singleAmount : null;
-  const offer_amount_max = null;
+  // Strongly-typed insert payload
+  type DealInsert = {
+    sender_id: string;
+    receiver_id: string;
+    message: string;
+    deal_stage: DealStage;
+    offer_pricing_mode: PricingMode;
+    offer_currency: string;
+    deal_value?: number;
+  };
+
+  const insertPayload: DealInsert = {
+    sender_id: senderId,
+    receiver_id: receiverId,
+    message,
+    deal_stage: 'Waiting for Response',
+    offer_pricing_mode: effectiveMode,
+    offer_currency: currency,
+  };
+
+  if (effectiveMode === 'fixed') {
+    insertPayload.deal_value = amount!;
+  }
 
   const { data, error } = await supabase
     .from('deals')
-    .insert([
-      {
-        sender_id: senderId,
-        receiver_id: receiverId,
-        message,
-        deal_stage: 'Waiting for Response' as DealStage,
-        offer_pricing_mode: effectiveMode,
-        offer_amount_min,
-        offer_amount_max,
-        offer_currency: currency,
-      },
-    ])
+    .insert([insertPayload])
     .select('id')
     .maybeSingle();
 
@@ -239,4 +244,11 @@ export async function confirmAgreement(dealId: string) {
     .maybeSingle();
 
   return { data, error };
+}
+
+/* ===================== UI helper ===================== */
+/** Decide what to display for price on the UI list/detail. */
+export function displayOfferAmount(mode?: PricingMode | null, deal_value?: number | null) {
+  if (mode === 'negotiable' || deal_value == null) return 'Negotiate';
+  return deal_value;
 }

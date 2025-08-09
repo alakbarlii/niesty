@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Loader, MessageSquare } from 'lucide-react';
 import DealProgress from '@/components/DealProgress';
-import PersonalNotes from '@/components/PersonalNotes';
+
 import DealChat from '@/components/DealChat';
 
 interface ProfileLite {
@@ -374,9 +374,7 @@ export default function DealDetailPage() {
             />
           </div>
 
-          <div className="border border-white/10 bg-white/5 rounded-2xl p-4 sm:p-5">
-            <PersonalNotes dealId={deal.id} />
-          </div>
+          
         </div>
 
         {/* RIGHT: Agreement card */}

@@ -1,4 +1,6 @@
 'use client';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -29,63 +31,73 @@ export default function Page() {
 
   const pageSize = 6;
 
-  
-
+  // Fetch current user once
   useEffect(() => {
     const fetchUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setCurrentUserId(data?.user?.id ?? null);
+      try {
+        const { data } = await supabase.auth.getUser();
+        setCurrentUserId(data?.user?.id ?? null);
+      } catch {
+        setCurrentUserId(null);
+      }
     };
-
     fetchUser();
   }, []);
 
+  // Fetch profiles once
   useEffect(() => {
     const fetchProfiles = async () => {
-      const { data, error } = await supabase.from('profiles').select('*');
-      if (!error && data) {
-        setProfiles(data);
-        console.log('Fetched profiles:', data);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id,user_id,username,full_name,role,description,profile_url')
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          setProfiles(data as Profile[]);
+        }
+      } finally {
+        setInitialLoad(false);
       }
-      setInitialLoad(false);
     };
-
     fetchProfiles();
   }, []);
 
+  // Local filtering + pagination
   useEffect(() => {
-    if (!initialLoad) {
-      setLoading(true);
-      const timeout = setTimeout(() => {
-        const lowerSearch = searchTerm.toLowerCase();
-        const filtered = profiles.filter((p) => {
-          const matchesName = p.full_name?.toLowerCase().includes(lowerSearch);
-          const matchesUsername = p.username?.toLowerCase().includes(lowerSearch.replace(/^@/, '')) ||
-            ('@' + p.username?.toLowerCase()).includes(lowerSearch);
-          const matchesRole = roleFilter === 'all' || p.role === roleFilter;
-          return (matchesName || matchesUsername) && matchesRole;
-        });
+    if (initialLoad) return;
 
-        if (!searchTerm && roleFilter === 'all') {
-          setFilteredProfiles(profiles);
-          setVisibleProfiles(profiles.slice(0, pageSize));
-          setHasMore(profiles.length > pageSize);
-        } else {
-          setFilteredProfiles(filtered);
-          setVisibleProfiles(filtered.slice(0, pageSize));
-          setHasMore(filtered.length > pageSize);
-        }
+    setLoading(true);
+    const timeout = setTimeout(() => {
+      const lowerSearch = searchTerm.toLowerCase().trim();
 
-        setLoading(false);
-      }, 300);
+      const filtered = profiles.filter((p) => {
+        const matchesRole = roleFilter === 'all' || p.role === roleFilter;
+        if (!lowerSearch) return matchesRole;
 
-      return () => clearTimeout(timeout);
-    }
+        const name = (p.full_name ?? '').toLowerCase();
+        const username = (p.username ?? '').toLowerCase();
+        const needle = lowerSearch.replace(/^@/, '');
+
+        const matchesName = name.includes(lowerSearch);
+        const matchesUsername = username.includes(needle) || ('@' + username).includes(lowerSearch);
+
+        return matchesRole && (matchesName || matchesUsername);
+      });
+
+      const initial = filtered.slice(0, pageSize);
+      setFilteredProfiles(filtered);
+      setVisibleProfiles(initial);
+      setHasMore(filtered.length > initial.length);
+
+      setLoading(false);
+    }, 300);
+
+    return () => clearTimeout(timeout);
   }, [searchTerm, roleFilter, profiles, initialLoad]);
 
   const loadMore = () => {
     const next = filteredProfiles.slice(visibleProfiles.length, visibleProfiles.length + pageSize);
-    setVisibleProfiles([...visibleProfiles, ...next]);
+    setVisibleProfiles((prev) => [...prev, ...next]);
     setHasMore(filteredProfiles.length > visibleProfiles.length + next.length);
   };
 
@@ -94,6 +106,7 @@ export default function Page() {
       <div className="flex flex-col gap-6 max-w-3xl mx-auto">
         <div className="flex flex-col gap-4 pt-3 mb-1">
           <h1 className="text-4xl font-bold text-white tracking-tight mb-6">Search</h1>
+
           <div className="relative w-full max-w-2xl mx-auto">
             <Search className="absolute z-10 left-4.5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white" />
 
@@ -104,6 +117,7 @@ export default function Page() {
               placeholder="Search..."
               className="w-full rounded-full border pl-12 pr-12 py-3 text-lg bg-black/40 backdrop-blur-sm text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
             />
+
             {loading ? (
               <div className="absolute right-5 top-1/2 transform -translate-y-[55%] w-6 h-6 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
             ) : (
@@ -111,6 +125,7 @@ export default function Page() {
                 <button
                   onClick={() => setSearchTerm('')}
                   className="absolute right-5 top-1/2 transform -translate-y-[60%] text-3xl text-gray-400 hover:text-white"
+                  aria-label="Clear search"
                 >
                   &times;
                 </button>
@@ -120,13 +135,18 @@ export default function Page() {
         </div>
 
         <div className="flex gap-2 text-sm -mt-2 flex-wrap">
-          {[{ label: 'All', value: 'all' }, { label: 'Creators', value: 'creator' }, { label: 'Businesses', value: 'business' }].map(({ label, value }) => (
+          {[
+            { label: 'All', value: 'all' },
+            { label: 'Creators', value: 'creator' },
+            { label: 'Businesses', value: 'business' },
+          ].map(({ label, value }) => (
             <button
               key={value}
               onClick={() => setRoleFilter(value as 'all' | 'creator' | 'business')}
               className={`px-4 py-1.5 rounded-full border text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-white focus:bg-white focus:text-black ${
                 roleFilter === value ? 'bg-white text-black' : 'bg-black text-white border-white'
               }`}
+              aria-pressed={roleFilter === value}
             >
               {label}
             </button>
@@ -157,7 +177,7 @@ export default function Page() {
                       <div className="w-[96px] h-[96px] rounded-full overflow-hidden border border-white/20">
                         <Image
                           src={profile.profile_url || '/default-avatar.png'}
-                          alt="avatar"
+                          alt={`${profile.username}'s avatar`}
                           width={96}
                           height={96}
                           className="object-cover w-full h-full"
@@ -165,12 +185,15 @@ export default function Page() {
                       </div>
                       <div className="text-xs text-gray-400 mt-1 truncate sm:hidden">@{profile.username}</div>
                     </div>
+
                     <div className="flex flex-col justify-start w-full">
                       <div className="text-white font-extrabold text-xl mb-1">{profile.full_name}</div>
                       <div className="text-sm text-gray-400 capitalize mb-1">
                         {profile.role} <span className="text-yellow-400 ml-2">⭐ 5.0</span>
                       </div>
-                      <div className="text-sm text-gray-300 line-clamp-3 pr-2 sm:pr-4">{profile.description}</div>
+                      <div className="text-sm text-gray-300 line-clamp-3 pr-2 sm:pr-4">
+                        {profile.description}
+                      </div>
                       <div className="text-xs text-gray-400 mt-1 hidden sm:block">@{profile.username}</div>
                     </div>
                   </div>

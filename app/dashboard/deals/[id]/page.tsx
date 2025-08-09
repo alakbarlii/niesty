@@ -1,4 +1,6 @@
 'use client';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -148,7 +150,11 @@ export default function DealDetailPage() {
   const isSender = userId === deal?.sender_id;
   const isReceiver = userId === deal?.receiver_id;
   const otherUser = isSender ? deal?.receiver_info : deal?.sender_info;
-  const currentStageIndex = deal ? DEAL_STAGES.indexOf(deal.deal_stage) : -1;
+
+  // SAFETY: never pass -1 to DealProgress
+  const currentStageIndexRaw = deal ? DEAL_STAGES.indexOf(deal.deal_stage) : -1;
+  const currentStageIndex = currentStageIndexRaw < 0 ? 0 : currentStageIndexRaw;
+
   const hasApproved = isSender ? deal?.approved_by_sender : deal?.approved_by_receiver;
   const bothAgreed = !!deal?.creator_agreed_at && !!deal?.business_agreed_at;
 

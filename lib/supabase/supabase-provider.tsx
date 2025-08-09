@@ -4,31 +4,36 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 
-const SupabaseContext = createContext<Session | null>(null);
+type Ctx = { ready: boolean; session: Session | null };
+
+const SupabaseContext = createContext<Ctx>({ ready: false, session: null });
 
 export const SupabaseProvider = ({ children }: { children: React.ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null);
+  const [state, setState] = useState<Ctx>({ ready: false, session: null });
 
   useEffect(() => {
-    
+    let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-    });
+    const init = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setState({ ready: true, session: data.session ?? null });
+    };
+    init();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setState({ ready: true, session: session ?? null });
     });
 
     return () => {
-      subscription.unsubscribe();
+      mounted = false;
+      sub.subscription.unsubscribe();
     };
   }, []);
 
   return (
-    <SupabaseContext.Provider value={session}>
+    <SupabaseContext.Provider value={state}>
       {children}
     </SupabaseContext.Provider>
   );

@@ -20,7 +20,7 @@ interface DealChatProps {
   currentUserId: string;
   otherUser: {
     name: string;
-    avatar: string | null;
+    profile_url: string | null;
   };
 }
 
@@ -142,8 +142,8 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
     <div className="w-96 h-[30rem] bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden shadow-lg fixed bottom-4 right-4 z-50">
       <div className="p-3 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          {otherUser.avatar && (
-            <Image src={otherUser.avatar} alt="avatar" width={32} height={32} className="rounded-full" />
+          {otherUser.profile_url && (
+            <Image src={otherUser.profile_url} alt="avatar" width={32} height={32} className="rounded-full" />
           )}
           <span className="text-sm font-semibold text-gray-300">{otherUser.name || 'Chat'}</span>
         </div>

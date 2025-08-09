@@ -1,16 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Loader, MessageSquare } from 'lucide-react';
 import DealProgress from '@/components/DealProgress';
 import DealChat from '@/components/DealChat';
 
+type UserRole = 'creator' | 'business';
+
 interface ProfileLite {
   id: string;
   full_name: string;
   username: string;
+  role?: UserRole;
+  profile_url?: string | null; // <-- added
 }
 
 type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
@@ -20,7 +24,7 @@ interface Deal {
   sender_id: string;
   receiver_id: string;
   message: string;
-  deal_stage: string;
+  deal_stage: (typeof DEAL_STAGES)[number] | string;
   created_at: string;
 
   // Agreement
@@ -45,7 +49,7 @@ interface Deal {
   sender_info?: ProfileLite;
   receiver_info?: ProfileLite;
 
-  // legacy flags referenced elsewhere
+  // legacy flags
   approved_by_sender?: boolean;
   approved_by_receiver?: boolean;
 }
@@ -65,9 +69,9 @@ export default function DealDetailPage() {
 
   const [deal, setDeal] = useState<Deal | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState<boolean>(false);
 
   // Agreement draft (shown during Negotiating)
   const [draftAmount, setDraftAmount] = useState<number>(0);
@@ -80,7 +84,6 @@ export default function DealDetailPage() {
       setLoading(true);
       setError(null);
 
-      // auth
       const {
         data: { user },
         error: userError,
@@ -93,7 +96,6 @@ export default function DealDetailPage() {
       }
       setUserId(user.id);
 
-      // deal
       const { data, error: dealError } = await supabase
         .from('deals')
         .select('*')
@@ -106,22 +108,15 @@ export default function DealDetailPage() {
         return;
       }
 
-      // Normalize stage if already accepted but still "Waiting"
       if (data.accepted_at && data.deal_stage === 'Waiting for Response') {
         await supabase.from('deals').update({ deal_stage: 'Negotiating Terms' }).eq('id', data.id);
         data.deal_stage = 'Negotiating Terms';
       }
 
-      // If both sides agreed but stage didn’t advance, lock to Escrow
-      if (data.creator_agreed_at && data.business_agreed_at && data.deal_stage === 'Negotiating Terms') {
-        await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', data.id);
-        data.deal_stage = 'Platform Escrow';
-      }
-
-      // fetch names
+      // include profile_url here
       const { data: users } = await supabase
         .from('profiles')
-        .select('id, full_name, username')
+        .select('id, full_name, username, role, profile_url')
         .in('id', [data.sender_id, data.receiver_id]);
 
       const sender = users?.find((u) => u.id === data.sender_id) as ProfileLite | undefined;
@@ -136,11 +131,8 @@ export default function DealDetailPage() {
       };
 
       setDeal(normalized);
-
-      // seed agreement draft fields
       setDraftAmount(Number(data.deal_value ?? 0));
       setDraftTerms(data.agreement_terms ?? '');
-
       setLoading(false);
     };
 
@@ -148,17 +140,21 @@ export default function DealDetailPage() {
   }, [dealId]);
 
   const isSender = userId === deal?.sender_id;
-  const isReceiver = userId === deal?.receiver_id;
+  const myProfile: ProfileLite | undefined =
+    (isSender ? deal?.sender_info : deal?.receiver_info) || undefined;
+  const isCreator = myProfile?.role === 'creator';
+  const isBusiness = myProfile?.role === 'business';
   const otherUser = isSender ? deal?.receiver_info : deal?.sender_info;
 
-  // never pass -1 to DealProgress
-  const stageIndexRaw = deal ? DEAL_STAGES.indexOf(deal.deal_stage as (typeof DEAL_STAGES)[number]) : -1;
-  const currentStageIndex = stageIndexRaw < 0 ? 0 : stageIndexRaw;
+  const currentStageIndexRaw = useMemo(() => {
+    if (!deal) return -1;
+    const idx = DEAL_STAGES.indexOf(deal.deal_stage as (typeof DEAL_STAGES)[number]);
+    return idx >= 0 ? idx : -1;
+  }, [deal]);
 
-  const hasApproved = isSender ? deal?.approved_by_sender : deal?.approved_by_receiver;
+  const currentStageIndex = currentStageIndexRaw < 0 ? 0 : currentStageIndexRaw;
   const bothAgreed = !!deal?.creator_agreed_at && !!deal?.business_agreed_at;
 
-  // helpers
   const displayAmount = (() => {
     if (!deal) return '';
     if (deal.deal_stage === 'Negotiating Terms' && (!deal.deal_value || deal.deal_value <= 0)) {
@@ -170,8 +166,6 @@ export default function DealDetailPage() {
     return '—';
   })();
 
-  // ========= Actions (inlined; NO server imports) =========
-
   const refreshDeal = async (id: string) => {
     const { data } = await supabase.from('deals').select('*').eq('id', id).maybeSingle();
     if (data) {
@@ -179,12 +173,14 @@ export default function DealDetailPage() {
     }
   };
 
+  const nowISO = () => new Date().toISOString();
+
   const handleAcceptOffer = async () => {
     if (!deal) return;
     const { error } = await supabase
       .from('deals')
       .update({
-        accepted_at: new Date().toISOString(),
+        accepted_at: nowISO(),
         deal_stage: 'Negotiating Terms',
         status: 'accepted',
       })
@@ -212,16 +208,16 @@ export default function DealDetailPage() {
 
   const handleConfirmAgreement = async () => {
     if (!deal || !userId) return;
-    const col = isSender ? 'creator_agreed_at' : 'business_agreed_at';
+    const myRole = myProfile?.role;
+    const col = myRole === 'creator' ? 'creator_agreed_at' : 'business_agreed_at';
 
     const { error } = await supabase
       .from('deals')
-      .update({ [col]: new Date().toISOString() })
+      .update({ [col]: nowISO() })
       .eq('id', deal.id);
 
     if (error) return alert(error.message);
 
-    // pull fresh to decide next stage
     const { data: refreshed } = await supabase
       .from('deals')
       .select('id,creator_agreed_at,business_agreed_at,deal_value,agreement_terms,deal_stage')
@@ -244,14 +240,15 @@ export default function DealDetailPage() {
     );
   };
 
+  // CREATOR-ONLY submit content
   const handleSubmitContent = async (url: string) => {
-    if (!deal) return;
+    if (!deal || !isCreator) return;
 
     const { error } = await supabase
       .from('deals')
       .update({
         submission_url: url,
-        submitted_at: new Date().toISOString(),
+        submitted_at: nowISO(),
         submission_status: 'pending' as SubmissionStatus,
         deal_stage: 'Content Submitted',
         rejection_reason: null,
@@ -259,23 +256,12 @@ export default function DealDetailPage() {
       .eq('id', deal.id);
 
     if (error) return alert('Failed to submit content.');
-
-    setDeal((prev) =>
-      prev
-        ? {
-            ...prev,
-            submission_url: url,
-            submitted_at: new Date().toISOString(),
-            submission_status: 'pending',
-            rejection_reason: null,
-            deal_stage: 'Content Submitted',
-          }
-        : prev
-    );
+    await refreshDeal(deal.id);
   };
 
+  // BUSINESS-ONLY reject
   const handleRejectContent = async (reason: string) => {
-    if (!deal) return;
+    if (!deal || !isBusiness) return;
 
     const { error } = await supabase
       .from('deals')
@@ -291,13 +277,14 @@ export default function DealDetailPage() {
     await refreshDeal(deal.id);
   };
 
+  // BUSINESS-ONLY approve
   const handleApproval = async () => {
-    if (!deal) return;
+    if (!deal || !isBusiness) return;
 
     const { error } = await supabase
       .from('deals')
       .update({
-        approved_at: new Date().toISOString(),
+        approved_at: nowISO(),
         deal_stage: 'Approved',
         submission_status: 'approved' as SubmissionStatus,
       })
@@ -316,6 +303,13 @@ export default function DealDetailPage() {
     );
   if (error) return <div className="p-6 text-red-500">{error}</div>;
   if (!deal) return <div className="p-6 text-gray-400">Deal not found.</div>;
+
+  // Make sure this is string | null (not undefined)
+  const otherAvatar: string | null =
+    (otherUser?.profile_url ?? null) ||
+    (otherUser?.username
+      ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(otherUser.username)}`
+      : null);
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto relative">
@@ -342,17 +336,16 @@ export default function DealDetailPage() {
         </span>
       </div>
 
-      {/* Responsive main area: Progress (left) • Agreement (right) */}
+      {/* Main: Progress (left) • Agreement (right) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-        {/* LEFT: Progress */}
+        {/* LEFT: Progress & actions */}
         <div className="space-y-4">
           <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)]">
             <p className="text-white text-sm sm:text-base mb-3">
               <span className="font-semibold">Offer:</span> {deal.message}
             </p>
 
-            {/* Waiting → receiver accepts the offer to start negotiating */}
-            {!deal.accepted_at && deal.deal_stage === 'Waiting for Response' && isReceiver && (
+            {!deal.accepted_at && deal.deal_stage === 'Waiting for Response' && !isSender && (
               <div className="mb-4 p-3 sm:p-4 rounded-xl border border-white/10 bg-black/30 text-white">
                 <p className="font-semibold mb-2 text-sm sm:text-base">Accept the offer to start negotiating terms</p>
                 <button
@@ -367,14 +360,14 @@ export default function DealDetailPage() {
             <DealProgress
               currentStage={currentStageIndex}
               contentLink={deal.submission_url || undefined}
-              isEditable={!!isSender && deal.deal_stage === 'Platform Escrow'}
+              isEditable={!!isCreator && deal.deal_stage === 'Platform Escrow'}
               isRejected={!!deal.rejection_reason}
               rejectionReason={deal.rejection_reason || undefined}
-              onApprove={!!isReceiver && !hasApproved ? handleApproval : undefined}
-              onReject={!!isReceiver && !hasApproved ? handleRejectContent : undefined}
+              onApprove={!!isBusiness && !deal.approved_at ? handleApproval : undefined}
+              onReject={!!isBusiness && !deal.approved_at ? handleRejectContent : undefined}
               onAgree={deal.deal_stage === 'Negotiating Terms' ? handleConfirmAgreement : undefined}
-              onSubmitContent={!!isSender && deal.deal_stage === 'Platform Escrow' ? handleSubmitContent : undefined}
-              canApprove={!!isReceiver && !hasApproved}
+              onSubmitContent={!!isCreator && deal.deal_stage === 'Platform Escrow' ? handleSubmitContent : undefined}
+              canApprove={!!isBusiness && !deal.approved_at}
               isSender={!!isSender}
             />
           </div>
@@ -382,7 +375,6 @@ export default function DealDetailPage() {
 
         {/* RIGHT: Agreement card */}
         <div className="space-y-4">
-          {/* Negotiating editor (unlocked) */}
           {deal.deal_stage === 'Negotiating Terms' && !bothAgreed && (
             <div className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black/30 text-white">
               <div className="flex items-baseline justify-between gap-2 mb-3">
@@ -399,7 +391,7 @@ export default function DealDetailPage() {
                     type="number"
                     min={1}
                     step="1"
-                    value={draftAmount || 0}
+                    value={Number.isFinite(draftAmount) ? draftAmount : 0}
                     onChange={(e) => setDraftAmount(Number(e.target.value))}
                     className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
                     placeholder="Enter agreed amount"
@@ -441,7 +433,6 @@ export default function DealDetailPage() {
             </div>
           )}
 
-          {/* Locked summary (after both agree) */}
           {bothAgreed && (
             <div className="p-4 sm:p-5 rounded-2xl border border-emerald-700/40 bg-emerald-900/20 text-white">
               <div className="flex items-baseline justify-between gap-2">
@@ -471,7 +462,7 @@ export default function DealDetailPage() {
             currentUserId={userId}
             otherUser={{
               name: otherUser?.full_name || 'Unknown User',
-              avatar: null, // use your component's fallback when null
+              profile_url: otherAvatar, 
             }}
           />
         </div>

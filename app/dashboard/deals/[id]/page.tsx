@@ -1,6 +1,4 @@
 'use client';
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -47,7 +45,7 @@ interface Deal {
   sender_info?: ProfileLite;
   receiver_info?: ProfileLite;
 
-  // legacy flags some components referenced; we keep for compatibility
+  // legacy flags referenced elsewhere
   approved_by_sender?: boolean;
   approved_by_receiver?: boolean;
 }
@@ -114,7 +112,7 @@ export default function DealDetailPage() {
         data.deal_stage = 'Negotiating Terms';
       }
 
-      // If both sides already agreed but stage didn't advance, lock to Escrow
+      // If both sides agreed but stage didn’t advance, lock to Escrow
       if (data.creator_agreed_at && data.business_agreed_at && data.deal_stage === 'Negotiating Terms') {
         await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', data.id);
         data.deal_stage = 'Platform Escrow';
@@ -154,8 +152,8 @@ export default function DealDetailPage() {
   const otherUser = isSender ? deal?.receiver_info : deal?.sender_info;
 
   // never pass -1 to DealProgress
-  const currentStageIndexRaw = deal ? DEAL_STAGES.indexOf(deal.deal_stage as (typeof DEAL_STAGES)[number]) : -1;
-  const currentStageIndex = currentStageIndexRaw < 0 ? 0 : currentStageIndexRaw;
+  const stageIndexRaw = deal ? DEAL_STAGES.indexOf(deal.deal_stage as (typeof DEAL_STAGES)[number]) : -1;
+  const currentStageIndex = stageIndexRaw < 0 ? 0 : stageIndexRaw;
 
   const hasApproved = isSender ? deal?.approved_by_sender : deal?.approved_by_receiver;
   const bothAgreed = !!deal?.creator_agreed_at && !!deal?.business_agreed_at;
@@ -473,7 +471,7 @@ export default function DealDetailPage() {
             currentUserId={userId}
             otherUser={{
               name: otherUser?.full_name || 'Unknown User',
-              avatar: null,
+              avatar: null, // use your component's fallback when null
             }}
           />
         </div>

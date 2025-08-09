@@ -1,6 +1,4 @@
 'use client';
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -9,17 +7,14 @@ import { Loader, MessageSquare } from 'lucide-react';
 import DealProgress from '@/components/DealProgress';
 import PersonalNotes from '@/components/PersonalNotes';
 import DealChat from '@/components/DealChat';
-import {
-  acceptDeal,
-  saveAgreementDraft,
-  confirmAgreement,
-} from '@/lib/supabase/deals';
 
 interface ProfileLite {
   id: string;
   full_name: string;
   username: string;
 }
+
+type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 
 interface Deal {
   id: string;
@@ -39,7 +34,7 @@ interface Deal {
   // Submission / approval
   submission_url?: string | null;
   submitted_at?: string | null;
-  submission_status?: 'pending' | 'rework' | 'approved' | null;
+  submission_status?: SubmissionStatus;
   rejection_reason?: string | null;
 
   approved_at?: string | null;
@@ -63,11 +58,11 @@ const DEAL_STAGES = [
   'Content Submitted',
   'Approved',
   'Payment Released',
-];
+] as const;
 
 export default function DealDetailPage() {
   const params = useParams();
-  const dealId = params?.id as string;
+  const dealId = params?.id as string | undefined;
 
   const [deal, setDeal] = useState<Deal | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -79,9 +74,12 @@ export default function DealDetailPage() {
   const [draftAmount, setDraftAmount] = useState<number>(0);
   const [draftTerms, setDraftTerms] = useState<string>('');
 
+  // ========= Load =========
   useEffect(() => {
     const fetchDeal = async () => {
+      if (!dealId) return;
       setLoading(true);
+      setError(null);
 
       // auth
       const {
@@ -124,15 +122,12 @@ export default function DealDetailPage() {
       const sender = users?.find((u) => u.id === data.sender_id) as ProfileLite | undefined;
       const receiver = users?.find((u) => u.id === data.receiver_id) as ProfileLite | undefined;
 
-      const approved_by_sender = !!data.approved_at;
-      const approved_by_receiver = !!data.approved_at;
-
       const normalized: Deal = {
         ...data,
         sender_info: sender,
         receiver_info: receiver,
-        approved_by_sender,
-        approved_by_receiver,
+        approved_by_sender: !!data.approved_at,
+        approved_by_receiver: !!data.approved_at,
       };
 
       setDeal(normalized);
@@ -144,15 +139,15 @@ export default function DealDetailPage() {
       setLoading(false);
     };
 
-    if (dealId) fetchDeal();
+    fetchDeal();
   }, [dealId]);
 
   const isSender = userId === deal?.sender_id;
   const isReceiver = userId === deal?.receiver_id;
   const otherUser = isSender ? deal?.receiver_info : deal?.sender_info;
 
-  // SAFETY: never pass -1 to DealProgress
-  const currentStageIndexRaw = deal ? DEAL_STAGES.indexOf(deal.deal_stage) : -1;
+  // never pass -1 to DealProgress
+  const currentStageIndexRaw = deal ? DEAL_STAGES.indexOf(deal.deal_stage as (typeof DEAL_STAGES)[number]) : -1;
   const currentStageIndex = currentStageIndexRaw < 0 ? 0 : currentStageIndexRaw;
 
   const hasApproved = isSender ? deal?.approved_by_sender : deal?.approved_by_receiver;
@@ -170,54 +165,78 @@ export default function DealDetailPage() {
     return '—';
   })();
 
-  // ========== Actions ==========
+  // ========= Actions (inlined; NO server imports) =========
+
+  const refreshDeal = async (id: string) => {
+    const { data } = await supabase.from('deals').select('*').eq('id', id).maybeSingle();
+    if (data) {
+      setDeal((prev) => (prev ? { ...prev, ...data } : (data as Deal)));
+    }
+  };
 
   const handleAcceptOffer = async () => {
     if (!deal) return;
-    const { error } = await acceptDeal(deal.id);
+    const { error } = await supabase
+      .from('deals')
+      .update({
+        accepted_at: new Date().toISOString(),
+        deal_stage: 'Negotiating Terms',
+        status: 'accepted',
+      })
+      .eq('id', deal.id);
     if (error) return alert(error.message);
-
-    // Refresh
-    const { data: refreshed } = await supabase.from('deals').select('*').eq('id', deal.id).maybeSingle();
-    if (refreshed) {
-      setDeal((prev) => (prev ? { ...prev, ...refreshed, deal_stage: 'Negotiating Terms' } : prev));
-    }
+    await refreshDeal(deal.id);
   };
 
   const handleSaveAgreementDraft = async () => {
     if (!deal) return;
     if (!draftAmount || draftAmount <= 0) return alert('Enter a valid amount.');
-    const { error } = await saveAgreementDraft(deal.id, { terms: draftTerms, amount: draftAmount });
+
+    const { error } = await supabase
+      .from('deals')
+      .update({
+        agreement_terms: draftTerms,
+        deal_value: draftAmount,
+      })
+      .eq('id', deal.id);
+
     if (error) return alert(error.message);
-    alert('Draft saved.');
     setDeal((prev) => (prev ? { ...prev, agreement_terms: draftTerms, deal_value: draftAmount } : prev));
+    alert('Draft saved.');
   };
 
   const handleConfirmAgreement = async () => {
-    if (!deal) return;
-    const { error } = await confirmAgreement(deal.id);
+    if (!deal || !userId) return;
+    const col = isSender ? 'creator_agreed_at' : 'business_agreed_at';
+
+    const { error } = await supabase
+      .from('deals')
+      .update({ [col]: new Date().toISOString() })
+      .eq('id', deal.id);
+
     if (error) return alert(error.message);
 
-    // Pull fresh to check if both sides are done; then advance stage locally
+    // pull fresh to decide next stage
     const { data: refreshed } = await supabase
       .from('deals')
-      .select('id,creator_agreed_at,business_agreed_at,deal_stage,deal_value,agreement_terms')
+      .select('id,creator_agreed_at,business_agreed_at,deal_value,agreement_terms,deal_stage')
       .eq('id', deal.id)
       .maybeSingle();
 
     const both = !!refreshed?.creator_agreed_at && !!refreshed?.business_agreed_at;
 
-    setDeal((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        creator_agreed_at: refreshed?.creator_agreed_at ?? prev.creator_agreed_at,
-        business_agreed_at: refreshed?.business_agreed_at ?? prev.business_agreed_at,
-        deal_value: refreshed?.deal_value ?? prev.deal_value,
-        agreement_terms: refreshed?.agreement_terms ?? prev.agreement_terms,
-        deal_stage: both ? 'Platform Escrow' : prev.deal_stage,
-      };
-    });
+    setDeal((prev) =>
+      prev
+        ? {
+            ...prev,
+            creator_agreed_at: refreshed?.creator_agreed_at ?? prev.creator_agreed_at,
+            business_agreed_at: refreshed?.business_agreed_at ?? prev.business_agreed_at,
+            deal_value: refreshed?.deal_value ?? prev.deal_value,
+            agreement_terms: refreshed?.agreement_terms ?? prev.agreement_terms,
+            deal_stage: both ? 'Platform Escrow' : prev.deal_stage,
+          }
+        : prev
+    );
   };
 
   const handleSubmitContent = async (url: string) => {
@@ -228,7 +247,7 @@ export default function DealDetailPage() {
       .update({
         submission_url: url,
         submitted_at: new Date().toISOString(),
-        submission_status: 'pending',
+        submission_status: 'pending' as SubmissionStatus,
         deal_stage: 'Content Submitted',
         rejection_reason: null,
       })
@@ -256,7 +275,7 @@ export default function DealDetailPage() {
     const { error } = await supabase
       .from('deals')
       .update({
-        submission_status: 'rework',
+        submission_status: 'rework' as SubmissionStatus,
         rejection_reason: reason,
         deal_stage: 'Platform Escrow',
         submission_url: null,
@@ -264,28 +283,26 @@ export default function DealDetailPage() {
       .eq('id', deal.id);
 
     if (error) return alert('Failed to reject content.');
-
-    const { data: updatedDeal } = await supabase.from('deals').select('*').eq('id', deal.id).single();
-    setDeal(updatedDeal as Deal);
+    await refreshDeal(deal.id);
   };
 
   const handleApproval = async () => {
     if (!deal) return;
 
-    // For MVP, single approval moves to Approved; payout handled elsewhere.
     const { error } = await supabase
       .from('deals')
-      .update({ approved_at: new Date().toISOString(), deal_stage: 'Approved', submission_status: 'approved' })
+      .update({
+        approved_at: new Date().toISOString(),
+        deal_stage: 'Approved',
+        submission_status: 'approved' as SubmissionStatus,
+      })
       .eq('id', deal.id);
 
     if (error) return alert('Failed to approve content.');
-
-    const { data: updatedDeal } = await supabase.from('deals').select('*').eq('id', deal.id).single();
-    setDeal(updatedDeal as Deal);
+    await refreshDeal(deal.id);
   };
 
-  // ========== Render ==========
-
+  // ========= Render =========
   if (loading)
     return (
       <div className="p-6 flex items-center gap-2 text-gray-400">
@@ -301,7 +318,7 @@ export default function DealDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white">Deal Details</h1>
         <button
-          onClick={() => setShowChat(!showChat)}
+          onClick={() => setShowChat((v) => !v)}
           className="self-start sm:self-auto inline-flex items-center gap-2 text-white/70 hover:text-yellow-400 transition"
           aria-label="Open chat"
         >
@@ -313,9 +330,7 @@ export default function DealDetailPage() {
       {/* Meta */}
       <div className="bg-white/10 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-sm sm:text-base font-semibold text-white mb-4 gap-3 sm:gap-0">
         <span className="leading-tight">
-          {isSender
-            ? `Your offer to ${otherUser?.full_name ?? '—'}`
-            : `${otherUser?.full_name ?? '—'}'s offer to you`}
+          {isSender ? `Your offer to ${otherUser?.full_name ?? '—'}` : `${otherUser?.full_name ?? '—'}'s offer to you`}
         </span>
         <span className="text-xs sm:text-sm font-medium text-white/70">
           Sent: {new Date(deal.created_at).toLocaleString()}
@@ -347,15 +362,15 @@ export default function DealDetailPage() {
             <DealProgress
               currentStage={currentStageIndex}
               contentLink={deal.submission_url || undefined}
-              isEditable={isSender && deal.deal_stage === 'Platform Escrow'}
+              isEditable={!!isSender && deal.deal_stage === 'Platform Escrow'}
               isRejected={!!deal.rejection_reason}
               rejectionReason={deal.rejection_reason || undefined}
-              onApprove={isReceiver && !hasApproved ? handleApproval : undefined}
-              onReject={isReceiver && !hasApproved ? handleRejectContent : undefined}
+              onApprove={!!isReceiver && !hasApproved ? handleApproval : undefined}
+              onReject={!!isReceiver && !hasApproved ? handleRejectContent : undefined}
               onAgree={deal.deal_stage === 'Negotiating Terms' ? handleConfirmAgreement : undefined}
-              onSubmitContent={isSender && deal.deal_stage === 'Platform Escrow' ? handleSubmitContent : undefined}
-              canApprove={isReceiver && !hasApproved}
-              isSender={isSender}
+              onSubmitContent={!!isSender && deal.deal_stage === 'Platform Escrow' ? handleSubmitContent : undefined}
+              canApprove={!!isReceiver && !hasApproved}
+              isSender={!!isSender}
             />
           </div>
 

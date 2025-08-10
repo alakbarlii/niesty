@@ -93,58 +93,67 @@ export default function DealDetailPage() {
       setLoading(true);
       setError(null);
 
-      const { data: auth } = await supabase.auth.getUser();
-      const user = auth.user;
-      if (!user) {
-        setError('User not found.');
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const user = auth.user;
+        if (!user) {
+          setError('User not found.');
+          return;
+        }
+        setUserId(user.id);
+
+        const { data, error: dealError } = await supabase
+          .from('deals')
+          .select('*')
+          .eq('id', dealId)
+          .single();
+
+        if (!data || dealError) {
+          setError('Deal not found.');
+          return;
+        }
+
+        if (data.accepted_at && data.deal_stage === 'Waiting for Response') {
+          await supabase.from('deals').update({ deal_stage: 'Negotiating Terms' }).eq('id', data.id);
+          data.deal_stage = 'Negotiating Terms';
+        }
+
+        // include profile_url here
+        const { data: users } = await supabase
+          .from('profiles')
+          .select('id, full_name, username, role, profile_url')
+          .in('id', [data.sender_id, data.receiver_id]);
+
+        const sender = users?.find((u) => u.id === data.sender_id) as ProfileLite | undefined;
+        const receiver = users?.find((u) => u.id === data.receiver_id) as ProfileLite | undefined;
+
+        const normalized: Deal = {
+          ...data,
+          sender_info: sender,
+          receiver_info: receiver,
+          approved_by_sender: !!data.approved_at,
+          approved_by_receiver: !!data.approved_at,
+        };
+
+        setDeal(normalized);
+
+        // Load latest submission from deal_submissions (DO NOT BLOCK PAGE IF IT FAILS)
+        try {
+          const sub = await fetchLatestSubmission(data.id);
+          setLatestSubmission(sub);
+        } catch (e) {
+          console.warn('fetchLatestSubmission failed', e);
+          setLatestSubmission(null);
+        }
+
+        setDraftAmount(Number(data.deal_value ?? 0));
+        setDraftTerms(data.agreement_terms ?? '');
+      } catch (e) {
+        console.error(e);
+        setError('Failed to load deal.');
+      } finally {
         setLoading(false);
-        return;
       }
-      setUserId(user.id);
-
-      const { data, error: dealError } = await supabase
-        .from('deals')
-        .select('*')
-        .eq('id', dealId)
-        .single();
-
-      if (!data || dealError) {
-        setError('Deal not found.');
-        setLoading(false);
-        return;
-      }
-
-      if (data.accepted_at && data.deal_stage === 'Waiting for Response') {
-        await supabase.from('deals').update({ deal_stage: 'Negotiating Terms' }).eq('id', data.id);
-        data.deal_stage = 'Negotiating Terms';
-      }
-
-      // include profile_url here
-      const { data: users } = await supabase
-        .from('profiles')
-        .select('id, full_name, username, role, profile_url')
-        .in('id', [data.sender_id, data.receiver_id]);
-
-      const sender = users?.find((u) => u.id === data.sender_id) as ProfileLite | undefined;
-      const receiver = users?.find((u) => u.id === data.receiver_id) as ProfileLite | undefined;
-
-      const normalized: Deal = {
-        ...data,
-        sender_info: sender,
-        receiver_info: receiver,
-        approved_by_sender: !!data.approved_at,
-        approved_by_receiver: !!data.approved_at,
-      };
-
-      setDeal(normalized);
-
-      // Load latest submission from deal_submissions
-      const sub = await fetchLatestSubmission(data.id);
-      setLatestSubmission(sub);
-
-      setDraftAmount(Number(data.deal_value ?? 0));
-      setDraftTerms(data.agreement_terms ?? '');
-      setLoading(false);
     };
 
     fetchDeal();
@@ -177,14 +186,24 @@ export default function DealDetailPage() {
   }, [deal]);
 
   const refreshDeal = async (id: string) => {
-    const [{ data: d }, sub] = await Promise.all([
-      supabase.from('deals').select('*').eq('id', id).maybeSingle(),
-      fetchLatestSubmission(id),
-    ]);
-    if (d) {
-      setDeal((prev) => (prev ? { ...prev, ...d } : (d as Deal)));
+    try {
+      const [{ data: d }, sub] = await Promise.all([
+        supabase.from('deals').select('*').eq('id', id).maybeSingle(),
+        // IMPORTANT: submissions fetch must be non-fatal
+        (async () => {
+          try {
+            return await fetchLatestSubmission(id);
+          } catch (e) {
+            console.warn('fetchLatestSubmission (refresh) failed', e);
+            return null;
+          }
+        })(),
+      ]);
+      if (d) setDeal((prev) => (prev ? { ...prev, ...d } : (d as Deal)));
+      setLatestSubmission(sub);
+    } catch (e) {
+      console.error('refreshDeal failed', e);
     }
-    setLatestSubmission(sub);
   };
 
   const nowISO = () => new Date().toISOString();
@@ -469,7 +488,7 @@ export default function DealDetailPage() {
             currentUserId={userId}
             otherUser={{
               name: otherUser?.full_name || 'Unknown User',
-              profile_url: otherAvatar, 
+              profile_url: otherAvatar, // <-- string | null
             }}
           />
         </div>

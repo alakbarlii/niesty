@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type KeyboardEventHandler } from 'react';
 import { CheckCircle, Clock, XCircle } from 'lucide-react';
 
 export const DEAL_STAGES = [
@@ -52,21 +52,21 @@ export default function DealProgress({
 }: DealProgressProps) {
   const [contentUrl, setContentUrl] = useState<string>('');
 
-  const isValidHttpUrl = (url: string) => /^https?:\/\/\S+/i.test(url);
+  const isValidHttpUrl = (url: string): boolean => /^https?:\/\/\S+/i.test(url);
 
-  const handleApprove = () => {
+  const handleApprove = (): void => {
     if (!onApprove) return;
     if (window.confirm('Approve this content?')) onApprove();
   };
 
-  const handleReject = () => {
+  const handleReject = (): void => {
     if (!onReject) return;
     const reason = window.prompt('Reason for rejection:')?.trim();
     if (!reason) return;
     onReject(reason);
   };
 
-  const submitIfValid = () => {
+  const submitIfValid = (): void => {
     if (!onSubmitContent) return;
     const url = contentUrl.trim();
     if (!isValidHttpUrl(url)) {
@@ -76,9 +76,9 @@ export default function DealProgress({
     if (window.confirm('Submit this URL?')) onSubmitContent(url);
   };
 
-  const handleSubmitContent = () => submitIfValid();
+  const handleSubmitContent = (): void => submitIfValid();
 
-  const onUrlKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+  const onUrlKeyDown: KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       submitIfValid();

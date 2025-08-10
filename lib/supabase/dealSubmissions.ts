@@ -11,54 +11,18 @@ export type DealSubmission = {
   url: string;
   status: SubmissionStatus;
   rejection_reason: string | null;
-  // Optional timestamp variants (schema-flexible)
-  created_at?: string | null;
-  submitted_at?: string | null;
-  inserted_at?: string | null;
-  createdAt?: string | null;
+  // Do NOT rely on timestamp columns (schema varies)
 };
 
-/** PostgREST undefined_column guard (code 42703) — no `any`. */
-function isUndefinedColumn(err: unknown): err is { code: '42703' } {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code?: unknown }).code === '42703'
-  );
-}
+/** Single safe ordering (no schema probing -> no 400s) */
+const ORDER_COLUMN = 'id' as const;
 
-/**
- * Fetch latest submission without assuming a specific timestamp column.
- * Tries common columns; falls back to ordering by `id` if needed.
- */
-export async function fetchLatestSubmission(dealId: string) {
-  const orderCandidates = ['created_at', 'submitted_at', 'inserted_at', 'createdAt'] as const;
-
-  for (const col of orderCandidates) {
-    try {
-      const { data, error } = await supabase
-        .from('deal_submissions')
-        .select('*')
-        .eq('deal_id', dealId)
-        .order(col, { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      return (data as DealSubmission) ?? null;
-    } catch (e) {
-      if (isUndefinedColumn(e)) continue; // try next column
-      throw e; // other errors (RLS, network, etc.) should bubble
-    }
-  }
-
-  // Final fallback: order by id
+export async function fetchLatestSubmission(dealId: string): Promise<DealSubmission | null> {
   const { data, error } = await supabase
     .from('deal_submissions')
     .select('*')
     .eq('deal_id', dealId)
-    .order('id', { ascending: false })
+    .order(ORDER_COLUMN, { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -66,49 +30,67 @@ export async function fetchLatestSubmission(dealId: string) {
   return (data as DealSubmission) ?? null;
 }
 
-export async function submitSubmission(dealId: string, url: string, userId: string) {
+export async function submitSubmission(dealId: string, url: string, userId: string): Promise<void> {
   const { error: insErr } = await supabase
     .from('deal_submissions')
     .insert([{ deal_id: dealId, submitted_by: userId, url, status: 'pending' }]);
-
   if (insErr) throw insErr;
 
   const { error: stageErr } = await supabase
     .from('deals')
     .update({ deal_stage: 'Content Submitted' })
     .eq('id', dealId);
-
   if (stageErr) throw stageErr;
 }
 
-export async function approveSubmission(submissionId: string, dealId: string) {
+export async function approveSubmission(submissionId: string, dealId: string): Promise<void> {
   const { error: updErr } = await supabase
     .from('deal_submissions')
     .update({ status: 'approved', rejection_reason: null })
     .eq('id', submissionId);
-
   if (updErr) throw updErr;
 
   const { error: stageErr } = await supabase
     .from('deals')
     .update({ deal_stage: 'Approved', approved_at: new Date().toISOString() })
     .eq('id', dealId);
-
   if (stageErr) throw stageErr;
 }
 
-export async function rejectSubmission(submissionId: string, dealId: string, reason: string) {
+export async function rejectSubmission(submissionId: string, dealId: string, reason: string): Promise<void> {
   const { error: updErr } = await supabase
     .from('deal_submissions')
     .update({ status: 'rework', rejection_reason: reason })
     .eq('id', submissionId);
-
   if (updErr) throw updErr;
 
   const { error: stageErr } = await supabase
     .from('deals')
     .update({ deal_stage: 'Platform Escrow' })
     .eq('id', dealId);
-
   if (stageErr) throw stageErr;
+}
+
+/* Optional: list/count helpers with the same safe ordering */
+
+export async function listSubmissionsByUser(userId: string, limit = 20): Promise<DealSubmission[]> {
+  const { data, error } = await supabase
+    .from('deal_submissions')
+    .select('*')
+    .eq('submitted_by', userId)
+    .order(ORDER_COLUMN, { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data as DealSubmission[]) ?? [];
+}
+
+export async function countSubmissionsByUser(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('deal_submissions')
+    .select('*', { count: 'exact', head: true })
+    .eq('submitted_by', userId);
+
+  if (error) throw error;
+  return count ?? 0;
 }

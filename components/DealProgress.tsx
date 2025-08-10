@@ -45,8 +45,9 @@ export default function DealProgress({
   onSubmitContent,
   canApprove = false,
   isCreator = false,
+  // keep prop for callers; alias to avoid unused-var lint
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  isSender: _isSender = false, // alias to avoid unused-var lint while keeping the prop
+  isSender: _isSender = false,
   submissionStatus = null,
 }: DealProgressProps) {
   const [contentUrl, setContentUrl] = useState<string>('');
@@ -65,7 +66,7 @@ export default function DealProgress({
     onReject(reason);
   };
 
-  const handleSubmitContent = () => {
+  const submitIfValid = () => {
     if (!onSubmitContent) return;
     const url = contentUrl.trim();
     if (!isValidHttpUrl(url)) {
@@ -73,6 +74,15 @@ export default function DealProgress({
       return;
     }
     if (window.confirm('Submit this URL?')) onSubmitContent(url);
+  };
+
+  const handleSubmitContent = () => submitIfValid();
+
+  const onUrlKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitIfValid();
+    }
   };
 
   const safeStageIndex =
@@ -131,15 +141,19 @@ export default function DealProgress({
                   </button>
                 )}
 
-                {/* Legacy support: allow submit at Platform Escrow if your flow shows it there */}
+                {/* Legacy support: submit at Platform Escrow if your flow shows it there */}
                 {stageLabel === 'Platform Escrow' && isCreator && onSubmitContent && (
                   <div className="mt-1 space-y-1">
                     <input
-                      type="text"
+                      type="url"
+                      inputMode="url"
+                      autoComplete="off"
                       placeholder="https://your-content-url.com"
                       value={contentUrl}
                       onChange={(e) => setContentUrl(e.target.value)}
+                      onKeyDown={onUrlKeyDown}
                       className="text-xs p-1 rounded bg-gray-800 text-white w-full"
+                      aria-label="Content URL"
                     />
                     <button
                       onClick={handleSubmitContent}
@@ -157,11 +171,15 @@ export default function DealProgress({
                     {isCreator && onSubmitContent && showResubmit && (
                       <>
                         <input
-                          type="text"
+                          type="url"
+                          inputMode="url"
+                          autoComplete="off"
                           placeholder="https://your-content-url.com"
                           value={contentUrl}
                           onChange={(e) => setContentUrl(e.target.value)}
+                          onKeyDown={onUrlKeyDown}
                           className="text-xs p-1 rounded bg-gray-800 text-white w-full"
+                          aria-label="Content URL"
                         />
                         <button
                           onClick={handleSubmitContent}

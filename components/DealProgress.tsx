@@ -1,6 +1,7 @@
 'use client';
-import { CheckCircle, Clock, XCircle } from 'lucide-react';
+
 import { useState } from 'react';
+import { CheckCircle, Clock, XCircle } from 'lucide-react';
 
 export const DEAL_STAGES = [
   'Waiting for Response',
@@ -9,56 +10,78 @@ export const DEAL_STAGES = [
   'Content Submitted',
   'Approved',
   'Payment Released',
-];
+] as const;
+
+type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 
 export interface DealProgressProps {
   currentStage: number;
   contentLink?: string;
-  onEditContentLink?: () => void;
   isEditable?: boolean;
   isRejected?: boolean;
-  rejectionReason?: string;
+  rejectionReason?: string | null;
   onApprove?: () => void;
   onReject?: (reason: string) => void;
   onAgree?: () => void;
   onSubmitContent?: (url: string) => void;
   canApprove?: boolean;
-  isSender: boolean;
+  /** Are *you* the creator participant on this deal? */
+  isCreator?: boolean;
+  /** Kept for compatibility with callers; not used here */
+  isSender?: boolean;
+  /** Status of the latest submission from deal_submissions */
+  submissionStatus?: SubmissionStatus;
 }
 
 export default function DealProgress({
   currentStage,
   contentLink,
-  onEditContentLink,
   isEditable = false,
   isRejected = false,
-  rejectionReason,
+  rejectionReason = null,
   onApprove,
   onReject,
   onAgree,
   onSubmitContent,
   canApprove = false,
-  isSender,
+  isCreator = false,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isSender: _isSender = false, // alias to avoid unused-var lint while keeping the prop
+  submissionStatus = null,
 }: DealProgressProps) {
-  const [contentUrl, setContentUrl] = useState('');
+  const [contentUrl, setContentUrl] = useState<string>('');
+
+  const isValidHttpUrl = (url: string) => /^https?:\/\/\S+/i.test(url);
 
   const handleApprove = () => {
-    const confirm = window.confirm('Are you sure you want to approve this content?');
-    if (confirm && onApprove) onApprove();
+    if (!onApprove) return;
+    if (window.confirm('Approve this content?')) onApprove();
   };
 
   const handleReject = () => {
-    const reason = window.prompt('Enter reason for rejection:');
-    if (reason && onReject) onReject(reason);
+    if (!onReject) return;
+    const reason = window.prompt('Reason for rejection:')?.trim();
+    if (!reason) return;
+    onReject(reason);
   };
 
   const handleSubmitContent = () => {
-    if (!contentUrl.trim()) return alert('Enter a valid content URL.');
-    const confirm = window.confirm('Submit this content URL?');
-    if (confirm && onSubmitContent) onSubmitContent(contentUrl.trim());
+    if (!onSubmitContent) return;
+    const url = contentUrl.trim();
+    if (!isValidHttpUrl(url)) {
+      alert('Enter a valid URL starting with http:// or https://');
+      return;
+    }
+    if (window.confirm('Submit this URL?')) onSubmitContent(url);
   };
 
-  const isDealFrozen = isRejected;
+  const safeStageIndex =
+    Number.isInteger(currentStage) && currentStage >= 0 && currentStage < DEAL_STAGES.length
+      ? currentStage
+      : 0;
+
+  const latestIsRework = submissionStatus === 'rework';
+  const showResubmit = latestIsRework || !contentLink;
 
   return (
     <div className="space-y-2">
@@ -66,11 +89,9 @@ export default function DealProgress({
 
       <ol className="relative border-l border-gray-700 ml-3">
         {DEAL_STAGES.map((stageLabel, index) => {
-          if (isDealFrozen && index > 3) return null;
-
-          const isCompleted = index < currentStage && !isDealFrozen;
+          const isCompleted = index < safeStageIndex;
           const isLastStage = index === DEAL_STAGES.length - 1;
-          const isCurrent = index === currentStage && !isDealFrozen;
+          const isCurrent = index === safeStageIndex;
 
           const showCheck = isCompleted || (isCurrent && isLastStage);
           const showClock = isCurrent && !isLastStage;
@@ -86,6 +107,7 @@ export default function DealProgress({
                   <div className="w-2 h-2 rounded-full bg-gray-500" />
                 )}
               </div>
+
               <div className="ml-4">
                 <p
                   className={`text-sm ${
@@ -99,7 +121,7 @@ export default function DealProgress({
                   {stageLabel}
                 </p>
 
-                {/* Stage-specific interaction */}
+                {/* Agree during Negotiating */}
                 {stageLabel === 'Negotiating Terms' && onAgree && (
                   <button
                     onClick={onAgree}
@@ -109,7 +131,8 @@ export default function DealProgress({
                   </button>
                 )}
 
-                {stageLabel === 'Platform Escrow' && isSender && onSubmitContent && (
+                {/* Legacy support: allow submit at Platform Escrow if your flow shows it there */}
+                {stageLabel === 'Platform Escrow' && isCreator && onSubmitContent && (
                   <div className="mt-1 space-y-1">
                     <input
                       type="text"
@@ -127,31 +150,50 @@ export default function DealProgress({
                   </div>
                 )}
 
-                {stageLabel === 'Content Submitted' && contentLink && (
-                  <>
-                    <a
-                      href={contentLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 text-xs ml-1 underline"
-                    >
-                      View Content
-                    </a>
-                    {isEditable && !isRejected && (
-                      <button
-                        onClick={onEditContentLink}
-                        className="ml-2 text-xs text-yellow-300 underline hover:text-yellow-200"
-                      >
-                        Edit Content Link
-                      </button>
+                {/* Primary flow: submit / resubmit in Content Submitted */}
+                {stageLabel === 'Content Submitted' && (
+                  <div className="mt-1 space-y-1">
+                    {/* Creator can (re)submit when needed */}
+                    {isCreator && onSubmitContent && showResubmit && (
+                      <>
+                        <input
+                          type="text"
+                          placeholder="https://your-content-url.com"
+                          value={contentUrl}
+                          onChange={(e) => setContentUrl(e.target.value)}
+                          className="text-xs p-1 rounded bg-gray-800 text-white w-full"
+                        />
+                        <button
+                          onClick={handleSubmitContent}
+                          className="text-xs text-yellow-300 underline hover:text-yellow-200"
+                        >
+                          {latestIsRework ? 'Resubmit Content' : 'Submit Content'}
+                        </button>
+                      </>
                     )}
-                    {isRejected && rejectionReason && (
+
+                    {/* View link if present */}
+                    {contentLink && (
+                      <a
+                        href={contentLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 text-xs ml-1 underline break-all"
+                      >
+                        View Content
+                      </a>
+                    )}
+
+                    {/* Rework banner (new flow) OR legacy rejection banner */}
+                    {(latestIsRework || isRejected) && rejectionReason && (
                       <div className="text-xs text-red-400 mt-1 flex items-center gap-1">
                         <XCircle className="w-3 h-3" />
                         <span>Rejected: {rejectionReason}</span>
                       </div>
                     )}
-                    {canApprove && !isRejected && (
+
+                    {/* Business controls when pending */}
+                    {canApprove && submissionStatus === 'pending' && (
                       <div className="mt-1 flex gap-2">
                         <button
                           onClick={handleApprove}
@@ -167,19 +209,31 @@ export default function DealProgress({
                         </button>
                       </div>
                     )}
-                  </>
+
+                    {/* Optional edit link (legacy) */}
+                    {isEditable && contentLink && onSubmitContent && (
+                      <button
+                        onClick={() => {
+                          const next = window.prompt('Edit content URL:', contentLink || '')?.trim();
+                          if (!next) return;
+                          if (!isValidHttpUrl(next)) {
+                            alert('Enter a valid URL starting with http:// or https://');
+                            return;
+                          }
+                          onSubmitContent(next);
+                        }}
+                        className="ml-2 text-xs text-yellow-300 underline hover:text-yellow-200"
+                      >
+                        Edit Content Link
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </li>
           );
         })}
       </ol>
-
-      {isDealFrozen && (
-        <p className="text-red-400 text-sm mt-2 font-semibold">
-          This deal has been rejected and cannot proceed.
-        </p>
-      )}
     </div>
   );
 }

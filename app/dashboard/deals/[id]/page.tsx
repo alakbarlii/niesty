@@ -1,13 +1,22 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Loader, MessageSquare } from 'lucide-react';
 import DealProgress from '@/components/DealProgress';
 import DealChat from '@/components/DealChat';
 
+import {
+  fetchLatestSubmission,
+  submitSubmission,
+  approveSubmission,
+  rejectSubmission,
+  type DealSubmission,
+} from '@/lib/supabase/dealSubmissions';
+
 type UserRole = 'creator' | 'business';
+type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 
 interface ProfileLite {
   id: string;
@@ -16,8 +25,6 @@ interface ProfileLite {
   role?: UserRole;
   profile_url?: string | null; // <-- added
 }
-
-type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 
 interface Deal {
   id: string;
@@ -34,7 +41,7 @@ interface Deal {
   creator_agreed_at?: string | null;
   business_agreed_at?: string | null;
 
-  // Submission / approval
+  // Submission / approval (legacy columns kept for compatibility)
   submission_url?: string | null;
   submitted_at?: string | null;
   submission_status?: SubmissionStatus;
@@ -69,6 +76,8 @@ export default function DealDetailPage() {
 
   const [deal, setDeal] = useState<Deal | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [latestSubmission, setLatestSubmission] = useState<DealSubmission | null>(null);
+
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState<boolean>(false);
@@ -84,12 +93,9 @@ export default function DealDetailPage() {
       setLoading(true);
       setError(null);
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (!user || userError) {
+      const { data: auth } = await supabase.auth.getUser();
+      const user = auth.user;
+      if (!user) {
         setError('User not found.');
         setLoading(false);
         return;
@@ -131,6 +137,11 @@ export default function DealDetailPage() {
       };
 
       setDeal(normalized);
+
+      // Load latest submission from deal_submissions
+      const sub = await fetchLatestSubmission(data.id);
+      setLatestSubmission(sub);
+
       setDraftAmount(Number(data.deal_value ?? 0));
       setDraftTerms(data.agreement_terms ?? '');
       setLoading(false);
@@ -146,16 +157,15 @@ export default function DealDetailPage() {
   const isBusiness = myProfile?.role === 'business';
   const otherUser = isSender ? deal?.receiver_info : deal?.sender_info;
 
-  const currentStageIndexRaw = useMemo(() => {
-    if (!deal) return -1;
+  const currentStageIndex = useMemo(() => {
+    if (!deal) return 0;
     const idx = DEAL_STAGES.indexOf(deal.deal_stage as (typeof DEAL_STAGES)[number]);
-    return idx >= 0 ? idx : -1;
+    return idx >= 0 ? idx : 0;
   }, [deal]);
 
-  const currentStageIndex = currentStageIndexRaw < 0 ? 0 : currentStageIndexRaw;
   const bothAgreed = !!deal?.creator_agreed_at && !!deal?.business_agreed_at;
 
-  const displayAmount = (() => {
+  const displayAmount = useMemo(() => {
     if (!deal) return '';
     if (deal.deal_stage === 'Negotiating Terms' && (!deal.deal_value || deal.deal_value <= 0)) {
       return 'Negotiate';
@@ -164,13 +174,17 @@ export default function DealDetailPage() {
       return `$${Math.round(deal.deal_value).toLocaleString()} USD`;
     }
     return '—';
-  })();
+  }, [deal]);
 
   const refreshDeal = async (id: string) => {
-    const { data } = await supabase.from('deals').select('*').eq('id', id).maybeSingle();
-    if (data) {
-      setDeal((prev) => (prev ? { ...prev, ...data } : (data as Deal)));
+    const [{ data: d }, sub] = await Promise.all([
+      supabase.from('deals').select('*').eq('id', id).maybeSingle(),
+      fetchLatestSubmission(id),
+    ]);
+    if (d) {
+      setDeal((prev) => (prev ? { ...prev, ...d } : (d as Deal)));
     }
+    setLatestSubmission(sub);
   };
 
   const nowISO = () => new Date().toISOString();
@@ -185,13 +199,19 @@ export default function DealDetailPage() {
         status: 'accepted',
       })
       .eq('id', deal.id);
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
     await refreshDeal(deal.id);
   };
 
   const handleSaveAgreementDraft = async () => {
     if (!deal) return;
-    if (!draftAmount || draftAmount <= 0) return alert('Enter a valid amount.');
+    if (!draftAmount || draftAmount <= 0) {
+      alert('Enter a valid amount.');
+      return;
+    }
 
     const { error } = await supabase
       .from('deals')
@@ -201,7 +221,10 @@ export default function DealDetailPage() {
       })
       .eq('id', deal.id);
 
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
     setDeal((prev) => (prev ? { ...prev, agreement_terms: draftTerms, deal_value: draftAmount } : prev));
     alert('Draft saved.');
   };
@@ -211,12 +234,11 @@ export default function DealDetailPage() {
     const myRole = myProfile?.role;
     const col = myRole === 'creator' ? 'creator_agreed_at' : 'business_agreed_at';
 
-    const { error } = await supabase
-      .from('deals')
-      .update({ [col]: nowISO() })
-      .eq('id', deal.id);
-
-    if (error) return alert(error.message);
+    const { error } = await supabase.from('deals').update({ [col]: nowISO() }).eq('id', deal.id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
     const { data: refreshed } = await supabase
       .from('deals')
@@ -240,58 +262,39 @@ export default function DealDetailPage() {
     );
   };
 
+  /* ===================== SUBMISSION FLOW (deal_submissions) ===================== */
+
   // CREATOR-ONLY submit content
   const handleSubmitContent = async (url: string) => {
-    if (!deal || !isCreator) return;
-
-    const { error } = await supabase
-      .from('deals')
-      .update({
-        submission_url: url,
-        submitted_at: nowISO(),
-        submission_status: 'pending' as SubmissionStatus,
-        deal_stage: 'Content Submitted',
-        rejection_reason: null,
-      })
-      .eq('id', deal.id);
-
-    if (error) return alert('Failed to submit content.');
-    await refreshDeal(deal.id);
+    if (!deal || !isCreator || !userId) return;
+    try {
+      await submitSubmission(deal.id, url, userId);
+      await refreshDeal(deal.id);
+    } catch {
+      alert('Failed to submit content.');
+    }
   };
 
   // BUSINESS-ONLY reject
   const handleRejectContent = async (reason: string) => {
-    if (!deal || !isBusiness) return;
-
-    const { error } = await supabase
-      .from('deals')
-      .update({
-        submission_status: 'rework' as SubmissionStatus,
-        rejection_reason: reason,
-        deal_stage: 'Platform Escrow',
-        submission_url: null,
-      })
-      .eq('id', deal.id);
-
-    if (error) return alert('Failed to reject content.');
-    await refreshDeal(deal.id);
+    if (!deal || !isBusiness || !latestSubmission) return;
+    try {
+      await rejectSubmission(latestSubmission.id, deal.id, reason);
+      await refreshDeal(deal.id);
+    } catch {
+      alert('Failed to reject content.');
+    }
   };
 
   // BUSINESS-ONLY approve
   const handleApproval = async () => {
-    if (!deal || !isBusiness) return;
-
-    const { error } = await supabase
-      .from('deals')
-      .update({
-        approved_at: nowISO(),
-        deal_stage: 'Approved',
-        submission_status: 'approved' as SubmissionStatus,
-      })
-      .eq('id', deal.id);
-
-    if (error) return alert('Failed to approve content.');
-    await refreshDeal(deal.id);
+    if (!deal || !isBusiness || !latestSubmission) return;
+    try {
+      await approveSubmission(latestSubmission.id, deal.id);
+      await refreshDeal(deal.id);
+    } catch {
+      alert('Failed to approve content.');
+    }
   };
 
   // ========= Render =========
@@ -310,6 +313,11 @@ export default function DealDetailPage() {
     (otherUser?.username
       ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(otherUser.username)}`
       : null);
+
+  // Submission-driven UI values
+  const submissionUrl = latestSubmission?.url ?? undefined;
+  const submissionStatus: SubmissionStatus = (latestSubmission?.status as SubmissionStatus) ?? null;
+  const rejectionReason = latestSubmission?.rejection_reason ?? null;
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto relative">
@@ -346,7 +354,7 @@ export default function DealDetailPage() {
             </p>
 
             {!deal.accepted_at && deal.deal_stage === 'Waiting for Response' && !isSender && (
-              <div className="mb-4 p-3 sm:p-4 rounded-xl border border-white/10 bg-black/30 text-white">
+              <div className="mb-4 p-3 sm:p-4 rounded-2xl border border-white/10 bg-black/30 text-white">
                 <p className="font-semibold mb-2 text-sm sm:text-base">Accept the offer to start negotiating terms</p>
                 <button
                   onClick={handleAcceptOffer}
@@ -359,16 +367,23 @@ export default function DealDetailPage() {
 
             <DealProgress
               currentStage={currentStageIndex}
-              contentLink={deal.submission_url || undefined}
-              isEditable={!!isCreator && deal.deal_stage === 'Platform Escrow'}
-              isRejected={!!deal.rejection_reason}
-              rejectionReason={deal.rejection_reason || undefined}
-              onApprove={!!isBusiness && !deal.approved_at ? handleApproval : undefined}
-              onReject={!!isBusiness && !deal.approved_at ? handleRejectContent : undefined}
+              contentLink={submissionUrl}
+              isEditable={false}
+              isRejected={submissionStatus === 'rework'}
+              rejectionReason={rejectionReason}
+              onApprove={isBusiness && submissionStatus === 'pending' ? handleApproval : undefined}
+              onReject={isBusiness && submissionStatus === 'pending' ? handleRejectContent : undefined}
               onAgree={deal.deal_stage === 'Negotiating Terms' ? handleConfirmAgreement : undefined}
-              onSubmitContent={!!isCreator && deal.deal_stage === 'Platform Escrow' ? handleSubmitContent : undefined}
-              canApprove={!!isBusiness && !deal.approved_at}
+              onSubmitContent={
+                isCreator &&
+                (deal.deal_stage === 'Platform Escrow' || deal.deal_stage === 'Content Submitted')
+                  ? handleSubmitContent
+                  : undefined
+              }
+              canApprove={isBusiness && submissionStatus === 'pending'}
+              isCreator={!!isCreator}
               isSender={!!isSender}
+              submissionStatus={submissionStatus}
             />
           </div>
         </div>
@@ -390,17 +405,14 @@ export default function DealDetailPage() {
                   <input
                     type="number"
                     min={1}
-                    step="1"
+                    step={1}
                     value={Number.isFinite(draftAmount) ? draftAmount : 0}
                     onChange={(e) => setDraftAmount(Number(e.target.value))}
                     className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
                     placeholder="Enter agreed amount"
                   />
                 </div>
-                <button
-                  className="px-3 py-2 bg-gray-700 rounded text-sm"
-                  onClick={handleSaveAgreementDraft}
-                >
+                <button className="px-3 py-2 bg-gray-700 rounded text-sm" onClick={handleSaveAgreementDraft}>
                   Save Draft
                 </button>
               </div>
@@ -415,15 +427,10 @@ export default function DealDetailPage() {
               />
 
               <div className="flex items-center gap-2 mt-3">
-                <button
-                  className="px-4 py-2 bg-emerald-600 rounded text-white text-sm sm:text-base"
-                  onClick={handleConfirmAgreement}
-                >
+                <button className="px-4 py-2 bg-emerald-600 rounded text-white text-sm sm:text-base" onClick={handleConfirmAgreement}>
                   Confirm Agreement
                 </button>
-                <p className="text-xs text-gray-400">
-                  When both sides confirm, the deal moves to escrow.
-                </p>
+                <p className="text-xs text-gray-400">When both sides confirm, the deal moves to escrow.</p>
               </div>
 
               <div className="mt-2 text-[11px] sm:text-xs text-gray-400">

@@ -11,12 +11,11 @@ export type DealSubmission = {
   url: string;
   status: SubmissionStatus;
   rejection_reason: string | null;
-  // Do NOT rely on timestamp columns (schema varies)
 };
 
-/** Single safe ordering (no schema probing -> no 400s) */
 const ORDER_COLUMN = 'id' as const;
 
+/** Latest submission for a deal (safe ordering). */
 export async function fetchLatestSubmission(dealId: string): Promise<DealSubmission | null> {
   const { data, error } = await supabase
     .from('deal_submissions')
@@ -30,48 +29,54 @@ export async function fetchLatestSubmission(dealId: string): Promise<DealSubmiss
   return (data as DealSubmission) ?? null;
 }
 
-export async function submitSubmission(dealId: string, url: string, userId: string): Promise<void> {
-  const { error: insErr } = await supabase
-    .from('deal_submissions')
-    .insert([{ deal_id: dealId, submitted_by: userId, url, status: 'pending' }]);
-  if (insErr) throw insErr;
+/**
+ * Create/Resubmit via SECURITY DEFINER RPC.
+ * `_userId` kept for call-site compatibility; server uses auth.uid().
+ */
+export async function submitSubmission(
+  dealId: string,
+  url: string,
+  _userId: string
+): Promise<void> {
+  // mark as used to satisfy eslint no-unused-vars
+  void _userId;
 
-  const { error: stageErr } = await supabase
-    .from('deals')
-    .update({ deal_stage: 'Content Submitted' })
-    .eq('id', dealId);
-  if (stageErr) throw stageErr;
+  const { error } = await supabase.rpc('submit_deal_content', {
+    p_deal_id: dealId,
+    p_url: url,
+  });
+  if (error) throw error;
 }
 
-export async function approveSubmission(submissionId: string, dealId: string): Promise<void> {
-  const { error: updErr } = await supabase
-    .from('deal_submissions')
-    .update({ status: 'approved', rejection_reason: null })
-    .eq('id', submissionId);
-  if (updErr) throw updErr;
+/** Approve via SECURITY DEFINER RPC. `_dealId` kept for compatibility. */
+export async function approveSubmission(
+  submissionId: string,
+  _dealId: string
+): Promise<void> {
+  void _dealId;
 
-  const { error: stageErr } = await supabase
-    .from('deals')
-    .update({ deal_stage: 'Approved', approved_at: new Date().toISOString() })
-    .eq('id', dealId);
-  if (stageErr) throw stageErr;
+  const { error } = await supabase.rpc('approve_deal_submission', {
+    p_submission_id: submissionId,
+  });
+  if (error) throw error;
 }
 
-export async function rejectSubmission(submissionId: string, dealId: string, reason: string): Promise<void> {
-  const { error: updErr } = await supabase
-    .from('deal_submissions')
-    .update({ status: 'rework', rejection_reason: reason })
-    .eq('id', submissionId);
-  if (updErr) throw updErr;
+/** Reject via SECURITY DEFINER RPC. `_dealId` kept for compatibility. */
+export async function rejectSubmission(
+  submissionId: string,
+  _dealId: string,
+  reason: string
+): Promise<void> {
+  void _dealId;
 
-  const { error: stageErr } = await supabase
-    .from('deals')
-    .update({ deal_stage: 'Platform Escrow' })
-    .eq('id', dealId);
-  if (stageErr) throw stageErr;
+  const { error } = await supabase.rpc('reject_deal_submission', {
+    p_submission_id: submissionId,
+    p_reason: reason,
+  });
+  if (error) throw error;
 }
 
-/* Optional: list/count helpers with the same safe ordering */
+/* ---------- Optional read-only helpers ---------- */
 
 export async function listSubmissionsByUser(userId: string, limit = 20): Promise<DealSubmission[]> {
   const { data, error } = await supabase

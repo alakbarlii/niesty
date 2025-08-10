@@ -9,12 +9,29 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 let _client: SupabaseClient | null = null;
 
-// Derive the exact auth options type without using `any`
+// Type-safe auth options (no `any`)
 type AuthOptions = NonNullable<SupabaseClientOptions<unknown>['auth']>;
+
+/**
+ * Stable per-tab id:
+ * - Stored in sessionStorage (tab-scoped)
+ * - Used to create a unique localStorage key per tab
+ *   => different tabs don't overwrite each other
+ *   => sessions survive refresh in the same tab
+ */
+function getTabId(): string {
+  if (typeof window === 'undefined') return 'ssr';
+  const KEY = 'niesty_tab_id';
+  let id = window.sessionStorage.getItem(KEY);
+  if (!id) {
+    id = `${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+    window.sessionStorage.setItem(KEY, id);
+  }
+  return id;
+}
 
 function makeClient(): SupabaseClient {
   const isBrowser = typeof window !== 'undefined';
-  const isDev = process.env.NODE_ENV !== 'production';
 
   const auth: AuthOptions = {
     persistSession: true,
@@ -22,10 +39,11 @@ function makeClient(): SupabaseClient {
     detectSessionInUrl: true,
   };
 
-  // Isolate tabs in dev; persist across tabs in prod
   if (isBrowser) {
-    auth.storage = isDev ? window.sessionStorage : window.localStorage;
-    auth.storageKey = isDev ? 'supabase.dev.session' : 'supabase.niesty.session';
+    // Use localStorage for persistence, but isolate by tab via unique storageKey
+    const tabId = getTabId();
+    auth.storage = window.localStorage;
+    auth.storageKey = `supabase.session.${tabId}`;
   }
 
   return createClient(supabaseUrl, supabaseAnonKey, { auth });
@@ -38,7 +56,7 @@ export const supabase: SupabaseClient = (() => {
   return _client;
 })();
 
-/** Back-compat: always return the singleton with the same options */
+/** Back-compat: always return the singleton */
 export function createBrowserClient(): SupabaseClient {
   return supabase;
 }

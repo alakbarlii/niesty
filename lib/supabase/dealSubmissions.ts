@@ -8,86 +8,163 @@ export type DealSubmission = {
   id: string;
   deal_id: string;
   submitted_by: string;
-  url: string;
+  url: string;                 // normalized in code (from submission_link or url)
   status: SubmissionStatus;
   rejection_reason: string | null;
 };
 
 const ORDER_COLUMN = 'id' as const;
 
-/** Latest submission for a deal (safe ordering). */
+type RowSubmissionLink = {
+  id: string;
+  deal_id: string;
+  submitted_by: string;
+  submission_link: string;
+  status: SubmissionStatus;
+  rejection_reason: string | null;
+};
+
+type RowUrl = {
+  id: string;
+  deal_id: string;
+  submitted_by: string;
+  url: string;
+  status: SubmissionStatus;
+  rejection_reason: string | null;
+};
+
+/** PostgREST undefined_column guard (code 42703). */
+function isUndefinedColumn(err: unknown): err is { code: '42703' } {
+  return typeof err === 'object' && err !== null && 'code' in err && (err as { code?: unknown }).code === '42703';
+}
+
+/** Normalize a DB row (either schema) into DealSubmission. */
+function normalizeRow(row: RowSubmissionLink | RowUrl | null): DealSubmission | null {
+  if (!row) return null;
+  // @ts-expect-error: conditional access across union types for convenience
+  const urlValue: string | undefined = row.submission_link ?? row.url;
+  return {
+    id: row.id,
+    deal_id: row.deal_id,
+    submitted_by: row.submitted_by,
+    url: urlValue ?? '',
+    status: row.status,
+    rejection_reason: row.rejection_reason,
+  };
+}
+
+/** Fetch latest submission, supporting both `submission_link` and `url` schemas. */
 export async function fetchLatestSubmission(dealId: string): Promise<DealSubmission | null> {
-  const { data, error } = await supabase
+  // Try submission_link first
+  try {
+    const { data, error } = await supabase
+      .from('deal_submissions')
+      .select('id, deal_id, submitted_by, submission_link, status, rejection_reason')
+      .eq('deal_id', dealId)
+      .order(ORDER_COLUMN, { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return normalizeRow(data as RowSubmissionLink | null);
+  } catch (e) {
+    // Fallback to url column if submission_link doesn't exist
+    if (!isUndefinedColumn(e)) throw e;
+
+    const { data, error } = await supabase
+      .from('deal_submissions')
+      .select('id, deal_id, submitted_by, url, status, rejection_reason')
+      .eq('deal_id', dealId)
+      .order(ORDER_COLUMN, { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return normalizeRow(data as RowUrl | null);
+  }
+}
+
+/** Insert a new submission (tries submission_link, falls back to url). Also moves deal to Content Submitted. */
+export async function submitSubmission(dealId: string, url: string, userId: string): Promise<void> {
+  // Try with submission_link
+  try {
+    const { error: insErr } = await supabase
+      .from('deal_submissions')
+      .insert([{ deal_id: dealId, submitted_by: userId, submission_link: url, status: 'pending' }]);
+
+    if (insErr) throw insErr;
+  } catch (e) {
+    if (!isUndefinedColumn(e)) throw e;
+
+    // Fallback: use url column
+    const { error: insErr2 } = await supabase
+      .from('deal_submissions')
+      .insert([{ deal_id: dealId, submitted_by: userId, url, status: 'pending' }]);
+
+    if (insErr2) throw insErr2;
+  }
+
+  // Stage update
+  const { error: stageErr } = await supabase.from('deals').update({ deal_stage: 'Content Submitted' }).eq('id', dealId);
+  if (stageErr) throw stageErr;
+}
+
+/** Approve latest submission and move deal to Approved. */
+export async function approveSubmission(submissionId: string, dealId: string): Promise<void> {
+  const { error: updErr } = await supabase
     .from('deal_submissions')
-    .select('*')
-    .eq('deal_id', dealId)
-    .order(ORDER_COLUMN, { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .update({ status: 'approved', rejection_reason: null })
+    .eq('id', submissionId);
+  if (updErr) throw updErr;
 
-  if (error) throw error;
-  return (data as DealSubmission) ?? null;
+  const { error: stageErr } = await supabase
+    .from('deals')
+    .update({ deal_stage: 'Approved', approved_at: new Date().toISOString() })
+    .eq('id', dealId);
+  if (stageErr) throw stageErr;
 }
 
-/**
- * Create/Resubmit via SECURITY DEFINER RPC.
- * `_userId` kept for call-site compatibility; server uses auth.uid().
- */
-export async function submitSubmission(
-  dealId: string,
-  url: string,
-  _userId: string
-): Promise<void> {
-  // mark as used to satisfy eslint no-unused-vars
-  void _userId;
+/** Reject latest submission and bounce deal back to Platform Escrow. */
+export async function rejectSubmission(submissionId: string, dealId: string, reason: string): Promise<void> {
+  const { error: updErr } = await supabase
+    .from('deal_submissions')
+    .update({ status: 'rework', rejection_reason: reason })
+    .eq('id', submissionId);
+  if (updErr) throw updErr;
 
-  const { error } = await supabase.rpc('submit_deal_content', {
-    p_deal_id: dealId,
-    p_url: url,
-  });
-  if (error) throw error;
+  const { error: stageErr } = await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', dealId);
+  if (stageErr) throw stageErr;
 }
 
-/** Approve via SECURITY DEFINER RPC. `_dealId` kept for compatibility. */
-export async function approveSubmission(
-  submissionId: string,
-  _dealId: string
-): Promise<void> {
-  void _dealId;
-
-  const { error } = await supabase.rpc('approve_deal_submission', {
-    p_submission_id: submissionId,
-  });
-  if (error) throw error;
-}
-
-/** Reject via SECURITY DEFINER RPC. `_dealId` kept for compatibility. */
-export async function rejectSubmission(
-  submissionId: string,
-  _dealId: string,
-  reason: string
-): Promise<void> {
-  void _dealId;
-
-  const { error } = await supabase.rpc('reject_deal_submission', {
-    p_submission_id: submissionId,
-    p_reason: reason,
-  });
-  if (error) throw error;
-}
-
-/* ---------- Optional read-only helpers ---------- */
+/* Optional helpers (left intact, safe on both schemas) */
 
 export async function listSubmissionsByUser(userId: string, limit = 20): Promise<DealSubmission[]> {
-  const { data, error } = await supabase
-    .from('deal_submissions')
-    .select('*')
-    .eq('submitted_by', userId)
-    .order(ORDER_COLUMN, { ascending: false })
-    .limit(limit);
+  // Try submission_link first
+  try {
+    const { data, error } = await supabase
+      .from('deal_submissions')
+      .select('id, deal_id, submitted_by, submission_link, status, rejection_reason')
+      .eq('submitted_by', userId)
+      .order(ORDER_COLUMN, { ascending: false })
+      .limit(limit);
 
-  if (error) throw error;
-  return (data as DealSubmission[]) ?? [];
+    if (error) throw error;
+    const rows = (data as RowSubmissionLink[]) || [];
+    return rows.map((r) => normalizeRow(r)!) as DealSubmission[];
+  } catch (e) {
+    if (!isUndefinedColumn(e)) throw e;
+
+    const { data, error } = await supabase
+      .from('deal_submissions')
+      .select('id, deal_id, submitted_by, url, status, rejection_reason')
+      .eq('submitted_by', userId)
+      .order(ORDER_COLUMN, { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    const rows = (data as RowUrl[]) || [];
+    return rows.map((r) => normalizeRow(r)!) as DealSubmission[];
+  }
 }
 
 export async function countSubmissionsByUser(userId: string): Promise<number> {

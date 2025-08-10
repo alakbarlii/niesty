@@ -8,13 +8,15 @@ export type DealSubmission = {
   id: string;
   deal_id: string;
   submitted_by: string;
-  url: string;                 // normalized in code (from submission_link or url)
+  // normalized across schemas: use .url always in code
+  url: string;
   status: SubmissionStatus;
   rejection_reason: string | null;
 };
 
 const ORDER_COLUMN = 'id' as const;
 
+/** Two shape variants your table might have */
 type RowSubmissionLink = {
   id: string;
   deal_id: string;
@@ -35,13 +37,18 @@ type RowUrl = {
 
 /** PostgREST undefined_column guard (code 42703). */
 function isUndefinedColumn(err: unknown): err is { code: '42703' } {
-  return typeof err === 'object' && err !== null && 'code' in err && (err as { code?: unknown }).code === '42703';
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: unknown }).code === '42703'
+  );
 }
 
-/** Normalize a DB row (either schema) into DealSubmission. */
+/** Normalize either schema to DealSubmission (always returns .url). */
 function normalizeRow(row: RowSubmissionLink | RowUrl | null): DealSubmission | null {
   if (!row) return null;
-  // @ts-expect-error: conditional access across union types for convenience
+  // @ts-expect-error union convenience: one of the props will exist
   const urlValue: string | undefined = row.submission_link ?? row.url;
   return {
     id: row.id,
@@ -84,14 +91,13 @@ export async function fetchLatestSubmission(dealId: string): Promise<DealSubmiss
   }
 }
 
-/** Insert a new submission (tries submission_link, falls back to url). Also moves deal to Content Submitted. */
+/** Insert a new submission and move deal to Content Submitted. */
 export async function submitSubmission(dealId: string, url: string, userId: string): Promise<void> {
   // Try with submission_link
   try {
     const { error: insErr } = await supabase
       .from('deal_submissions')
       .insert([{ deal_id: dealId, submitted_by: userId, submission_link: url, status: 'pending' }]);
-
     if (insErr) throw insErr;
   } catch (e) {
     if (!isUndefinedColumn(e)) throw e;
@@ -100,16 +106,18 @@ export async function submitSubmission(dealId: string, url: string, userId: stri
     const { error: insErr2 } = await supabase
       .from('deal_submissions')
       .insert([{ deal_id: dealId, submitted_by: userId, url, status: 'pending' }]);
-
     if (insErr2) throw insErr2;
   }
 
-  // Stage update
-  const { error: stageErr } = await supabase.from('deals').update({ deal_stage: 'Content Submitted' }).eq('id', dealId);
+  // Stage update -> Content Submitted
+  const { error: stageErr } = await supabase
+    .from('deals')
+    .update({ deal_stage: 'Content Submitted' })
+    .eq('id', dealId);
   if (stageErr) throw stageErr;
 }
 
-/** Approve latest submission and move deal to Approved. */
+/** Approve submission and move deal to Approved. */
 export async function approveSubmission(submissionId: string, dealId: string): Promise<void> {
   const { error: updErr } = await supabase
     .from('deal_submissions')
@@ -124,7 +132,11 @@ export async function approveSubmission(submissionId: string, dealId: string): P
   if (stageErr) throw stageErr;
 }
 
-/** Reject latest submission and bounce deal back to Platform Escrow. */
+/**
+ * Reject submission:
+ * - mark this submission as "rework"
+ * - move the deal back to "Content Submitted" (so timeline shows the pending state again)
+ */
 export async function rejectSubmission(submissionId: string, dealId: string, reason: string): Promise<void> {
   const { error: updErr } = await supabase
     .from('deal_submissions')
@@ -132,11 +144,14 @@ export async function rejectSubmission(submissionId: string, dealId: string, rea
     .eq('id', submissionId);
   if (updErr) throw updErr;
 
-  const { error: stageErr } = await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', dealId);
+  const { error: stageErr } = await supabase
+    .from('deals')
+    .update({ deal_stage: 'Content Submitted' })
+    .eq('id', dealId);
   if (stageErr) throw stageErr;
 }
 
-/* Optional helpers (left intact, safe on both schemas) */
+/* Optional helpers (work on both schemas) */
 
 export async function listSubmissionsByUser(userId: string, limit = 20): Promise<DealSubmission[]> {
   // Try submission_link first

@@ -23,7 +23,7 @@ interface ProfileLite {
   full_name: string;
   username: string;
   role?: UserRole;
-  profile_url?: string | null;
+  profile_url?: string | null; // <-- added
 }
 
 interface Deal {
@@ -175,11 +175,32 @@ export default function DealDetailPage() {
   const isBusiness = myProfile?.role === 'business';
   const otherUser = isSender ? deal?.receiver_info : deal?.sender_info;
 
+  // Submission-driven UI values
+  const submissionUrl = latestSubmission?.url ?? undefined;
+  const submissionStatus: SubmissionStatus = (latestSubmission?.status as SubmissionStatus) ?? null;
+  const rejectionReason = latestSubmission?.rejection_reason ?? null;
+
+  // Stage display rules:
+  // - pending submission: "Content Submitted" is done, "Approved" is current (clock)
+  // - rework: "Content Submitted" is current (clock)
+  // - approved: "Approved" is done
   const currentStageIndex = useMemo(() => {
     if (!deal) return 0;
+
+    if (submissionStatus === 'pending') {
+      return DEAL_STAGES.indexOf('Approved'); // clock will appear here
+    }
+    if (submissionStatus === 'rework') {
+      return DEAL_STAGES.indexOf('Content Submitted'); // clock here until resubmitted
+    }
+    if (submissionStatus === 'approved') {
+      return DEAL_STAGES.indexOf('Approved'); // checked
+    }
+
+    // Fallback to deal's stage when no submission status is present
     const idx = DEAL_STAGES.indexOf(deal.deal_stage as (typeof DEAL_STAGES)[number]);
     return idx >= 0 ? idx : 0;
-  }, [deal]);
+  }, [deal, submissionStatus]);
 
   const bothAgreed = !!deal?.creator_agreed_at && !!deal?.business_agreed_at;
 
@@ -341,11 +362,6 @@ export default function DealDetailPage() {
       ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(otherUser.username)}`
       : null);
 
-  // Submission-driven UI values
-  const submissionUrl = latestSubmission?.url ?? undefined;
-  const submissionStatus: SubmissionStatus = (latestSubmission?.status as SubmissionStatus) ?? null;
-  const rejectionReason = latestSubmission?.rejection_reason ?? null;
-
   // Big-section helpers
   const isValidHttpUrl = (url: string): boolean => /^https?:\/\/\S+/i.test(url);
   const latestIsRework = submissionStatus === 'rework';
@@ -408,12 +424,13 @@ export default function DealDetailPage() {
               isEditable={false}
               isRejected={submissionStatus === 'rework'}
               rejectionReason={rejectionReason}
-              onApprove={isBusiness && submissionStatus === 'pending' ? handleApproval : undefined}
-              onReject={isBusiness && submissionStatus === 'pending' ? handleRejectContent : undefined}
+              // NOTE: removed approve/reject controls from timeline
+              onApprove={undefined}
+              onReject={undefined}
               onAgree={deal.deal_stage === 'Negotiating Terms' ? handleConfirmAgreement : undefined}
               // IMPORTANT: no inline submission inputs in the timeline
               onSubmitContent={undefined}
-              canApprove={isBusiness && submissionStatus === 'pending'}
+              canApprove={false}
               isCreator={!!isCreator}
               isSender={!!isSender}
               submissionStatus={submissionStatus}
@@ -597,7 +614,7 @@ export default function DealDetailPage() {
             </div>
             <p className="text-xs text-white/50 mt-2">
               Approval will move the deal to <span className="font-semibold">Approved</span>. Rejection sends it back to{' '}
-              <span className="font-semibold">Platform Escrow</span> with your reason.
+              <span className="font-semibold">Content Submitted</span> with your reason.
             </p>
           </div>
         )}

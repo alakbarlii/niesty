@@ -15,46 +15,59 @@ export const DEAL_STAGES = [
 type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 
 export interface DealProgressProps {
+  /** Zero-based index of the current stage in DEAL_STAGES */
   currentStage: number;
+  /** Latest submitted content link (if any) */
   contentLink?: string;
-  isEditable?: boolean;                 // kept for compatibility
+  /** Compatibility flags (not rendered in this component) */
+  isEditable?: boolean;
   isRejected?: boolean;
   rejectionReason?: string | null;
-  onApprove?: () => void;               // kept for compatibility (not rendered here)
-  onReject?: (reason: string) => void;  // kept for compatibility (not rendered here)
+  onApprove?: () => void;
+  onReject?: (reason: string) => void;
+  /** No agreement button here — kept only to satisfy callers */
   onAgree?: () => void;
+  /** Creator submission handler (optional) */
   onSubmitContent?: (url: string) => void;
-  canApprove?: boolean;                 // kept for compatibility (not rendered here)
-  /** Are *you* the creator participant on this deal? */
+  canApprove?: boolean;
+
+  /** Are you the creator? Enables submit/resubmit input at Content Submitted stage */
   isCreator?: boolean;
   /** Kept for compatibility with callers; not used here */
   isSender?: boolean;
-  /** Status of the latest submission from deal_submissions */
+
+  /**
+   * Status of the latest submission.
+   * Used to render:
+   *  - rework banner
+   *  - ⏳ at Content Submitted when rework/pending
+   *  - ⏳ at Payment Released while payout is in-flight
+   */
   submissionStatus?: SubmissionStatus;
 }
 
 export default function DealProgress({
   currentStage,
   contentLink,
-  isEditable: _isEditable = false, // alias + neutralize to satisfy eslint
+  isEditable: _isEditable = false,
   isRejected = false,
   rejectionReason = null,
-  onApprove: _onApprove,            // neutralized (not rendered here)
-  onReject: _onReject,              // neutralized (not rendered here)
-  onAgree,
+  onApprove: _onApprove,
+  onReject: _onReject,
+  onAgree: _onAgree, // intentionally unused here
   onSubmitContent,
-  canApprove: _canApprove,          // neutralized (not rendered here)
+  canApprove: _canApprove,
   isCreator = false,
-  // keep prop for callers; alias to avoid unused-var lint
   isSender: _isSender = false,
   submissionStatus = null,
 }: DealProgressProps) {
-  // mark intentionally-unused props as used to satisfy no-unused-vars
+  // neutralize unused props to satisfy TS/ESLint
   void _isEditable;
   void _onApprove;
   void _onReject;
   void _canApprove;
   void _isSender;
+  void _onAgree;
 
   const [contentUrl, setContentUrl] = useState<string>('');
 
@@ -67,10 +80,8 @@ export default function DealProgress({
       alert('Enter a valid URL starting with http:// or https://');
       return;
     }
-    if (window.confirm('Submit this URL?')) onSubmitContent(url);
+    onSubmitContent(url);
   };
-
-  const handleSubmitContent = (): void => submitIfValid();
 
   const onUrlKeyDown: KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter') {
@@ -97,12 +108,8 @@ export default function DealProgress({
           const isLastStage = index === DEAL_STAGES.length - 1;
           const isCurrent = index === safeStageIndex;
 
-          // NEW: allow last stage to be "pending" (⏳) instead of forced ✅.
-          // Condition: after approval but before payout we want:
-          //  - "Approved" ✅
-          //  - "Payment Released" ⏳
-          const lastStagePending =
-            isCurrent && isLastStage && submissionStatus === 'approved';
+          // Drive last-stage pending clock if submission was approved but payout not yet confirmed.
+          const lastStagePending = isCurrent && isLastStage && submissionStatus === 'approved';
 
           // Decide which indicator to show
           let showCheck = false;
@@ -110,15 +117,12 @@ export default function DealProgress({
 
           if (isCurrent) {
             if (isLastStage) {
-              // If it's the last stage and still pending payout, show ⏳; otherwise ✅
               showClock = lastStagePending;
               showCheck = !lastStagePending;
             } else {
-              // Any middle stage that is current is pending
               showClock = true;
             }
           } else if (isCompleted) {
-            // All stages before current are completed
             showCheck = true;
           }
 
@@ -147,20 +151,9 @@ export default function DealProgress({
                   {stageLabel}
                 </p>
 
-                {/* Agree during Negotiating */}
-                {stageLabel === 'Negotiating Terms' && onAgree && (
-                  <button
-                    onClick={onAgree}
-                    className="text-xs mt-1 text-yellow-300 underline hover:text-yellow-200"
-                  >
-                    I Agree to Terms
-                  </button>
-                )}
-
-                {/* Primary flow: submit / resubmit in Content Submitted (input only; no view/approve/reject here) */}
+                {/* Content Submitted — allow (re)submit for creators only */}
                 {stageLabel === 'Content Submitted' && (
                   <div className="mt-1 space-y-1">
-                    {/* Creator can (re)submit when needed */}
                     {isCreator && onSubmitContent && showResubmit && (
                       <>
                         <input
@@ -175,7 +168,7 @@ export default function DealProgress({
                           aria-label="Content URL"
                         />
                         <button
-                          onClick={handleSubmitContent}
+                          onClick={submitIfValid}
                           className="text-xs text-yellow-300 underline hover:text-yellow-200"
                         >
                           {latestIsRework ? 'Resubmit Content' : 'Submit Content'}
@@ -183,7 +176,6 @@ export default function DealProgress({
                       </>
                     )}
 
-                    {/* Rework banner */}
                     {(latestIsRework || isRejected) && rejectionReason && (
                       <div className="text-xs text-red-400 mt-1 flex items-center gap-1">
                         <XCircle className="w-3 h-3" />

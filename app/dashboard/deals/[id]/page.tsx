@@ -1,4 +1,4 @@
- 'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -15,6 +15,10 @@ import {
   type DealSubmission,
 } from '@/lib/supabase/dealSubmissions';
 
+// NEW: matcher imports
+import AgreementMatchCard from '@/components/AgreementMatchCard';
+import { fetchLatestPair, proposalsMatch } from '@/lib/supabase/terms';
+
 type UserRole = 'creator' | 'business';
 type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 
@@ -26,41 +30,6 @@ interface ProfileLite {
   profile_url?: string | null;
 }
 
-interface Deal {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  message: string;
-  deal_stage: (typeof DEAL_STAGES)[number] | string;
-  created_at: string;
-
-  // Agreement
-  accepted_at?: string | null;
-  agreement_terms?: string | null;
-  deal_value?: number | null;
-  creator_agreed_at?: string | null;
-  business_agreed_at?: string | null;
-
-  // Submission / approval (legacy columns kept for compatibility)
-  submission_url?: string | null;
-  submitted_at?: string | null;
-  submission_status?: SubmissionStatus;
-  rejection_reason?: string | null;
-
-  approved_at?: string | null;
-  payout_requested_at?: string | null;
-  payout_status?: 'requested' | 'paid' | null;
-  payment_released_at?: string | null;
-
-  // UI helpers
-  sender_info?: ProfileLite;
-  receiver_info?: ProfileLite;
-
-  // legacy flags
-  approved_by_sender?: boolean;
-  approved_by_receiver?: boolean;
-}
-
 const DEAL_STAGES = [
   'Waiting for Response',
   'Negotiating Terms',
@@ -70,13 +39,70 @@ const DEAL_STAGES = [
   'Payment Released',
 ] as const;
 
+type DealStage = (typeof DEAL_STAGES)[number];
+
+interface Deal {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  message: string;
+  deal_stage: DealStage | string;
+  created_at: string;
+
+  // Agreement
+  accepted_at?: string | null;
+  agreement_terms?: string | null; // may contain JSON (see AgreementTerms)
+  deal_value?: number | null;
+  creator_agreed_at?: string | null;
+  business_agreed_at?: string | null;
+
+  // Submission / approval
+  submission_url?: string | null; // legacy
+  submitted_at?: string | null;   // legacy
+  submission_status?: SubmissionStatus;
+  rejection_reason?: string | null;
+
+  approved_at?: string | null;
+
+  // Payout markers (used to drive last-stage clock)
+  payout_requested_at?: string | null;
+  payout_status?: 'requested' | 'paid' | null;
+  payment_released_at?: string | null;
+
+  // UI helpers
+  sender_info?: ProfileLite;
+  receiver_info?: ProfileLite;
+}
+
+type AgreementTerms = {
+  scope?: string;       // deliverables/notes
+  deadline?: string;    // ISO date string (yyyy-mm-dd or ISO datetime)
+};
+
+function parseAgreement(terms?: string | null): AgreementTerms {
+  if (!terms) return {};
+  try {
+    const obj = JSON.parse(terms);
+    if (obj && typeof obj === 'object') return obj as AgreementTerms;
+    return {};
+  } catch {
+    // fallback: treat as plain text scope
+    return { scope: terms };
+  }
+}
+
+function buildAgreement(ag: AgreementTerms): string {
+  return JSON.stringify(ag);
+}
+
 export default function DealDetailPage() {
-  // Robust param normalization (prevents infinite spinner)
+  // ===== Params =====
   const rawParams = useParams() as Record<string, string | string[] | undefined>;
   const dealId =
     (Array.isArray(rawParams?.id) ? rawParams.id[0] : (rawParams?.id as string | undefined)) ??
     undefined;
 
+  // ===== State =====
   const [deal, setDeal] = useState<Deal | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [latestSubmission, setLatestSubmission] = useState<DealSubmission | null>(null);
@@ -85,23 +111,23 @@ export default function DealDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState<boolean>(false);
 
-  // Agreement draft (shown during Negotiating)
-  const [draftAmount, setDraftAmount] = useState<number>(0);
-  const [draftTerms, setDraftTerms] = useState<string>('');
+  // Agreement draft inputs
+  const [draftAmount, setDraftAmount] = useState<number | ''>('');
+  const [draftDeadline, setDraftDeadline] = useState<string>(''); // yyyy-mm-dd
+  const [draftScope, setDraftScope] = useState<string>('');
+  const [agreeChecked, setAgreeChecked] = useState<boolean>(false);
 
-  // Content delivery input (big section below)
+  // Content delivery input
   const [deliverUrl, setDeliverUrl] = useState<string>('');
 
-  // ========= Load =========
+  // ===== Load =====
   useEffect(() => {
     const fetchDeal = async () => {
-      // Guard: missing id -> stop loading & show error
       if (!dealId) {
         setError('Missing deal id.');
         setLoading(false);
         return;
       }
-
       setLoading(true);
       setError(null);
 
@@ -110,21 +136,24 @@ export default function DealDetailPage() {
         const user = auth.user;
         if (!user) {
           setError('User not found.');
+          setLoading(false);
           return;
         }
         setUserId(user.id);
 
-        const { data, error: dealError } = await supabase
+        const { data, error: dealErr } = await supabase
           .from('deals')
           .select('*')
           .eq('id', dealId)
           .single();
 
-        if (!data || dealError) {
+        if (!data || dealErr) {
           setError('Deal not found.');
+          setLoading(false);
           return;
         }
 
+        // Auto-advance to Negotiating on accept
         if (data.accepted_at && data.deal_stage === 'Waiting for Response') {
           await supabase.from('deals').update({ deal_stage: 'Negotiating Terms' }).eq('id', data.id);
           data.deal_stage = 'Negotiating Terms';
@@ -135,20 +164,17 @@ export default function DealDetailPage() {
           .select('id, full_name, username, role, profile_url')
           .in('id', [data.sender_id, data.receiver_id]);
 
-        const sender = users?.find((u) => u.id === data.sender_id) as ProfileLite | undefined;
-        const receiver = users?.find((u) => u.id === data.receiver_id) as ProfileLite | undefined;
+        const sender = (users || []).find((u) => u.id === data.sender_id) as ProfileLite | undefined;
+        const receiver = (users || []).find((u) => u.id === data.receiver_id) as ProfileLite | undefined;
 
         const normalized: Deal = {
           ...data,
           sender_info: sender,
           receiver_info: receiver,
-          approved_by_sender: !!data.approved_at,
-          approved_by_receiver: !!data.approved_at,
         };
-
         setDeal(normalized);
 
-        // Load latest submission from deal_submissions (non-fatal)
+        // Load latest submission (non-fatal)
         try {
           const sub = await fetchLatestSubmission(data.id);
           setLatestSubmission(sub);
@@ -156,8 +182,12 @@ export default function DealDetailPage() {
           setLatestSubmission(null);
         }
 
-        setDraftAmount(Number(data.deal_value ?? 0));
-        setDraftTerms(data.agreement_terms ?? '');
+        // Seed agreement UI from DB (supports JSON or plain text)
+        const ag = parseAgreement(data.agreement_terms);
+        setDraftAmount(Number.isFinite(Number(data.deal_value)) ? Number(data.deal_value) : '');
+        setDraftDeadline(ag.deadline ? ag.deadline.slice(0, 10) : '');
+        setDraftScope(ag.scope ?? (typeof data.agreement_terms === 'string' ? data.agreement_terms : ''));
+
       } catch {
         setError('Failed to load deal.');
       } finally {
@@ -168,6 +198,7 @@ export default function DealDetailPage() {
     void fetchDeal();
   }, [dealId]);
 
+  // ===== Derived =====
   const isSender = userId === deal?.sender_id;
   const myProfile: ProfileLite | undefined =
     (isSender ? deal?.sender_info : deal?.receiver_info) || undefined;
@@ -175,46 +206,52 @@ export default function DealDetailPage() {
   const isBusiness = myProfile?.role === 'business';
   const otherUser = isSender ? deal?.receiver_info : deal?.sender_info;
 
-  // Submission-driven UI values (defined BEFORE stage logic because it uses them)
   const submissionUrl = latestSubmission?.url ?? undefined;
   const submissionStatus: SubmissionStatus =
     (latestSubmission?.status as SubmissionStatus) ?? null;
   const rejectionReason = latestSubmission?.rejection_reason ?? null;
 
-  // Stage display rules:
-  // - pending submission: "Content Submitted" is checked, "Approved" shows the clock
-  // - rework: "Content Submitted" shows the clock
-  // - approved: "Approved" is checked
+  // Payment progress detection
+  const payoutInFlight = !!deal?.approved_at && !deal?.payment_released_at;
+
+  // Stage index rules:
   const currentStageIndex = useMemo(() => {
     if (!deal) return 0;
 
-    if (submissionStatus === 'pending') {
-      return DEAL_STAGES.indexOf('Approved'); // clock here
-    }
-    if (submissionStatus === 'rework') {
-      return DEAL_STAGES.indexOf('Content Submitted'); // clock here
-    }
-    if (submissionStatus === 'approved') {
-      return DEAL_STAGES.indexOf('Approved'); // checked
+    if (deal.payment_released_at) {
+      return DEAL_STAGES.indexOf('Payment Released');
     }
 
-    // Fallback to DB stage when no submission status yet
-    const idx = DEAL_STAGES.indexOf(deal.deal_stage as (typeof DEAL_STAGES)[number]);
+    if (submissionStatus === 'approved' && !deal.payment_released_at) {
+      return DEAL_STAGES.indexOf('Payment Released');
+    }
+
+    if (submissionStatus === 'pending') {
+      return DEAL_STAGES.indexOf('Approved'); // clock at Approved
+    }
+
+    if (submissionStatus === 'rework') {
+      return DEAL_STAGES.indexOf('Content Submitted'); // clock at Content Submitted
+    }
+
+    // Fallback to DB stage
+    const idx = DEAL_STAGES.indexOf(deal.deal_stage as DealStage);
     return idx >= 0 ? idx : 0;
   }, [deal, submissionStatus]);
+
+  // Display submission status for timeline:
+  const timelineSubmissionStatus: SubmissionStatus =
+    deal?.payment_released_at ? null : submissionStatus;
 
   const bothAgreed = !!deal?.creator_agreed_at && !!deal?.business_agreed_at;
 
   const displayAmount = useMemo(() => {
-    if (!deal) return '';
-    if (deal.deal_stage === 'Negotiating Terms' && (!deal.deal_value || deal.deal_value <= 0)) {
-      return 'Negotiate';
-    }
-    if (deal.deal_value && deal.deal_value > 0) {
-      return `$${Math.round(deal.deal_value).toLocaleString()} USD`;
-    }
-    return '—';
-  }, [deal]);
+    const val = deal?.deal_value;
+    if (!val || val <= 0) return deal?.deal_stage === 'Negotiating Terms' ? 'Negotiate' : '—';
+    return `$${Math.round(val).toLocaleString()} USD`;
+  }, [deal?.deal_value, deal?.deal_stage]);
+
+  const agreementFromDb = useMemo(() => parseAgreement(deal?.agreement_terms), [deal?.agreement_terms]);
 
   const refreshDeal = async (id: string) => {
     try {
@@ -237,6 +274,7 @@ export default function DealDetailPage() {
 
   const nowISO = () => new Date().toISOString();
 
+  // ===== Actions =====
   const handleAcceptOffer = async () => {
     if (!deal) return;
     const { error: err } = await supabase
@@ -244,7 +282,6 @@ export default function DealDetailPage() {
       .update({
         accepted_at: nowISO(),
         deal_stage: 'Negotiating Terms',
-        status: 'accepted',
       })
       .eq('id', deal.id);
     if (err) {
@@ -256,16 +293,27 @@ export default function DealDetailPage() {
 
   const handleSaveAgreementDraft = async () => {
     if (!deal) return;
-    if (!draftAmount || draftAmount <= 0) {
+    const amount = Number(draftAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
       alert('Enter a valid amount.');
       return;
     }
+    if (!draftDeadline) {
+      alert('Pick a delivery date.');
+      return;
+    }
+
+    const termsJson = buildAgreement({
+      scope: (draftScope || '').trim(),
+      deadline: draftDeadline, // yyyy-mm-dd
+    });
 
     const { error: err } = await supabase
       .from('deals')
       .update({
-        agreement_terms: draftTerms,
-        deal_value: draftAmount,
+        agreement_terms: termsJson,
+        deal_value: amount,
+        deal_stage: 'Negotiating Terms',
       })
       .eq('id', deal.id);
 
@@ -273,14 +321,50 @@ export default function DealDetailPage() {
       alert(err.message);
       return;
     }
+
+    // Local reflect
     setDeal((prev) =>
-      prev ? { ...prev, agreement_terms: draftTerms, deal_value: draftAmount } : prev
+      prev
+        ? {
+            ...prev,
+            agreement_terms: termsJson,
+            deal_value: amount,
+            deal_stage: 'Negotiating Terms',
+          }
+        : prev
     );
-    alert('Draft saved.');
+    alert('Terms saved. Ask the other side to review and confirm.');
   };
 
   const handleConfirmAgreement = async () => {
     if (!deal || !userId) return;
+
+    // 0) enforce: amount + deadline must be saved on the record
+    const amount = Number(deal.deal_value || 0);
+    const ag = parseAgreement(deal.agreement_terms);
+    if (!amount || amount <= 0 || !ag.deadline) {
+      alert('Save the final amount and deadline first.');
+      return;
+    }
+    if (!agreeChecked) {
+      alert('Please check the agreement box.');
+      return;
+    }
+
+    // 1) enforce matching proposals between both parties
+    try {
+      const pair = await fetchLatestPair(deal.id, deal.sender_id, deal.receiver_id);
+      const ok = proposalsMatch(pair.sender, pair.receiver);
+      if (!ok) {
+        alert('Both sides must propose the SAME amount and delivery date before confirming.');
+        return;
+      }
+    } catch {
+      alert('Could not verify matching terms. Try again.');
+      return;
+    }
+
+    // 2) Stamp my role's agreement
     const myRole = myProfile?.role;
     const col = myRole === 'creator' ? 'creator_agreed_at' : 'business_agreed_at';
 
@@ -293,31 +377,24 @@ export default function DealDetailPage() {
       return;
     }
 
+    // 3) If both sides agreed → move to Platform Escrow
     const { data: refreshed } = await supabase
       .from('deals')
-      .select('id,creator_agreed_at,business_agreed_at,deal_value,agreement_terms,deal_stage')
+      .select('id,creator_agreed_at,business_agreed_at,deal_stage')
       .eq('id', deal.id)
       .maybeSingle();
 
     const both = !!refreshed?.creator_agreed_at && !!refreshed?.business_agreed_at;
 
-    setDeal((prev) =>
-      prev
-        ? {
-            ...prev,
-            creator_agreed_at: refreshed?.creator_agreed_at ?? prev.creator_agreed_at,
-            business_agreed_at: refreshed?.business_agreed_at ?? prev.business_agreed_at,
-            deal_value: refreshed?.deal_value ?? prev.deal_value,
-            agreement_terms: refreshed?.agreement_terms ?? prev.agreement_terms,
-            deal_stage: both ? 'Platform Escrow' : prev.deal_stage,
-          }
-        : prev
-    );
+    if (both) {
+      await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', deal.id);
+    }
+
+    await refreshDeal(deal.id);
+    setAgreeChecked(false);
   };
 
-  /* ===================== SUBMISSION FLOW (deal_submissions) ===================== */
-
-  // CREATOR-ONLY submit content
+  // Submission (creator)
   const handleSubmitContent = async (url: string) => {
     if (!deal || !isCreator || !userId) return;
     try {
@@ -329,7 +406,7 @@ export default function DealDetailPage() {
     }
   };
 
-  // BUSINESS-ONLY reject
+  // Business reject (with reason)
   const handleRejectContent = async (reason: string) => {
     if (!deal || !isBusiness || !latestSubmission) return;
     try {
@@ -340,7 +417,7 @@ export default function DealDetailPage() {
     }
   };
 
-  // BUSINESS-ONLY approve
+  // Business approve
   const handleApproval = async () => {
     if (!deal || !isBusiness || !latestSubmission) return;
     try {
@@ -351,7 +428,7 @@ export default function DealDetailPage() {
     }
   };
 
-  // ========= Render =========
+  // ===== Render =====
   if (loading)
     return (
       <div className="p-6 flex items-center gap-2 text-gray-400">
@@ -361,7 +438,7 @@ export default function DealDetailPage() {
   if (error) return <div className="p-6 text-red-500">{error}</div>;
   if (!deal) return <div className="p-6 text-gray-400">Deal not found.</div>;
 
-  // Avatar (string | null)
+  // Avatar
   const otherAvatar: string | null =
     (otherUser?.profile_url ?? null) ||
     (otherUser?.username
@@ -370,7 +447,7 @@ export default function DealDetailPage() {
         )}`
       : null);
 
-  // Helpers for the big Content Delivery section
+  // Helpers
   const isValidHttpUrl = (url: string): boolean => /^https?:\/\/\S+/i.test(url);
   const latestIsRework = submissionStatus === 'rework';
   const creatorCanSubmit =
@@ -379,6 +456,11 @@ export default function DealDetailPage() {
     (latestIsRework || !submissionUrl);
 
   const businessCanReview = !!isBusiness && submissionStatus === 'pending';
+
+  // Deadlines display
+  const lockedDeadline = agreementFromDb.deadline
+    ? new Date(agreementFromDb.deadline).toLocaleDateString()
+    : '—';
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto relative">
@@ -407,15 +489,16 @@ export default function DealDetailPage() {
         </span>
       </div>
 
-      {/* Main: Progress (left) • Agreement (right) */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-        {/* LEFT: Progress & actions */}
+        {/* LEFT: Progress */}
         <div className="space-y-4">
           <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)]">
             <p className="text-white text-sm sm:text-base mb-3">
               <span className="font-semibold">Offer:</span> {deal.message}
             </p>
 
+            {/* Accept (receiver only) */}
             {!deal.accepted_at &&
               deal.deal_stage === 'Waiting for Response' &&
               !isSender && (
@@ -432,79 +515,126 @@ export default function DealDetailPage() {
                 </div>
               )}
 
+            {/* Timeline — no agree button inside */}
             <DealProgress
               currentStage={currentStageIndex}
               contentLink={submissionUrl}
               isEditable={false}
               isRejected={submissionStatus === 'rework'}
               rejectionReason={rejectionReason}
-              // No approve/reject inside the timeline
               onApprove={undefined}
               onReject={undefined}
-              onAgree={
-                deal.deal_stage === 'Negotiating Terms' ? handleConfirmAgreement : undefined
-              }
-              // No inline submission inside the timeline
+              onAgree={undefined}
               onSubmitContent={undefined}
               canApprove={false}
               isCreator={!!isCreator}
               isSender={!!isSender}
-              submissionStatus={submissionStatus}
+              submissionStatus={timelineSubmissionStatus}
             />
           </div>
         </div>
 
-        {/* RIGHT: Agreement card */}
+        {/* RIGHT: Agreement Card */}
         <div className="space-y-4">
           {deal.deal_stage === 'Negotiating Terms' && !bothAgreed && (
             <div className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black/30 text-white">
-              <div className="flex items-baseline justify-between gap-2 mb-3">
+              <div className="mb-3">
                 <p className="font-semibold text-base sm:text-lg">Deal Agreement</p>
-                <span className="text-xs sm:text-sm text-white/70">
-                  Amount:&nbsp;<span className="font-semibold">{displayAmount}</span>
-                </span>
+                <p className="text-xs text-white/70 mt-1">
+                  <b>Step 1:</b> Align in chat. <b>Both sides must confirm the same price and delivery date.</b> Once saved and both parties
+                  check the box and confirm, the deal moves to <i>Platform Escrow</i>.
+                </p>
               </div>
 
-              <div className="flex items-end gap-3 mb-3">
-                <div className="flex-1">
+              {/* Role responsibilities (both can see both) */}
+              <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                  <p className="text-xs font-semibold mb-1">Business will:</p>
+                  <ul className="text-xs text-white/80 list-disc ml-4 space-y-0.5">
+                    <li>Deposit the agreed amount into secure escrow.</li>
+                    <li>Review within 72 hours of submission.</li>
+                    <li>Approve or request revisions only by agreed scope.</li>
+                  </ul>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                  <p className="text-xs font-semibold mb-1">Creator will:</p>
+                  <ul className="text-xs text-white/80 list-disc ml-4 space-y-0.5">
+                    <li>Deliver by the agreed deadline.</li>
+                    <li>Provide original, compliant content.</li>
+                    <li>Handle up to limited in-scope revisions if requested.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Inputs */}
+              <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                <div>
                   <label className="block text-xs text-gray-400 mb-1">Amount (USD)</label>
                   <input
                     type="number"
                     min={1}
                     step={1}
-                    value={Number.isFinite(draftAmount) ? draftAmount : 0}
-                    onChange={(e) => setDraftAmount(Number(e.target.value))}
+                    value={draftAmount}
+                    onChange={(e) => setDraftAmount(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
                     placeholder="Enter agreed amount"
                   />
                 </div>
-                <button
-                  className="px-3 py-2 bg-gray-700 rounded text-sm"
-                  onClick={handleSaveAgreementDraft}
-                >
-                  Save Draft
-                </button>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Delivery date</label>
+                  <input
+                    type="date"
+                    value={draftDeadline}
+                    onChange={(e) => setDraftDeadline(e.target.value)}
+                    className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
+                  />
+                </div>
               </div>
 
-              <label className="block text-xs text-gray-400 mb-1">Terms</label>
+              <label className="block text-xs text-gray-400 mb-1">Scope / deliverables</label>
               <textarea
-                value={draftTerms}
-                onChange={(e) => setDraftTerms(e.target.value)}
-                placeholder="Deliverables, dates, rights, posting schedule..."
+                value={draftScope}
+                onChange={(e) => setDraftScope(e.target.value)}
+                placeholder="Deliverables, posting handle(s), format, usage rights..."
                 className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
                 rows={4}
               />
 
+              {/* NEW: Matching Card (forces same amount + date before confirming) */}
+              {userId && (
+                <div className="mt-4">
+                  <AgreementMatchCard
+                    dealId={deal.id}
+                    senderId={deal.sender_id}
+                    receiverId={deal.receiver_id}
+                    myUserId={userId}
+                    onMatched={() => void refreshDeal(deal.id)}
+                  />
+                </div>
+              )}
+
               <div className="flex items-center gap-2 mt-3">
                 <button
-                  className="px-4 py-2 bg-emerald-600 rounded text-white text-sm sm:text-base"
+                  className="px-3 py-2 bg-gray-700 rounded text-sm"
+                  onClick={handleSaveAgreementDraft}
+                >
+                  Save Terms
+                </button>
+                <label className="inline-flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={agreeChecked}
+                    onChange={(e) => setAgreeChecked(e.target.checked)}
+                  />
+                  I have read and agree to the Niesty Deal Agreement.
+                </label>
+                <button
+                  className="ml-auto px-4 py-2 bg-emerald-600 rounded text-white text-sm sm:text-base disabled:opacity-50"
                   onClick={handleConfirmAgreement}
+                  disabled={!agreeChecked}
                 >
                   Confirm Agreement
                 </button>
-                <p className="text-xs text-gray-400">
-                  When both sides confirm, the deal moves to escrow.
-                </p>
               </div>
 
               <div className="mt-2 text-[11px] sm:text-xs text-gray-400">
@@ -522,22 +652,27 @@ export default function DealDetailPage() {
                 </p>
                 <span className="text-xs sm:text-sm">
                   Amount:&nbsp;
-                  <span className="font-semibold">
-                    {deal.deal_value && deal.deal_value > 0
-                      ? `$${Math.round(deal.deal_value).toLocaleString()} USD`
-                      : '—'}
-                  </span>
+                  <span className="font-semibold">{displayAmount}</span>
                 </span>
               </div>
-              <p className="text-sm text-gray-200 mt-2 whitespace-pre-wrap">
-                {deal.agreement_terms || '—'}
+              <div className="grid sm:grid-cols-2 gap-2 mt-2 text-sm">
+                <p>
+                  <span className="text-white/70">Deadline:</span> {lockedDeadline}
+                </p>
+                <p className="truncate">
+                  <span className="text-white/70">Scope:</span>{' '}
+                  <span className="whitespace-pre-wrap">{agreementFromDb.scope || '—'}</span>
+                </p>
+              </div>
+              <p className="text-xs text-emerald-300 mt-2">
+                Next: Business deposits funds in <b>Platform Escrow</b>. Only then content submission opens.
               </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* ======= BIG CONTENT DELIVERY SECTION (below) ======= */}
+      {/* ======= CONTENT DELIVERY ======= */}
       <div className="mt-6 border border-white/10 bg-black/40 rounded-2xl p-4 sm:p-5 text-white">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg sm:text-xl font-bold">Content Delivery</h2>
@@ -640,11 +775,17 @@ export default function DealDetailPage() {
               </button>
             </div>
             <p className="text-xs text-white/50 mt-2">
-              Approval will move the deal to <span className="font-semibold">Approved</span>.
-              Rejection sends it back to <span className="font-semibold">Content Submitted</span>{' '}
-              with your reason.
+              Approval moves the deal to <span className="font-semibold">Approved</span>. Rejection returns to{' '}
+              <span className="font-semibold">Content Submitted</span> with your reason.
             </p>
           </div>
+        )}
+
+        {/* Payout in progress hint */}
+        {payoutInFlight && !deal.payment_released_at && (
+          <p className="mt-3 text-xs text-yellow-300">
+            Payment is being released. <span className="opacity-80">Final stage shows a pending clock until funds land.</span>
+          </p>
         )}
       </div>
 

@@ -97,8 +97,30 @@ export default function DealProgress({
           const isLastStage = index === DEAL_STAGES.length - 1;
           const isCurrent = index === safeStageIndex;
 
-          const showCheck = isCompleted || (isCurrent && isLastStage);
-          const showClock = isCurrent && !isLastStage;
+          // NEW: allow last stage to be "pending" (⏳) instead of forced ✅.
+          // Condition: after approval but before payout we want:
+          //  - "Approved" ✅
+          //  - "Payment Released" ⏳
+          const lastStagePending =
+            isCurrent && isLastStage && submissionStatus === 'approved';
+
+          // Decide which indicator to show
+          let showCheck = false;
+          let showClock = false;
+
+          if (isCurrent) {
+            if (isLastStage) {
+              // If it's the last stage and still pending payout, show ⏳; otherwise ✅
+              showClock = lastStagePending;
+              showCheck = !lastStagePending;
+            } else {
+              // Any middle stage that is current is pending
+              showClock = true;
+            }
+          } else if (isCompleted) {
+            // All stages before current are completed
+            showCheck = true;
+          }
 
           return (
             <li key={stageLabel} className="mb-6 ml-4">
@@ -135,8 +157,6 @@ export default function DealProgress({
                   </button>
                 )}
 
-                {/* NOTE: Removed inline submit at Platform Escrow (submission happens in big section below) */}
-
                 {/* Primary flow: submit / resubmit in Content Submitted (input only; no view/approve/reject here) */}
                 {stageLabel === 'Content Submitted' && (
                   <div className="mt-1 space-y-1">
@@ -163,8 +183,6 @@ export default function DealProgress({
                       </>
                     )}
 
-                    
-
                     {/* Rework banner */}
                     {(latestIsRework || isRejected) && rejectionReason && (
                       <div className="text-xs text-red-400 mt-1 flex items-center gap-1">
@@ -172,8 +190,6 @@ export default function DealProgress({
                         <span>Rejected: {rejectionReason}</span>
                       </div>
                     )}
-
-                    
                   </div>
                 )}
               </div>

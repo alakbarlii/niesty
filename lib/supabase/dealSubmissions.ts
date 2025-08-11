@@ -117,10 +117,15 @@ export async function submitSubmission(dealId: string, url: string, userId: stri
 }
 
 /**
- * Approve a submission (business). Marks submission approved and moves deal to "Approved".
- * Also stamps `approved_at`.
+ * Approve a submission (business).
+ * - Marks submission approved
+ * - Moves deal to "Approved" & stamps `approved_at`
+ * - **Auto-triggers payout**: sets `payout_requested_at` and `payout_status='requested'`
+ *   so both user and admin timelines show Payment Released ⏳.
  */
 export async function approveSubmission(submissionId: string, dealId: string): Promise<void> {
+  const now = new Date().toISOString();
+
   const { error: updErr } = await supabase
     .from('deal_submissions')
     .update({ status: 'approved', rejection_reason: null })
@@ -129,7 +134,12 @@ export async function approveSubmission(submissionId: string, dealId: string): P
 
   const { error: stageErr } = await supabase
     .from('deals')
-    .update({ deal_stage: 'Approved', approved_at: new Date().toISOString() })
+    .update({
+      deal_stage: 'Approved',
+      approved_at: now,
+      payout_requested_at: now,
+      payout_status: 'requested',
+    })
     .eq('id', dealId);
   if (stageErr) throw stageErr;
 }

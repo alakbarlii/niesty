@@ -23,7 +23,7 @@ interface ProfileLite {
   full_name: string;
   username: string;
   role?: UserRole;
-  profile_url?: string | null; // <-- added
+  profile_url?: string | null;
 }
 
 interface Deal {
@@ -71,7 +71,7 @@ const DEAL_STAGES = [
 ] as const;
 
 export default function DealDetailPage() {
-  // --- Robust param normalization (prevents infinite spinner) ---
+  // Robust param normalization (prevents infinite spinner)
   const rawParams = useParams() as Record<string, string | string[] | undefined>;
   const dealId =
     (Array.isArray(rawParams?.id) ? rawParams.id[0] : (rawParams?.id as string | undefined)) ??
@@ -95,7 +95,7 @@ export default function DealDetailPage() {
   // ========= Load =========
   useEffect(() => {
     const fetchDeal = async () => {
-      // Guard: missing id -> stop loading & show error (prevents infinite spinner)
+      // Guard: missing id -> stop loading & show error
       if (!dealId) {
         setError('Missing deal id.');
         setLoading(false);
@@ -175,29 +175,31 @@ export default function DealDetailPage() {
   const isBusiness = myProfile?.role === 'business';
   const otherUser = isSender ? deal?.receiver_info : deal?.sender_info;
 
-  // Submission-driven UI values
+  // Submission-driven UI values (defined BEFORE stage logic because it uses them)
   const submissionUrl = latestSubmission?.url ?? undefined;
-  const submissionStatus: SubmissionStatus = (latestSubmission?.status as SubmissionStatus) ?? null;
+  const submissionStatus: SubmissionStatus =
+    (latestSubmission?.status as SubmissionStatus) ?? null;
   const rejectionReason = latestSubmission?.rejection_reason ?? null;
 
   // Stage display rules:
-  // - pending submission: "Content Submitted" is done, "Approved" is current (clock)
-  // - rework: "Content Submitted" is current (clock)
-  // - approved: "Approved" is done
+  // - pending submission: "Content Submitted" is checked, "Approved" shows the clock
+  // - rework: "Content Submitted" shows the clock
+  // - approved: "Approved" becomes ✅ and current moves to "Payment Released"
   const currentStageIndex = useMemo(() => {
     if (!deal) return 0;
 
     if (submissionStatus === 'pending') {
-      return DEAL_STAGES.indexOf('Approved'); // clock will appear here
+      return DEAL_STAGES.indexOf('Approved'); // ⏳ here; "Content Submitted" is ✅
     }
     if (submissionStatus === 'rework') {
-      return DEAL_STAGES.indexOf('Content Submitted'); // clock here until resubmitted
+      return DEAL_STAGES.indexOf('Content Submitted'); // ⏳ here
     }
     if (submissionStatus === 'approved') {
-      return DEAL_STAGES.indexOf('Approved'); // checked
+      // ✅ when approved, move current to "Payment Released" so "Approved" shows as completed
+      return DEAL_STAGES.indexOf('Payment Released');
     }
 
-    // Fallback to deal's stage when no submission status is present
+    // Fallback to DB stage when no submission status yet
     const idx = DEAL_STAGES.indexOf(deal.deal_stage as (typeof DEAL_STAGES)[number]);
     return idx >= 0 ? idx : 0;
   }, [deal, submissionStatus]);
@@ -230,7 +232,7 @@ export default function DealDetailPage() {
       if (d) setDeal((prev) => (prev ? { ...prev, ...d } : (d as Deal)));
       setLatestSubmission(sub);
     } catch {
-      // swallow; UI already reflects last good state
+      /* no-op */
     }
   };
 
@@ -272,7 +274,9 @@ export default function DealDetailPage() {
       alert(err.message);
       return;
     }
-    setDeal((prev) => (prev ? { ...prev, agreement_terms: draftTerms, deal_value: draftAmount } : prev));
+    setDeal((prev) =>
+      prev ? { ...prev, agreement_terms: draftTerms, deal_value: draftAmount } : prev
+    );
     alert('Draft saved.');
   };
 
@@ -281,7 +285,10 @@ export default function DealDetailPage() {
     const myRole = myProfile?.role;
     const col = myRole === 'creator' ? 'creator_agreed_at' : 'business_agreed_at';
 
-    const { error: err } = await supabase.from('deals').update({ [col]: nowISO() }).eq('id', deal.id);
+    const { error: err } = await supabase
+      .from('deals')
+      .update({ [col]: nowISO() })
+      .eq('id', deal.id);
     if (err) {
       alert(err.message);
       return;
@@ -355,14 +362,16 @@ export default function DealDetailPage() {
   if (error) return <div className="p-6 text-red-500">{error}</div>;
   if (!deal) return <div className="p-6 text-gray-400">Deal not found.</div>;
 
-  // Make sure this is string | null (not undefined)
+  // Avatar (string | null)
   const otherAvatar: string | null =
     (otherUser?.profile_url ?? null) ||
     (otherUser?.username
-      ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(otherUser.username)}`
+      ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
+          otherUser.username
+        )}`
       : null);
 
-  // Big-section helpers
+  // Helpers for the big Content Delivery section
   const isValidHttpUrl = (url: string): boolean => /^https?:\/\/\S+/i.test(url);
   const latestIsRework = submissionStatus === 'rework';
   const creatorCanSubmit =
@@ -390,7 +399,9 @@ export default function DealDetailPage() {
       {/* Meta */}
       <div className="bg-white/10 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-sm sm:text-base font-semibold text-white mb-4 gap-3 sm:gap-0">
         <span className="leading-tight">
-          {isSender ? `Your offer to ${otherUser?.full_name ?? '—'}` : `${otherUser?.full_name ?? '—'}'s offer to you`}
+          {isSender
+            ? `Your offer to ${otherUser?.full_name ?? '—'}`
+            : `${otherUser?.full_name ?? '—'}'s offer to you`}
         </span>
         <span className="text-xs sm:text-sm font-medium text-white/70">
           Sent: {new Date(deal.created_at).toLocaleString()}
@@ -406,17 +417,21 @@ export default function DealDetailPage() {
               <span className="font-semibold">Offer:</span> {deal.message}
             </p>
 
-            {!deal.accepted_at && deal.deal_stage === 'Waiting for Response' && !isSender && (
-              <div className="mb-4 p-3 sm:p-4 rounded-2xl border border-white/10 bg-black/30 text-white">
-                <p className="font-semibold mb-2 text-sm sm:text-base">Accept the offer to start negotiating terms</p>
-                <button
-                  onClick={handleAcceptOffer}
-                  className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600 text-sm"
-                >
-                  Accept Offer
-                </button>
-              </div>
-            )}
+            {!deal.accepted_at &&
+              deal.deal_stage === 'Waiting for Response' &&
+              !isSender && (
+                <div className="mb-4 p-3 sm:p-4 rounded-2xl border border-white/10 bg-black/30 text-white">
+                  <p className="font-semibold mb-2 text-sm sm:text-base">
+                    Accept the offer to start negotiating terms
+                  </p>
+                  <button
+                    onClick={handleAcceptOffer}
+                    className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600 text-sm"
+                  >
+                    Accept Offer
+                  </button>
+                </div>
+              )}
 
             <DealProgress
               currentStage={currentStageIndex}
@@ -424,11 +439,13 @@ export default function DealDetailPage() {
               isEditable={false}
               isRejected={submissionStatus === 'rework'}
               rejectionReason={rejectionReason}
-              // NOTE: removed approve/reject controls from timeline
+              // No approve/reject inside the timeline
               onApprove={undefined}
               onReject={undefined}
-              onAgree={deal.deal_stage === 'Negotiating Terms' ? handleConfirmAgreement : undefined}
-              // IMPORTANT: no inline submission inputs in the timeline
+              onAgree={
+                deal.deal_stage === 'Negotiating Terms' ? handleConfirmAgreement : undefined
+              }
+              // No inline submission inside the timeline
               onSubmitContent={undefined}
               canApprove={false}
               isCreator={!!isCreator}
@@ -462,7 +479,10 @@ export default function DealDetailPage() {
                     placeholder="Enter agreed amount"
                   />
                 </div>
-                <button className="px-3 py-2 bg-gray-700 rounded text-sm" onClick={handleSaveAgreementDraft}>
+                <button
+                  className="px-3 py-2 bg-gray-700 rounded text-sm"
+                  onClick={handleSaveAgreementDraft}
+                >
                   Save Draft
                 </button>
               </div>
@@ -477,10 +497,15 @@ export default function DealDetailPage() {
               />
 
               <div className="flex items-center gap-2 mt-3">
-                <button className="px-4 py-2 bg-emerald-600 rounded text-white text-sm sm:text-base" onClick={handleConfirmAgreement}>
+                <button
+                  className="px-4 py-2 bg-emerald-600 rounded text-white text-sm sm:text-base"
+                  onClick={handleConfirmAgreement}
+                >
                   Confirm Agreement
                 </button>
-                <p className="text-xs text-gray-400">When both sides confirm, the deal moves to escrow.</p>
+                <p className="text-xs text-gray-400">
+                  When both sides confirm, the deal moves to escrow.
+                </p>
               </div>
 
               <div className="mt-2 text-[11px] sm:text-xs text-gray-400">
@@ -493,7 +518,9 @@ export default function DealDetailPage() {
           {bothAgreed && (
             <div className="p-4 sm:p-5 rounded-2xl border border-emerald-700/40 bg-emerald-900/20 text-white">
               <div className="flex items-baseline justify-between gap-2">
-                <p className="text-emerald-300 font-semibold text-base sm:text-lg">Agreement Locked</p>
+                <p className="text-emerald-300 font-semibold text-base sm:text-lg">
+                  Agreement Locked
+                </p>
                 <span className="text-xs sm:text-sm">
                   Amount:&nbsp;
                   <span className="font-semibold">
@@ -559,11 +586,12 @@ export default function DealDetailPage() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (!isValidHttpUrl(deliverUrl.trim())) {
+                    const url = deliverUrl.trim();
+                    if (!isValidHttpUrl(url)) {
                       alert('Enter a valid URL starting with http:// or https://');
                       return;
                     }
-                    void handleSubmitContent(deliverUrl.trim());
+                    void handleSubmitContent(url);
                   }
                 }}
                 className="flex-1 text-sm p-2 rounded bg-gray-900 border border-white/10 text-white"
@@ -613,8 +641,9 @@ export default function DealDetailPage() {
               </button>
             </div>
             <p className="text-xs text-white/50 mt-2">
-              Approval will move the deal to <span className="font-semibold">Approved</span>. Rejection sends it back to{' '}
-              <span className="font-semibold">Content Submitted</span> with your reason.
+              Approval will move the deal to <span className="font-semibold">Approved</span>.
+              Rejection sends it back to <span className="font-semibold">Content Submitted</span>{' '}
+              with your reason.
             </p>
           </div>
         )}

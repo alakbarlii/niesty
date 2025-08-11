@@ -184,19 +184,18 @@ export default function DealDetailPage() {
   // Stage display rules:
   // - pending submission: "Content Submitted" is checked, "Approved" shows the clock
   // - rework: "Content Submitted" shows the clock
-  // - approved: "Approved" becomes ✅ and current moves to "Payment Released"
+  // - approved: "Approved" is checked and "Payment Released" shows the clock
   const currentStageIndex = useMemo(() => {
     if (!deal) return 0;
 
     if (submissionStatus === 'pending') {
-      return DEAL_STAGES.indexOf('Approved'); // ⏳ here; "Content Submitted" is ✅
+      return DEAL_STAGES.indexOf('Approved'); // clock here
     }
     if (submissionStatus === 'rework') {
-      return DEAL_STAGES.indexOf('Content Submitted'); // ⏳ here
+      return DEAL_STAGES.indexOf('Content Submitted'); // clock here
     }
     if (submissionStatus === 'approved') {
-      // ✅ when approved, move current to "Payment Released" so "Approved" shows as completed
-      return DEAL_STAGES.indexOf('Payment Released');
+      return DEAL_STAGES.indexOf('Payment Released'); // Approved done; Payment Released pending
     }
 
     // Fallback to DB stage when no submission status yet

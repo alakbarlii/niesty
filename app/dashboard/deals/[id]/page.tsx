@@ -566,39 +566,7 @@ export default function DealDetailPage() {
                 </div>
               </div>
 
-              {/* Inputs */}
-              <div className="grid sm:grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Amount (USD)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={draftAmount}
-                    onChange={(e) => setDraftAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
-                    placeholder="Enter agreed amount"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Delivery date</label>
-                  <input
-                    type="date"
-                    value={draftDeadline}
-                    onChange={(e) => setDraftDeadline(e.target.value)}
-                    className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
-                  />
-                </div>
-              </div>
-
-              <label className="block text-xs text-gray-400 mb-1">Scope / deliverables</label>
-              <textarea
-                value={draftScope}
-                onChange={(e) => setDraftScope(e.target.value)}
-                placeholder="Deliverables, posting handle(s), format, usage rights..."
-                className="w-full bg-black/20 text-white p-2 rounded border border-white/10 text-sm"
-                rows={4}
-              />
+             
 
               {/* NEW: Matching Card (forces same amount + date before confirming) */}
               {userId && (

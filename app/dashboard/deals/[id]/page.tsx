@@ -411,9 +411,11 @@ export default function DealDetailPage() {
   // Helpers
   const isValidHttpUrl = (url: string): boolean => /^https?:\/\/\S+/i.test(url);
   const latestIsRework = submissionStatus === 'rework';
+
+  // ⬇️ minimal fix #1: remove Platform Escrow from creator submit gate
   const creatorCanSubmit =
     !!isCreator &&
-    (deal.deal_stage === 'Platform Escrow' || deal.deal_stage === 'Content Submitted') &&
+    (deal.deal_stage === 'Content Submitted') &&
     (latestIsRework || !submissionUrl);
 
   const businessCanReview = !!isBusiness && submissionStatus === 'pending';
@@ -594,121 +596,126 @@ export default function DealDetailPage() {
       </div>
 
       {/* ======= CONTENT DELIVERY ======= */}
-      <div className="mt-6 border border-white/10 bg-black/40 rounded-2xl p-4 sm:p-5 text-white">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg sm:text-xl font-bold">Content Delivery</h2>
-          <span className="text-xs text-white/60">
-            Stage: <span className="font-semibold">{deal.deal_stage}</span>
-          </span>
-        </div>
+      {/* ⬇️ minimal fix #2: hide Content Delivery until AFTER Platform Escrow */}
+      {(deal.deal_stage === 'Content Submitted' ||
+        deal.deal_stage === 'Approved' ||
+        deal.deal_stage === 'Payment Released') && (
+        <div className="mt-6 border border-white/10 bg-black/40 rounded-2xl p-4 sm:p-5 text-white">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg sm:text-xl font-bold">Content Delivery</h2>
+            <span className="text-xs text-white/60">
+              Stage: <span className="font-semibold">{deal.deal_stage}</span>
+            </span>
+          </div>
 
-        {/* Status / latest link */}
-        <div className="text-sm mb-3">
-          {submissionUrl ? (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <span className="text-white/70">Latest submission:</span>
-              <a
-                href={submissionUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 underline break-all"
-              >
-                {submissionUrl}
-              </a>
-            </div>
-          ) : (
-            <span className="text-white/60">No submission yet.</span>
-          )}
-          {rejectionReason && (
-            <div className="mt-2 text-red-400 text-sm">
-              <span className="font-semibold">Rework requested:</span> {rejectionReason}
-            </div>
-          )}
-        </div>
+          {/* Status / latest link */}
+          <div className="text-sm mb-3">
+            {submissionUrl ? (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <span className="text-white/70">Latest submission:</span>
+                <a
+                  href={submissionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline break-all"
+                >
+                  {submissionUrl}
+                </a>
+              </div>
+            ) : (
+              <span className="text-white/60">No submission yet.</span>
+            )}
+            {rejectionReason && (
+              <div className="mt-2 text-red-400 text-sm">
+                <span className="font-semibold">Rework requested:</span> {rejectionReason}
+              </div>
+            )}
+          </div>
 
-        {/* Creator: Submit / Resubmit */}
-        {creatorCanSubmit && (
-          <div className="mt-3">
-            <label className="block text-xs text-white/60 mb-1">Content URL</label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="url"
-                inputMode="url"
-                autoComplete="off"
-                placeholder="https://your-content-url.com"
-                value={deliverUrl}
-                onChange={(e) => setDeliverUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
+          {/* Creator: Submit / Resubmit */}
+          {creatorCanSubmit && (
+            <div className="mt-3">
+              <label className="block text-xs text-white/60 mb-1">Content URL</label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="url"
+                  inputMode="url"
+                  autoComplete="off"
+                  placeholder="https://your-content-url.com"
+                  value={deliverUrl}
+                  onChange={(e) => setDeliverUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const url = deliverUrl.trim();
+                      if (!isValidHttpUrl(url)) {
+                        alert('Enter a valid URL starting with http:// or https://');
+                        return;
+                      }
+                      void handleSubmitContent(url);
+                    }
+                  }}
+                  className="flex-1 text-sm p-2 rounded bg-gray-900 border border-white/10 text-white"
+                  aria-label="Content URL"
+                />
+                <button
+                  onClick={() => {
                     const url = deliverUrl.trim();
                     if (!isValidHttpUrl(url)) {
                       alert('Enter a valid URL starting with http:// or https://');
                       return;
                     }
                     void handleSubmitContent(url);
-                  }
-                }}
-                className="flex-1 text-sm p-2 rounded bg-gray-900 border border-white/10 text-white"
-                aria-label="Content URL"
-              />
-              <button
-                onClick={() => {
-                  const url = deliverUrl.trim();
-                  if (!isValidHttpUrl(url)) {
-                    alert('Enter a valid URL starting with http:// or https://');
-                    return;
-                  }
-                  void handleSubmitContent(url);
-                }}
-                className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600 text-sm"
-              >
-                {latestIsRework ? 'Resubmit' : 'Submit'}
-              </button>
+                  }}
+                  className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600 text-sm"
+                >
+                  {latestIsRework ? 'Resubmit' : 'Submit'}
+                </button>
+              </div>
+              <p className="text-xs text-white/50 mt-2">
+                {latestIsRework
+                  ? 'Your previous submission was rejected. Update and resubmit the correct link.'
+                  : 'Submit the final link to your content for review.'}
+              </p>
             </div>
-            <p className="text-xs text-white/50 mt-2">
-              {latestIsRework
-                ? 'Your previous submission was rejected. Update and resubmit the correct link.'
-                : 'Submit the final link to your content for review.'}
-            </p>
-          </div>
-        )}
+          )}
 
-        {/* Business: Approve / Reject */}
-        {businessCanReview && submissionUrl && (
-          <div className="mt-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-              <button
-                onClick={() => void handleApproval()}
-                className="px-4 py-2 bg-emerald-500 text-black rounded font-semibold hover:bg-emerald-600 text-sm"
-              >
-                Approve
-              </button>
-              <button
-                onClick={() => {
-                  const reason = window.prompt('Reason for rejection:')?.trim();
-                  if (!reason) return;
-                  void handleRejectContent(reason);
-                }}
-                className="px-4 py-2 bg-red-500 text-white rounded font-semibold hover:bg-red-600 text-sm"
-              >
-                Reject
-              </button>
+          {/* Business: Approve / Reject */}
+          {businessCanReview && submissionUrl && (
+            <div className="mt-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                <button
+                  onClick={() => void handleApproval()}
+                  className="px-4 py-2 bg-emerald-500 text-black rounded font-semibold hover:bg-emerald-600 text-sm"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => {
+                    const reason = window.prompt('Reason for rejection:')?.trim();
+                    if (!reason) return;
+                    void handleRejectContent(reason);
+                  }}
+                  className="px-4 py-2 bg-red-500 text-white rounded font-semibold hover:bg-red-600 text-sm"
+                >
+                  Reject
+                </button>
+              </div>
+              <p className="text-xs text-white/50 mt-2">
+                Approval moves the deal to <span className="font-semibold">Approved</span>. Rejection returns to{' '}
+                <span className="font-semibold">Content Submitted</span> with your reason.
+              </p>
             </div>
-            <p className="text-xs text-white/50 mt-2">
-              Approval moves the deal to <span className="font-semibold">Approved</span>. Rejection returns to{' '}
-              <span className="font-semibold">Content Submitted</span> with your reason.
-            </p>
-          </div>
-        )}
+          )}
 
-        {/* Payout in progress hint */}
-        {payoutInFlight && !deal.payment_released_at && (
-          <p className="mt-3 text-xs text-yellow-300">
-            Payment is being released. <span className="opacity-80">Final stage shows a pending clock until funds land.</span>
-          </p>
-        )}
-      </div>
+          {/* Payout in progress hint */}
+          {payoutInFlight && !deal.payment_released_at && (
+            <p className="mt-3 text-xs text-yellow-300">
+              Payment is being released. <span className="opacity-80">Final stage shows a pending clock until funds land.</span>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Chat */}
       {showChat && userId && (

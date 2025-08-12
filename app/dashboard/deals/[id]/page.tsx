@@ -110,11 +110,6 @@ export default function DealDetailPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState<boolean>(false);
-
-  // Agreement draft inputs
-  const [draftAmount, setDraftAmount] = useState<number | ''>('');
-  const [draftDeadline, setDraftDeadline] = useState<string>(''); // yyyy-mm-dd
-  const [draftScope, setDraftScope] = useState<string>('');
   const [agreeChecked, setAgreeChecked] = useState<boolean>(false);
 
   // Content delivery input
@@ -181,13 +176,6 @@ export default function DealDetailPage() {
         } catch {
           setLatestSubmission(null);
         }
-
-        // Seed agreement UI from DB (supports JSON or plain text)
-        const ag = parseAgreement(data.agreement_terms);
-        setDraftAmount(Number.isFinite(Number(data.deal_value)) ? Number(data.deal_value) : '');
-        setDraftDeadline(ag.deadline ? ag.deadline.slice(0, 10) : '');
-        setDraftScope(ag.scope ?? (typeof data.agreement_terms === 'string' ? data.agreement_terms : ''));
-
       } catch {
         setError('Failed to load deal.');
       } finally {
@@ -251,7 +239,10 @@ export default function DealDetailPage() {
     return `$${Math.round(val).toLocaleString()} USD`;
   }, [deal?.deal_value, deal?.deal_stage]);
 
-  const agreementFromDb = useMemo(() => parseAgreement(deal?.agreement_terms), [deal?.agreement_terms]);
+  const agreementFromDb = useMemo(
+    () => parseAgreement(deal?.agreement_terms),
+    [deal?.agreement_terms]
+  );
 
   const refreshDeal = async (id: string) => {
     try {
@@ -291,67 +282,17 @@ export default function DealDetailPage() {
     await refreshDeal(deal.id);
   };
 
-  const handleSaveAgreementDraft = async () => {
-    if (!deal) return;
-    const amount = Number(draftAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      alert('Enter a valid amount.');
-      return;
-    }
-    if (!draftDeadline) {
-      alert('Pick a delivery date.');
-      return;
-    }
-
-    const termsJson = buildAgreement({
-      scope: (draftScope || '').trim(),
-      deadline: draftDeadline, // yyyy-mm-dd
-    });
-
-    const { error: err } = await supabase
-      .from('deals')
-      .update({
-        agreement_terms: termsJson,
-        deal_value: amount,
-        deal_stage: 'Negotiating Terms',
-      })
-      .eq('id', deal.id);
-
-    if (err) {
-      alert(err.message);
-      return;
-    }
-
-    // Local reflect
-    setDeal((prev) =>
-      prev
-        ? {
-            ...prev,
-            agreement_terms: termsJson,
-            deal_value: amount,
-            deal_stage: 'Negotiating Terms',
-          }
-        : prev
-    );
-    alert('Terms saved. Ask the other side to review and confirm.');
-  };
-
   const handleConfirmAgreement = async () => {
     if (!deal || !userId) return;
 
-    // 0) enforce: amount + deadline must be saved on the record
-    const amount = Number(deal.deal_value || 0);
-    const ag = parseAgreement(deal.agreement_terms);
-    if (!amount || amount <= 0 || !ag.deadline) {
-      alert('Save the final amount and deadline first.');
-      return;
-    }
     if (!agreeChecked) {
       alert('Please check the agreement box.');
       return;
     }
 
-    // 1) enforce matching proposals between both parties
+    // 1) ensure both proposals match (same amount + date)
+    let matchedAmount: number | null = null;
+    let matchedDeadline: string | null = null;
     try {
       const pair = await fetchLatestPair(deal.id, deal.sender_id, deal.receiver_id);
       const ok = proposalsMatch(pair.sender, pair.receiver);
@@ -359,6 +300,9 @@ export default function DealDetailPage() {
         alert('Both sides must propose the SAME amount and delivery date before confirming.');
         return;
       }
+      const sample = pair.sender ?? pair.receiver!;
+      matchedAmount = Number(sample.amount);
+      matchedDeadline = String(sample.deadline).slice(0, 10);
     } catch {
       alert('Could not verify matching terms. Try again.');
       return;
@@ -377,7 +321,21 @@ export default function DealDetailPage() {
       return;
     }
 
-    // 3) If both sides agreed → move to Platform Escrow
+    // 3) Persist matched terms onto the deal (so locked view shows the numbers)
+    const agreementJson = buildAgreement({
+      scope: agreementFromDb.scope || '',
+      deadline: matchedDeadline || undefined,
+    });
+
+    await supabase
+      .from('deals')
+      .update({
+        deal_value: matchedAmount!,
+        agreement_terms: agreementJson,
+      })
+      .eq('id', deal.id);
+
+    // 4) If both sides agreed → move to Platform Escrow
     const { data: refreshed } = await supabase
       .from('deals')
       .select('id,creator_agreed_at,business_agreed_at,deal_stage')
@@ -387,7 +345,10 @@ export default function DealDetailPage() {
     const both = !!refreshed?.creator_agreed_at && !!refreshed?.business_agreed_at;
 
     if (both) {
-      await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', deal.id);
+      await supabase
+        .from('deals')
+        .update({ deal_stage: 'Platform Escrow' })
+        .eq('id', deal.id);
     }
 
     await refreshDeal(deal.id);
@@ -566,9 +527,7 @@ export default function DealDetailPage() {
                 </div>
               </div>
 
-             
-
-              {/* NEW: Matching Card (forces same amount + date before confirming) */}
+              {/* Matching Card */}
               {userId && (
                 <div className="mt-4">
                   <AgreementMatchCard
@@ -582,12 +541,6 @@ export default function DealDetailPage() {
               )}
 
               <div className="flex items-center gap-2 mt-3">
-                <button
-                  className="px-3 py-2 bg-gray-700 rounded text-sm"
-                  onClick={handleSaveAgreementDraft}
-                >
-                  Save Terms
-                </button>
                 <label className="inline-flex items-center gap-2 text-xs">
                   <input
                     type="checkbox"

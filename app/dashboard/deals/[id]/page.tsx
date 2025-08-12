@@ -759,7 +759,7 @@ export default function DealDetailPage() {
 
       {/* Chat */}
       {showChat && userId && (
-        <div className="mt-6">
+        <div className="mt-16">
           <DealChat
             dealId={deal.id}
             currentUserId={userId}

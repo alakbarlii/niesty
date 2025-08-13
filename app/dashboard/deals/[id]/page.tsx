@@ -478,6 +478,40 @@ export default function DealDetailPage() {
   const lockedDeadline =
     agreement.deadline ? new Date(agreement.deadline).toLocaleDateString() : '—';
 
+  // Reusable instructions + responsibilities block — shown in both Negotiating and Locked states
+  const AgreementGuidelines = (
+    <>
+      {/* Title + instructions */}
+      <div className="mb-3">
+        <p className="font-semibold text-base sm:text-lg">Deal Agreement</p>
+        <p className="text-xs text-white/70 mt-1">
+          <b>Step 1:</b> Align in chat. <b>Both sides must confirm the same price and delivery date.</b>{' '}
+          Once saved and both parties check the box and confirm, the deal moves to <i>Platform Escrow</i>.
+        </p>
+      </div>
+
+      {/* Role responsibilities (always visible) */}
+      <div className="grid sm:grid-cols-2 gap-3 mb-4">
+        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+          <p className="text-xs font-semibold mb-1">Business will:</p>
+          <ul className="text-xs text-white/80 list-disc ml-4 space-y-0.5">
+            <li>Deposit the agreed amount into secure escrow.</li>
+            <li>Review within 72 hours of submission.</li>
+            <li>Approve or request revisions only by agreed scope.</li>
+          </ul>
+        </div>
+        <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+          <p className="text-xs font-semibold mb-1">Creator will:</p>
+          <ul className="text-xs text-white/80 list-disc ml-4 space-y-0.5">
+            <li>Deliver by the agreed deadline.</li>
+            <li>Provide original, compliant content.</li>
+            <li>Handle up to limited in-scope revisions if requested.</li>
+          </ul>
+        </div>
+      </div>
+    </>
+  );
+
   // Simple frozen (all gray) timeline for rejected deals
   const FrozenTimeline = () => (
     <div className="space-y-2">
@@ -592,13 +626,7 @@ export default function DealDetailPage() {
         {!isDealRejected && deal.deal_stage === 'Negotiating Terms' && !bothAgreed && (
           <div className="space-y-4">
             <div className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black/30 text-white">
-              <div className="mb-3">
-                <p className="font-semibold text-base sm:text-lg">Deal Agreement</p>
-                <p className="text-xs text-white/70 mt-1">
-                  <b>Step 1:</b> Both sides propose the same price and delivery date (use the card below).
-                  Then tick the box and hit <b>Confirm Agreement</b>. Once both confirm, the deal moves to <i>Platform Escrow</i>.
-                </p>
-              </div>
+              {AgreementGuidelines}
 
               {userId && (
                 <div className="mt-4">
@@ -642,6 +670,8 @@ export default function DealDetailPage() {
         {!isDealRejected && bothAgreed && (
           <div className="space-y-4">
             <div className="p-4 sm:p-5 rounded-2xl border border-emerald-700/40 bg-emerald-900/20 text-white">
+              {AgreementGuidelines}
+
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-emerald-300 font-semibold text-base sm:text-lg">
                   Agreement Locked

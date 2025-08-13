@@ -443,6 +443,44 @@ export default function DealDetailPage() {
     }
   };
 
+  // ===== For DealProgress: per-stage timestamps =====
+  const stageTimes = useMemo<Record<DealStage, string | null>>(() => {
+    // Provide all keys explicitly to satisfy strict typing
+    if (!deal) {
+      return {
+        'Waiting for Response': null,
+        'Negotiating Terms': null,
+        'Platform Escrow': null,
+        'Content Submitted': null,
+        'Approved': null,
+        'Payment Released': null,
+      };
+    }
+
+    // Safely read created_at from latestSubmission (fallback to legacy deal.submitted_at)
+    const latestSubmittedAt: string | null =
+      ((latestSubmission as unknown as { created_at?: string | null } | null)?.created_at ??
+        deal.submitted_at ??
+        null);
+
+    // When both have agreed, take the later timestamp
+    const bothAgreedAt: string | null =
+      deal.creator_agreed_at && deal.business_agreed_at
+        ? (new Date(deal.creator_agreed_at) > new Date(deal.business_agreed_at)
+            ? deal.creator_agreed_at
+            : deal.business_agreed_at)
+        : null;
+
+    return {
+      'Waiting for Response': deal.created_at ?? null,
+      'Negotiating Terms': deal.accepted_at ?? null,
+      'Platform Escrow': bothAgreedAt,
+      'Content Submitted': latestSubmittedAt,
+      'Approved': deal.approved_at ?? null,
+      'Payment Released': deal.payment_released_at ?? null,
+    };
+  }, [deal, latestSubmission]);
+
   // ===== Render =====
   if (loading)
     return (
@@ -617,6 +655,7 @@ export default function DealDetailPage() {
                 isCreator={!!isCreator}
                 isSender={!!isSender}
                 submissionStatus={timelineSubmissionStatus}
+                stageTimes={stageTimes}
               />
             )}
           </div>
@@ -689,12 +728,7 @@ export default function DealDetailPage() {
                 <p>
                   <span className="text-white/70">Deadline:</span> {lockedDeadline}
                 </p>
-                <p className="truncate">
-                  <span className="text-white/70">Scope:</span>{' '}
-                  <span className="whitespace-pre-wrap">
-                    {agreement.scope || '—'}
-                  </span>
-                </p>
+                
               </div>
               <p className="text-xs text-emerald-300 mt-2">
                 Next: Business deposits funds in <b>Platform Escrow</b>. Only then content submission opens.

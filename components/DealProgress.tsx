@@ -15,34 +15,19 @@ export const DEAL_STAGES = [
 type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 
 export interface DealProgressProps {
-  /** Zero-based index of the current stage in DEAL_STAGES */
+  /** Zero-based index of the current stage. Pass -1 to render all stages as not-started (gray). */
   currentStage: number;
-  /** Latest submitted content link (if any) */
   contentLink?: string;
-  /** Compatibility flags (not rendered in this component) */
   isEditable?: boolean;
   isRejected?: boolean;
   rejectionReason?: string | null;
   onApprove?: () => void;
   onReject?: (reason: string) => void;
-  /** No agreement button here — kept only to satisfy callers */
-  onAgree?: () => void;
-  /** Creator submission handler (optional) */
+  onAgree?: () => void; // not used here
   onSubmitContent?: (url: string) => void;
   canApprove?: boolean;
-
-  /** Are you the creator? Enables submit/resubmit input at Content Submitted stage */
   isCreator?: boolean;
-  /** Kept for compatibility with callers; not used here */
   isSender?: boolean;
-
-  /**
-   * Status of the latest submission.
-   * Used to render:
-   *  - rework banner
-   *  - ⏳ at Content Submitted when rework/pending
-   *  - ⏳ at Payment Released while payout is in-flight
-   */
   submissionStatus?: SubmissionStatus;
 }
 
@@ -54,23 +39,17 @@ export default function DealProgress({
   rejectionReason = null,
   onApprove: _onApprove,
   onReject: _onReject,
-  onAgree: _onAgree, // intentionally unused here
+  onAgree: _onAgree,
   onSubmitContent,
   canApprove: _canApprove,
   isCreator = false,
   isSender: _isSender = false,
   submissionStatus = null,
 }: DealProgressProps) {
-  // neutralize unused props to satisfy TS/ESLint
-  void _isEditable;
-  void _onApprove;
-  void _onReject;
-  void _canApprove;
-  void _isSender;
-  void _onAgree;
+  // silence unused-args warnings
+  void _isEditable; void _onApprove; void _onReject; void _onAgree; void _canApprove; void _isSender;
 
   const [contentUrl, setContentUrl] = useState<string>('');
-
   const isValidHttpUrl = (url: string): boolean => /^https?:\/\/\S+/i.test(url);
 
   const submitIfValid = (): void => {
@@ -90,6 +69,9 @@ export default function DealProgress({
     }
   };
 
+  // NEW: allow -1 = “no stage started” (everything gray)
+  const noStageStarted = Number.isInteger(currentStage) && currentStage < 0;
+
   const safeStageIndex =
     Number.isInteger(currentStage) && currentStage >= 0 && currentStage < DEAL_STAGES.length
       ? currentStage
@@ -104,14 +86,13 @@ export default function DealProgress({
 
       <ol className="relative border-l border-gray-700 ml-3">
         {DEAL_STAGES.map((stageLabel, index) => {
-          const isCompleted = index < safeStageIndex;
           const isLastStage = index === DEAL_STAGES.length - 1;
-          const isCurrent = index === safeStageIndex;
+          const isCompleted = !noStageStarted && index < safeStageIndex;
+          const isCurrent = !noStageStarted && index === safeStageIndex;
 
-          // Drive last-stage pending clock if submission was approved but payout not yet confirmed.
+          // last-stage pending clock if content approved but payout not confirmed
           const lastStagePending = isCurrent && isLastStage && submissionStatus === 'approved';
 
-          // Decide which indicator to show
           let showCheck = false;
           let showClock = false;
 
@@ -151,7 +132,6 @@ export default function DealProgress({
                   {stageLabel}
                 </p>
 
-                {/* Content Submitted — allow (re)submit for creators only */}
                 {stageLabel === 'Content Submitted' && (
                   <div className="mt-1 space-y-1">
                     {isCreator && onSubmitContent && showResubmit && (

@@ -153,13 +153,8 @@ export default function DealDetailPage() {
           return;
         }
 
-        // Prevent auto-advance if the deal is already rejected
-        const dataRejected =
-          typeof data.deal_stage === 'string' &&
-          data.deal_stage.toLowerCase() === 'rejected';
-
-        // Auto-advance to Negotiating on accept (only if NOT rejected)
-        if (!dataRejected && data.accepted_at && data.deal_stage === 'Waiting for Response') {
+        // Auto-advance to Negotiating on accept
+        if (data.accepted_at && data.deal_stage === 'Waiting for Response') {
           await supabase.from('deals').update({ deal_stage: 'Negotiating Terms' }).eq('id', data.id);
           data.deal_stage = 'Negotiating Terms';
         }
@@ -216,21 +211,12 @@ export default function DealDetailPage() {
     (latestSubmission?.status as SubmissionStatus) ?? null;
   const rejectionReason = latestSubmission?.rejection_reason ?? null;
 
-  // Deal is rejected?
-  const isDealRejected =
-    !!deal &&
-    typeof deal.deal_stage === 'string' &&
-    deal.deal_stage.toLowerCase() === 'rejected';
-
   // Payment progress detection
   const payoutInFlight = !!deal?.approved_at && !deal?.payment_released_at;
 
   // Stage index rules:
   const currentStageIndex = useMemo(() => {
     if (!deal) return 0;
-
-    // When rejected, render as "never started" (all gray)
-    if (isDealRejected) return -1;
 
     if (deal.payment_released_at) {
       return DEAL_STAGES.indexOf('Payment Released');
@@ -251,7 +237,7 @@ export default function DealDetailPage() {
     // Fallback to DB stage
     const idx = DEAL_STAGES.indexOf(deal.deal_stage as DealStage);
     return idx >= 0 ? idx : 0;
-  }, [deal, submissionStatus, isDealRejected]);
+  }, [deal, submissionStatus]);
 
   // Display submission status for timeline:
   const timelineSubmissionStatus: SubmissionStatus =
@@ -291,10 +277,6 @@ export default function DealDetailPage() {
   // ===== Actions =====
   const handleAcceptOffer = async () => {
     if (!deal) return;
-    if (isDealRejected) {
-      alert('This offer was rejected and cannot be accepted.');
-      return;
-    }
     const { error: err } = await supabase
       .from('deals')
       .update({
@@ -516,9 +498,8 @@ export default function DealDetailPage() {
               <span className="font-semibold">Offer:</span> {deal.message}
             </p>
 
-            {/* Accept (receiver only) — hidden when rejected */}
-            {!isDealRejected &&
-              !deal.accepted_at &&
+            {/* Accept (receiver only) */}
+            {!deal.accepted_at &&
               deal.deal_stage === 'Waiting for Response' &&
               !isSender && (
                 <div className="mb-4 p-3 sm:p-4 rounded-2xl border border-white/10 bg-black/30 text-white">
@@ -584,6 +565,8 @@ export default function DealDetailPage() {
                   </ul>
                 </div>
               </div>
+
+             
 
               {/* NEW: Matching Card (forces same amount + date before confirming) */}
               {userId && (

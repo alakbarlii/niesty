@@ -15,7 +15,7 @@ import {
   type DealSubmission,
 } from '@/lib/supabase/dealSubmissions';
 
-// NEW: matcher imports
+// matcher imports
 import AgreementMatchCard from '@/components/AgreementMatchCard';
 import { fetchLatestPair, proposalsMatch } from '@/lib/supabase/terms';
 
@@ -51,7 +51,7 @@ interface Deal {
 
   // Agreement
   accepted_at?: string | null;
-  agreement_terms?: string | null; // may contain JSON (see AgreementTerms)
+  agreement_terms?: string | null;
   deal_value?: number | null;
   creator_agreed_at?: string | null;
   business_agreed_at?: string | null;
@@ -64,10 +64,15 @@ interface Deal {
 
   approved_at?: string | null;
 
-  // Payout markers (used to drive last-stage clock)
+  // Payout markers
   payout_requested_at?: string | null;
   payout_status?: 'requested' | 'paid' | null;
   payment_released_at?: string | null;
+
+  // Rejection markers (any one may exist depending on schema)
+  rejected_at?: string | null;
+  is_rejected?: boolean | null;
+  status?: string | null;
 
   // UI helpers
   sender_info?: ProfileLite;
@@ -75,8 +80,8 @@ interface Deal {
 }
 
 type AgreementTerms = {
-  scope?: string;       // deliverables/notes
-  deadline?: string;    // ISO date string (yyyy-mm-dd or ISO datetime)
+  scope?: string;
+  deadline?: string; // ISO (yyyy-mm-dd)
 };
 
 function parseAgreement(terms?: string | null): AgreementTerms {
@@ -86,7 +91,6 @@ function parseAgreement(terms?: string | null): AgreementTerms {
     if (obj && typeof obj === 'object') return obj as AgreementTerms;
     return {};
   } catch {
-    // fallback: treat as plain text scope
     return { scope: terms };
   }
 }
@@ -153,11 +157,15 @@ export default function DealDetailPage() {
           return;
         }
 
-        // If deal is rejected, DO NOT auto-advance on accept
-        const isRejected = data.deal_stage === 'Rejected';
+        // Determine if the offer was rejected (any supported flag)
+        const rejected =
+          data.is_rejected === true ||
+          !!data.rejected_at ||
+          (typeof data.status === 'string' && data.status.toLowerCase() === 'rejected') ||
+          (typeof data.deal_stage === 'string' && data.deal_stage.toLowerCase() === 'rejected');
 
-        // Auto-advance to Negotiating on accept (only if NOT rejected)
-        if (!isRejected && data.accepted_at && data.deal_stage === 'Waiting for Response') {
+        // Auto-advance to Negotiating on accept — ONLY if not rejected
+        if (!rejected && data.accepted_at && data.deal_stage === 'Waiting for Response') {
           await supabase.from('deals').update({ deal_stage: 'Negotiating Terms' }).eq('id', data.id);
           data.deal_stage = 'Negotiating Terms';
         }
@@ -185,12 +193,11 @@ export default function DealDetailPage() {
           setLatestSubmission(null);
         }
 
-        // Seed agreement UI from DB (supports JSON or plain text)
+        // Seed agreement UI
         const ag = parseAgreement(data.agreement_terms);
         setDraftAmount(Number.isFinite(Number(data.deal_value)) ? Number(data.deal_value) : '');
         setDraftDeadline(ag.deadline ? ag.deadline.slice(0, 10) : '');
         setDraftScope(ag.scope ?? (typeof data.agreement_terms === 'string' ? data.agreement_terms : ''));
-
       } catch {
         setError('Failed to load deal.');
       } finally {
@@ -214,14 +221,24 @@ export default function DealDetailPage() {
     (latestSubmission?.status as SubmissionStatus) ?? null;
   const rejectionReason = latestSubmission?.rejection_reason ?? null;
 
-  // Rejected marker (simple & explicit)
-  const isDealRejected = deal?.deal_stage === 'Rejected';
+  // Offer-level rejection (supports multiple schemas)
+  const isDealRejected = useMemo(() => {
+    if (!deal) return false;
+    const stageStr = typeof deal.deal_stage === 'string' ? deal.deal_stage.toLowerCase() : '';
+    const statusStr = typeof deal.status === 'string' ? deal.status.toLowerCase() : '';
+    return (
+      deal.is_rejected === true ||
+      !!deal.rejected_at ||
+      stageStr === 'rejected' ||
+      statusStr === 'rejected'
+    );
+  }, [deal]);
 
   // Payment progress detection
   const payoutInFlight = !!deal?.approved_at && !deal?.payment_released_at;
 
-  // Stage index rules:
-  const currentStageIndex = useMemo(() => {
+  // Stage index rules (normal path)
+  const computedStageIndex = useMemo(() => {
     if (!deal) return 0;
 
     if (deal.payment_released_at) {
@@ -240,14 +257,17 @@ export default function DealDetailPage() {
       return DEAL_STAGES.indexOf('Content Submitted'); // clock at Content Submitted
     }
 
-    // Fallback to DB stage
     const idx = DEAL_STAGES.indexOf(deal.deal_stage as DealStage);
     return idx >= 0 ? idx : 0;
   }, [deal, submissionStatus]);
 
-  // Display submission status for timeline:
+  // For a rejected offer we want the entire timeline gray:
+  // pass -1 so nothing is "current" or "done" (idx < -1 is false; idx === -1 is false).
+  const currentStageForTimeline = isDealRejected ? -1 : computedStageIndex;
+
+  // Display submission status for timeline (none when rejected or already paid)
   const timelineSubmissionStatus: SubmissionStatus =
-    deal?.payment_released_at ? null : submissionStatus;
+    isDealRejected || deal?.payment_released_at ? null : submissionStatus;
 
   const bothAgreed = !!deal?.creator_agreed_at && !!deal?.business_agreed_at;
 
@@ -271,7 +291,7 @@ export default function DealDetailPage() {
           }
         })(),
       ]);
-    if (d) setDeal((prev) => (prev ? { ...prev, ...d } : (d as Deal)));
+      if (d) setDeal((prev) => (prev ? { ...prev, ...d } : (d as Deal)));
       setLatestSubmission(sub);
     } catch {
       /* no-op */
@@ -280,7 +300,7 @@ export default function DealDetailPage() {
 
   const nowISO = () => new Date().toISOString();
 
-  // ===== Actions (blocked when Rejected) =====
+  // ===== Actions (all blocked if deal is rejected) =====
   const handleAcceptOffer = async () => {
     if (!deal) return;
     if (isDealRejected) {
@@ -319,7 +339,7 @@ export default function DealDetailPage() {
 
     const termsJson = buildAgreement({
       scope: (draftScope || '').trim(),
-      deadline: draftDeadline, // yyyy-mm-dd
+      deadline: draftDeadline,
     });
 
     const { error: err } = await supabase
@@ -336,7 +356,6 @@ export default function DealDetailPage() {
       return;
     }
 
-    // Local reflect
     setDeal((prev) =>
       prev
         ? {
@@ -357,7 +376,6 @@ export default function DealDetailPage() {
       return;
     }
 
-    // 0) enforce: amount + deadline must be saved on the record
     const amount = Number(deal.deal_value || 0);
     const ag = parseAgreement(deal.agreement_terms);
     if (!amount || amount <= 0 || !ag.deadline) {
@@ -369,7 +387,6 @@ export default function DealDetailPage() {
       return;
     }
 
-    // 1) enforce matching proposals between both parties
     try {
       const pair = await fetchLatestPair(deal.id, deal.sender_id, deal.receiver_id);
       const ok = proposalsMatch(pair.sender, pair.receiver);
@@ -382,7 +399,6 @@ export default function DealDetailPage() {
       return;
     }
 
-    // 2) Stamp my role's agreement
     const myRole = myProfile?.role;
     const col = myRole === 'creator' ? 'creator_agreed_at' : 'business_agreed_at';
 
@@ -395,7 +411,6 @@ export default function DealDetailPage() {
       return;
     }
 
-    // 3) If both sides agreed → move to Platform Escrow
     const { data: refreshed } = await supabase
       .from('deals')
       .select('id,creator_agreed_at,business_agreed_at,deal_stage')
@@ -488,13 +503,19 @@ export default function DealDetailPage() {
 
   const businessCanReview = !isDealRejected && !!isBusiness && submissionStatus === 'pending';
 
-  // Deadlines display
   const lockedDeadline = agreementFromDb.deadline
     ? new Date(agreementFromDb.deadline).toLocaleDateString()
     : '—';
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto relative">
+      {/* Rejected banner */}
+      {isDealRejected && (
+        <div className="mb-4 p-3 rounded-xl border border-red-500/40 bg-red-900/20 text-red-200 text-sm">
+          This offer was <b>rejected</b>. It can’t be accepted or progressed.
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white">Deal Details</h1>
@@ -507,13 +528,6 @@ export default function DealDetailPage() {
           <span className="text-sm">Chat</span>
         </button>
       </div>
-
-      {/* Rejected banner */}
-      {isDealRejected && (
-        <div className="mb-4 p-3 rounded-xl border border-red-500/40 bg-red-900/20 text-red-200 text-sm">
-          This offer was <b>rejected</b>. It can’t be accepted or progressed.
-        </div>
-      )}
 
       {/* Meta */}
       <div className="bg-white/10 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-sm sm:text-base font-semibold text-white mb-4 gap-3 sm:gap-0">
@@ -554,9 +568,9 @@ export default function DealDetailPage() {
                 </div>
               )}
 
-            {/* Timeline — all gray if Rejected */}
+            {/* Timeline — fully gray when rejected via currentStage = -1 */}
             <DealProgress
-              currentStage={isDealRejected ? -1 : currentStageIndex}
+              currentStage={currentStageForTimeline}
               contentLink={submissionUrl}
               isEditable={false}
               isRejected={submissionStatus === 'rework'}
@@ -585,7 +599,7 @@ export default function DealDetailPage() {
                 </p>
               </div>
 
-              {/* Role responsibilities (both can see both) */}
+              {/* Role responsibilities */}
               <div className="grid sm:grid-cols-2 gap-3 mb-3">
                 <div className="bg-white/5 rounded-lg p-3 border border-white/10">
                   <p className="text-xs font-semibold mb-1">Business will:</p>
@@ -605,7 +619,7 @@ export default function DealDetailPage() {
                 </div>
               </div>
 
-              {/* NEW: Matching Card (forces same amount + date before confirming) */}
+              {/* Matching Card */}
               {userId && (
                 <div className="mt-4">
                   <AgreementMatchCard
@@ -621,7 +635,7 @@ export default function DealDetailPage() {
               <div className="flex items-center gap-2 mt-3">
                 <button
                   className="px-3 py-2 bg-gray-700 rounded text-sm"
-                  onClick={handleSaveAgreementDraft}
+                  onClick={() => void handleSaveAgreementDraft()}
                 >
                   Save Terms
                 </button>
@@ -635,7 +649,7 @@ export default function DealDetailPage() {
                 </label>
                 <button
                   className="ml-auto px-4 py-2 bg-emerald-600 rounded text-white text-sm sm:text-base disabled:opacity-50"
-                  onClick={handleConfirmAgreement}
+                  onClick={() => void handleConfirmAgreement()}
                   disabled={!agreeChecked}
                 >
                   Confirm Agreement

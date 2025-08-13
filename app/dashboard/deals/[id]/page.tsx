@@ -51,7 +51,7 @@ interface Deal {
 
   // Agreement
   accepted_at?: string | null;
-  agreement_terms?: string | null; // may contain JSON (see AgreementTerms)
+  agreement_terms?: string | null;
   deal_value?: number | null;
   creator_agreed_at?: string | null;
   business_agreed_at?: string | null;
@@ -64,10 +64,15 @@ interface Deal {
 
   approved_at?: string | null;
 
-  // Payout markers (used to drive last-stage clock)
+  // Payout markers
   payout_requested_at?: string | null;
   payout_status?: 'requested' | 'paid' | null;
   payment_released_at?: string | null;
+
+  // Rejection markers (optional; UI reads them if present)
+  rejected_at?: string | null;
+  is_rejected?: boolean | null;
+  status?: string | null;
 
   // UI helpers
   sender_info?: ProfileLite;
@@ -75,8 +80,8 @@ interface Deal {
 }
 
 type AgreementTerms = {
-  scope?: string;       // deliverables/notes
-  deadline?: string;    // ISO date string (yyyy-mm-dd or ISO datetime)
+  scope?: string;
+  deadline?: string;
 };
 
 function parseAgreement(terms?: string | null): AgreementTerms {
@@ -86,7 +91,6 @@ function parseAgreement(terms?: string | null): AgreementTerms {
     if (obj && typeof obj === 'object') return obj as AgreementTerms;
     return {};
   } catch {
-    // fallback: treat as plain text scope
     return { scope: terms };
   }
 }
@@ -113,7 +117,7 @@ export default function DealDetailPage() {
 
   // Agreement draft inputs
   const [draftAmount, setDraftAmount] = useState<number | ''>('');
-  const [draftDeadline, setDraftDeadline] = useState<string>(''); // yyyy-mm-dd
+  const [draftDeadline, setDraftDeadline] = useState<string>('');
   const [draftScope, setDraftScope] = useState<string>('');
   const [agreeChecked, setAgreeChecked] = useState<boolean>(false);
 
@@ -153,8 +157,15 @@ export default function DealDetailPage() {
           return;
         }
 
-        // Auto-advance to Negotiating on accept
-        if (data.accepted_at && data.deal_stage === 'Waiting for Response') {
+        // Recognize rejected to avoid auto-advance
+        const rejected =
+          data.is_rejected === true ||
+          !!data.rejected_at ||
+          data.status === 'rejected' ||
+          data.deal_stage === 'Rejected';
+
+        // Auto-advance to Negotiating on accept — only if NOT rejected
+        if (!rejected && data.accepted_at && data.deal_stage === 'Waiting for Response') {
           await supabase.from('deals').update({ deal_stage: 'Negotiating Terms' }).eq('id', data.id);
           data.deal_stage = 'Negotiating Terms';
         }
@@ -182,7 +193,7 @@ export default function DealDetailPage() {
           setLatestSubmission(null);
         }
 
-        // Seed agreement UI from DB (supports JSON or plain text)
+        // Seed agreement UI from DB
         const ag = parseAgreement(data.agreement_terms);
         setDraftAmount(Number.isFinite(Number(data.deal_value)) ? Number(data.deal_value) : '');
         setDraftDeadline(ag.deadline ? ag.deadline.slice(0, 10) : '');
@@ -211,10 +222,18 @@ export default function DealDetailPage() {
     (latestSubmission?.status as SubmissionStatus) ?? null;
   const rejectionReason = latestSubmission?.rejection_reason ?? null;
 
+  // Was the INITIAL offer rejected?
+  const isDealRejected =
+    !!deal &&
+    (deal.is_rejected === true ||
+      !!deal.rejected_at ||
+      deal.status === 'rejected' ||
+      deal.deal_stage === 'Rejected');
+
   // Payment progress detection
   const payoutInFlight = !!deal?.approved_at && !deal?.payment_released_at;
 
-  // Stage index rules:
+  // Stage index rules (normal)
   const currentStageIndex = useMemo(() => {
     if (!deal) return 0;
 
@@ -239,19 +258,26 @@ export default function DealDetailPage() {
     return idx >= 0 ? idx : 0;
   }, [deal, submissionStatus]);
 
+  // Use a special index for UI when rejected → entire timeline appears "never started" (all gray).
+  const progressStageForUI = isDealRejected ? -1 : currentStageIndex;
+
   // Display submission status for timeline:
   const timelineSubmissionStatus: SubmissionStatus =
     deal?.payment_released_at ? null : submissionStatus;
 
   const bothAgreed = !!deal?.creator_agreed_at && !!deal?.business_agreed_at;
 
-  const displayAmount = useMemo(() => {
-    const val = deal?.deal_value;
-    if (!val || val <= 0) return deal?.deal_stage === 'Negotiating Terms' ? 'Negotiate' : '—';
-    return `$${Math.round(val).toLocaleString()} USD`;
-  }, [deal?.deal_value, deal?.deal_stage]);
+  // Price label (always visible)
+  const amountLabel = useMemo(() => {
+    const v = deal?.deal_value;
+    if (!v || v <= 0) return 'Negotiate';
+    return `$${Math.round(v).toLocaleString()} USD`;
+  }, [deal?.deal_value]);
 
-  const agreementFromDb = useMemo(() => parseAgreement(deal?.agreement_terms), [deal?.agreement_terms]);
+  const agreementFromDb = useMemo(
+    () => parseAgreement(deal?.agreement_terms),
+    [deal?.agreement_terms]
+  );
 
   const refreshDeal = async (id: string) => {
     try {
@@ -265,7 +291,7 @@ export default function DealDetailPage() {
           }
         })(),
       ]);
-      if (d) setDeal((prev) => (prev ? { ...prev, ...d } : (d as Deal)));
+    if (d) setDeal((prev) => (prev ? { ...prev, ...d } : (d as Deal)));
       setLatestSubmission(sub);
     } catch {
       /* no-op */
@@ -274,9 +300,13 @@ export default function DealDetailPage() {
 
   const nowISO = () => new Date().toISOString();
 
-  // ===== Actions =====
+  // ===== Actions (blocked if rejected) =====
   const handleAcceptOffer = async () => {
     if (!deal) return;
+    if (isDealRejected) {
+      alert('This offer was rejected and cannot be accepted.');
+      return;
+    }
     const { error: err } = await supabase
       .from('deals')
       .update({
@@ -293,6 +323,10 @@ export default function DealDetailPage() {
 
   const handleSaveAgreementDraft = async () => {
     if (!deal) return;
+    if (isDealRejected) {
+      alert('This deal was rejected and cannot be modified.');
+      return;
+    }
     const amount = Number(draftAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
       alert('Enter a valid amount.');
@@ -305,7 +339,7 @@ export default function DealDetailPage() {
 
     const termsJson = buildAgreement({
       scope: (draftScope || '').trim(),
-      deadline: draftDeadline, // yyyy-mm-dd
+      deadline: draftDeadline,
     });
 
     const { error: err } = await supabase
@@ -322,7 +356,6 @@ export default function DealDetailPage() {
       return;
     }
 
-    // Local reflect
     setDeal((prev) =>
       prev
         ? {
@@ -338,8 +371,12 @@ export default function DealDetailPage() {
 
   const handleConfirmAgreement = async () => {
     if (!deal || !userId) return;
+    if (isDealRejected) {
+      alert('This deal was rejected and cannot be confirmed.');
+      return;
+    }
 
-    // 0) enforce: amount + deadline must be saved on the record
+    // 0) Must have amount + date saved
     const amount = Number(deal.deal_value || 0);
     const ag = parseAgreement(deal.agreement_terms);
     if (!amount || amount <= 0 || !ag.deadline) {
@@ -351,7 +388,7 @@ export default function DealDetailPage() {
       return;
     }
 
-    // 1) enforce matching proposals between both parties
+    // 1) Enforce matching proposals
     try {
       const pair = await fetchLatestPair(deal.id, deal.sender_id, deal.receiver_id);
       const ok = proposalsMatch(pair.sender, pair.receiver);
@@ -397,6 +434,10 @@ export default function DealDetailPage() {
   // Submission (creator)
   const handleSubmitContent = async (url: string) => {
     if (!deal || !isCreator || !userId) return;
+    if (isDealRejected) {
+      alert('This deal was rejected. You cannot submit content.');
+      return;
+    }
     try {
       await submitSubmission(deal.id, url, userId);
       setDeliverUrl('');
@@ -409,6 +450,10 @@ export default function DealDetailPage() {
   // Business reject (with reason)
   const handleRejectContent = async (reason: string) => {
     if (!deal || !isBusiness || !latestSubmission) return;
+    if (isDealRejected) {
+      alert('This deal was rejected already.');
+      return;
+    }
     try {
       await rejectSubmission(latestSubmission.id, deal.id, reason);
       await refreshDeal(deal.id);
@@ -420,6 +465,10 @@ export default function DealDetailPage() {
   // Business approve
   const handleApproval = async () => {
     if (!deal || !isBusiness || !latestSubmission) return;
+    if (isDealRejected) {
+      alert('This deal was rejected already.');
+      return;
+    }
     try {
       await approveSubmission(latestSubmission.id, deal.id);
       await refreshDeal(deal.id);
@@ -451,16 +500,12 @@ export default function DealDetailPage() {
   const isValidHttpUrl = (url: string): boolean => /^https?:\/\/\S+/i.test(url);
   const latestIsRework = submissionStatus === 'rework';
   const creatorCanSubmit =
+    !isDealRejected &&
     !!isCreator &&
     (deal.deal_stage === 'Platform Escrow' || deal.deal_stage === 'Content Submitted') &&
     (latestIsRework || !submissionUrl);
 
-  const businessCanReview = !!isBusiness && submissionStatus === 'pending';
-
-  // Deadlines display
-  const lockedDeadline = agreementFromDb.deadline
-    ? new Date(agreementFromDb.deadline).toLocaleDateString()
-    : '—';
+  const businessCanReview = !isDealRejected && !!isBusiness && submissionStatus === 'pending';
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto relative">
@@ -476,6 +521,13 @@ export default function DealDetailPage() {
           <span className="text-sm">Chat</span>
         </button>
       </div>
+
+      {/* Rejected banner */}
+      {isDealRejected && (
+        <div className="mb-4 p-3 rounded-xl border border-red-500/40 bg-red-900/20 text-red-200 text-sm">
+          This offer was <b>rejected</b>. It can’t be accepted or progressed.
+        </div>
+      )}
 
       {/* Meta */}
       <div className="bg-white/10 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-sm sm:text-base font-semibold text-white mb-4 gap-3 sm:gap-0">
@@ -494,12 +546,20 @@ export default function DealDetailPage() {
         {/* LEFT: Progress */}
         <div className="space-y-4">
           <div className="border border-white/10 bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 text-white shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-white text-sm sm:text-base font-semibold">Deal Progress</p>
+              <span className="text-xs sm:text-sm font-medium text-white/80">
+                {amountLabel}
+              </span>
+            </div>
+
             <p className="text-white text-sm sm:text-base mb-3">
               <span className="font-semibold">Offer:</span> {deal.message}
             </p>
 
-            {/* Accept (receiver only) */}
-            {!deal.accepted_at &&
+            {/* Accept (receiver only) — hidden if rejected */}
+            {!isDealRejected &&
+              !deal.accepted_at &&
               deal.deal_stage === 'Waiting for Response' &&
               !isSender && (
                 <div className="mb-4 p-3 sm:p-4 rounded-2xl border border-white/10 bg-black/30 text-white">
@@ -515,9 +575,9 @@ export default function DealDetailPage() {
                 </div>
               )}
 
-            {/* Timeline — no agree button inside */}
+            {/* Timeline */}
             <DealProgress
-              currentStage={currentStageIndex}
+              currentStage={progressStageForUI}
               contentLink={submissionUrl}
               isEditable={false}
               isRejected={submissionStatus === 'rework'}
@@ -536,7 +596,7 @@ export default function DealDetailPage() {
 
         {/* RIGHT: Agreement Card */}
         <div className="space-y-4">
-          {deal.deal_stage === 'Negotiating Terms' && !bothAgreed && (
+          {deal.deal_stage === 'Negotiating Terms' && !bothAgreed && !isDealRejected && (
             <div className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black/30 text-white">
               <div className="mb-3">
                 <p className="font-semibold text-base sm:text-lg">Deal Agreement</p>
@@ -546,7 +606,7 @@ export default function DealDetailPage() {
                 </p>
               </div>
 
-              {/* Role responsibilities (both can see both) */}
+              {/* Responsibilities */}
               <div className="grid sm:grid-cols-2 gap-3 mb-3">
                 <div className="bg-white/5 rounded-lg p-3 border border-white/10">
                   <p className="text-xs font-semibold mb-1">Business will:</p>
@@ -566,9 +626,7 @@ export default function DealDetailPage() {
                 </div>
               </div>
 
-             
-
-              {/* NEW: Matching Card (forces same amount + date before confirming) */}
+              {/* Matching Card */}
               {userId && (
                 <div className="mt-4">
                   <AgreementMatchCard
@@ -612,7 +670,7 @@ export default function DealDetailPage() {
             </div>
           )}
 
-          {bothAgreed && (
+          {bothAgreed && !isDealRejected && (
             <div className="p-4 sm:p-5 rounded-2xl border border-emerald-700/40 bg-emerald-900/20 text-white">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-emerald-300 font-semibold text-base sm:text-lg">
@@ -620,12 +678,15 @@ export default function DealDetailPage() {
                 </p>
                 <span className="text-xs sm:text-sm">
                   Amount:&nbsp;
-                  <span className="font-semibold">{displayAmount}</span>
+                  <span className="font-semibold">{amountLabel}</span>
                 </span>
               </div>
               <div className="grid sm:grid-cols-2 gap-2 mt-2 text-sm">
                 <p>
-                  <span className="text-white/70">Deadline:</span> {lockedDeadline}
+                  <span className="text-white/70">Deadline:</span>{' '}
+                  {agreementFromDb.deadline
+                    ? new Date(agreementFromDb.deadline).toLocaleDateString()
+                    : '—'}
                 </p>
                 <p className="truncate">
                   <span className="text-white/70">Scope:</span>{' '}
@@ -641,121 +702,123 @@ export default function DealDetailPage() {
       </div>
 
       {/* ======= CONTENT DELIVERY ======= */}
-      <div className="mt-6 border border-white/10 bg-black/40 rounded-2xl p-4 sm:p-5 text-white">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg sm:text-xl font-bold">Content Delivery</h2>
-          <span className="text-xs text-white/60">
-            Stage: <span className="font-semibold">{deal.deal_stage}</span>
-          </span>
-        </div>
+      {!isDealRejected && (
+        <div className="mt-6 border border-white/10 bg-black/40 rounded-2xl p-4 sm:p-5 text-white">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg sm:text-xl font-bold">Content Delivery</h2>
+            <span className="text-xs text-white/60">
+              Stage: <span className="font-semibold">{deal.deal_stage}</span>
+            </span>
+          </div>
 
-        {/* Status / latest link */}
-        <div className="text-sm mb-3">
-          {submissionUrl ? (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <span className="text-white/70">Latest submission:</span>
-              <a
-                href={submissionUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 underline break-all"
-              >
-                {submissionUrl}
-              </a>
-            </div>
-          ) : (
-            <span className="text-white/60">No submission yet.</span>
-          )}
-          {rejectionReason && (
-            <div className="mt-2 text-red-400 text-sm">
-              <span className="font-semibold">Rework requested:</span> {rejectionReason}
-            </div>
-          )}
-        </div>
+          {/* Status / latest link */}
+          <div className="text-sm mb-3">
+            {submissionUrl ? (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <span className="text-white/70">Latest submission:</span>
+                <a
+                  href={submissionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline break-all"
+                >
+                  {submissionUrl}
+                </a>
+              </div>
+            ) : (
+              <span className="text-white/60">No submission yet.</span>
+            )}
+            {rejectionReason && (
+              <div className="mt-2 text-red-400 text-sm">
+                <span className="font-semibold">Rework requested:</span> {rejectionReason}
+              </div>
+            )}
+          </div>
 
-        {/* Creator: Submit / Resubmit */}
-        {creatorCanSubmit && (
-          <div className="mt-3">
-            <label className="block text-xs text-white/60 mb-1">Content URL</label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="url"
-                inputMode="url"
-                autoComplete="off"
-                placeholder="https://your-content-url.com"
-                value={deliverUrl}
-                onChange={(e) => setDeliverUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
+          {/* Creator: Submit / Resubmit */}
+          {creatorCanSubmit && (
+            <div className="mt-3">
+              <label className="block text-xs text-white/60 mb-1">Content URL</label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="url"
+                  inputMode="url"
+                  autoComplete="off"
+                  placeholder="https://your-content-url.com"
+                  value={deliverUrl}
+                  onChange={(e) => setDeliverUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const url = deliverUrl.trim();
+                      if (!isValidHttpUrl(url)) {
+                        alert('Enter a valid URL starting with http:// or https://');
+                        return;
+                      }
+                      void handleSubmitContent(url);
+                    }
+                  }}
+                  className="flex-1 text-sm p-2 rounded bg-gray-900 border border-white/10 text-white"
+                  aria-label="Content URL"
+                />
+                <button
+                  onClick={() => {
                     const url = deliverUrl.trim();
                     if (!isValidHttpUrl(url)) {
                       alert('Enter a valid URL starting with http:// or https://');
                       return;
                     }
                     void handleSubmitContent(url);
-                  }
-                }}
-                className="flex-1 text-sm p-2 rounded bg-gray-900 border border-white/10 text-white"
-                aria-label="Content URL"
-              />
-              <button
-                onClick={() => {
-                  const url = deliverUrl.trim();
-                  if (!isValidHttpUrl(url)) {
-                    alert('Enter a valid URL starting with http:// or https://');
-                    return;
-                  }
-                  void handleSubmitContent(url);
-                }}
-                className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600 text-sm"
-              >
-                {latestIsRework ? 'Resubmit' : 'Submit'}
-              </button>
+                  }}
+                  className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600 text-sm"
+                >
+                  {latestIsRework ? 'Resubmit' : 'Submit'}
+                </button>
+              </div>
+              <p className="text-xs text-white/50 mt-2">
+                {latestIsRework
+                  ? 'Your previous submission was rejected. Update and resubmit the correct link.'
+                  : 'Submit the final link to your content for review.'}
+              </p>
             </div>
-            <p className="text-xs text-white/50 mt-2">
-              {latestIsRework
-                ? 'Your previous submission was rejected. Update and resubmit the correct link.'
-                : 'Submit the final link to your content for review.'}
-            </p>
-          </div>
-        )}
+          )}
 
-        {/* Business: Approve / Reject */}
-        {businessCanReview && submissionUrl && (
-          <div className="mt-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-              <button
-                onClick={() => void handleApproval()}
-                className="px-4 py-2 bg-emerald-500 text-black rounded font-semibold hover:bg-emerald-600 text-sm"
-              >
-                Approve
-              </button>
-              <button
-                onClick={() => {
-                  const reason = window.prompt('Reason for rejection:')?.trim();
-                  if (!reason) return;
-                  void handleRejectContent(reason);
-                }}
-                className="px-4 py-2 bg-red-500 text-white rounded font-semibold hover:bg-red-600 text-sm"
-              >
-                Reject
-              </button>
+          {/* Business: Approve / Reject */}
+          {businessCanReview && submissionUrl && (
+            <div className="mt-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                <button
+                  onClick={() => void handleApproval()}
+                  className="px-4 py-2 bg-emerald-500 text-black rounded font-semibold hover:bg-emerald-600 text-sm"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => {
+                    const reason = window.prompt('Reason for rejection:')?.trim();
+                    if (!reason) return;
+                    void handleRejectContent(reason);
+                  }}
+                  className="px-4 py-2 bg-red-500 text-white rounded font-semibold hover:bg-red-600 text-sm"
+                >
+                  Reject
+                </button>
+              </div>
+              <p className="text-xs text-white/50 mt-2">
+                Approval moves the deal to <span className="font-semibold">Approved</span>. Rejection returns to{' '}
+                <span className="font-semibold">Content Submitted</span> with your reason.
+              </p>
             </div>
-            <p className="text-xs text-white/50 mt-2">
-              Approval moves the deal to <span className="font-semibold">Approved</span>. Rejection returns to{' '}
-              <span className="font-semibold">Content Submitted</span> with your reason.
-            </p>
-          </div>
-        )}
+          )}
 
-        {/* Payout in progress hint */}
-        {payoutInFlight && !deal.payment_released_at && (
-          <p className="mt-3 text-xs text-yellow-300">
-            Payment is being released. <span className="opacity-80">Final stage shows a pending clock until funds land.</span>
-          </p>
-        )}
-      </div>
+          {/* Payout in progress hint */}
+          {payoutInFlight && !deal.payment_released_at && (
+            <p className="mt-3 text-xs text-yellow-300">
+              Payment is being released. <span className="opacity-80">Final stage shows a pending clock until funds land.</span>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Chat */}
       {showChat && userId && (

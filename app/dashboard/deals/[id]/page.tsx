@@ -73,9 +73,6 @@ interface Deal {
   payout_status?: 'requested' | 'paid' | null;
   payment_released_at?: string | null;
 
-  // Escrow fund time (for stage times)
-  escrow_funded_at?: string | null;
-
   // Rejected flags (any one may exist depending on schema)
   rejected_at?: string | null;
   is_rejected?: boolean | null;
@@ -468,12 +465,10 @@ export default function DealDetailPage() {
   // Helpers
   const isValidHttpUrl = (url: string): boolean => /^https?:\/\/\S+/i.test(url);
   const latestIsRework = submissionStatus === 'rework';
-
-  // Creator can submit ONLY at "Content Submitted"
   const creatorCanSubmit =
     !isDealRejected &&
     !!isCreator &&
-    deal.deal_stage === 'Content Submitted' &&
+    (deal.deal_stage === 'Platform Escrow' || deal.deal_stage === 'Content Submitted') &&
     (latestIsRework || !submissionUrl);
 
   const businessCanReview = !isDealRejected && !!isBusiness && submissionStatus === 'pending';
@@ -482,17 +477,6 @@ export default function DealDetailPage() {
   const agreement = agreementFromDb;
   const lockedDeadline =
     agreement.deadline ? new Date(agreement.deadline).toLocaleDateString() : '—';
-
-  // Stage times (no hooks → no rule-of-hooks warning)
-  const stageTimes: Record<DealStage, string | null | undefined> = {
-    'Waiting for Response': deal.created_at,
-    'Negotiating Terms': deal.accepted_at ?? (deal.creator_agreed_at || deal.business_agreed_at),
-    'Platform Escrow': deal.escrow_funded_at ?? null,
-    'Content Submitted': deal.submitted_at ?? null,
-    'Approved': deal.approved_at ?? deal.payout_requested_at,
-    'Payment Released': deal.payment_released_at,
-  };
-  const fmt = (ts?: string | null) => (ts ? new Date(ts).toLocaleString() : '—');
 
   // Reusable instructions + responsibilities block — shown in both Negotiating and Locked states
   const AgreementGuidelines = (
@@ -548,13 +532,6 @@ export default function DealDetailPage() {
       </ol>
     </div>
   );
-
-  // Show Content Delivery only from "Content Submitted" onward
-  const showContentDelivery =
-    !isDealRejected &&
-    (deal.deal_stage === 'Content Submitted' ||
-      deal.deal_stage === 'Approved' ||
-      deal.deal_stage === 'Payment Released');
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto relative">
@@ -626,36 +603,21 @@ export default function DealDetailPage() {
             {isDealRejected ? (
               <FrozenTimeline />
             ) : (
-              <>
-                <DealProgress
-                  currentStage={currentStageIndex}
-                  contentLink={submissionUrl}
-                  isEditable={false}
-                  isRejected={submissionStatus === 'rework'}
-                  rejectionReason={rejectionReason}
-                  onApprove={undefined}
-                  onReject={undefined}
-                  onAgree={undefined}
-                  onSubmitContent={undefined}
-                  canApprove={false}
-                  isCreator={!!isCreator}
-                  isSender={!!isSender}
-                  submissionStatus={timelineSubmissionStatus}
-                />
-
-                {/* Stage times (compact) */}
-                <div className="mt-4 border-t border-white/10 pt-3">
-                  <p className="text-xs text-white/70 mb-2">Stage Times</p>
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-white/70">
-                    {DEAL_STAGES.map((s) => (
-                      <li key={s} className="flex justify-between gap-2">
-                        <span className="text-white/80">{s}:</span>
-                        <span className="text-right">{fmt(stageTimes[s as DealStage])}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </>
+              <DealProgress
+                currentStage={currentStageIndex}
+                contentLink={submissionUrl}
+                isEditable={false}
+                isRejected={submissionStatus === 'rework'}
+                rejectionReason={rejectionReason}
+                onApprove={undefined}
+                onReject={undefined}
+                onAgree={undefined}
+                onSubmitContent={undefined}
+                canApprove={false}
+                isCreator={!!isCreator}
+                isSender={!!isSender}
+                submissionStatus={timelineSubmissionStatus}
+              />
             )}
           </div>
         </div>
@@ -738,7 +700,7 @@ export default function DealDetailPage() {
       </div>
 
       {/* ======= CONTENT DELIVERY ======= */}
-      {showContentDelivery && (
+      {!isDealRejected && (
         <div className="mt-6 border border-white/10 bg-black/40 rounded-2xl p-4 sm:p-5 text-white">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg sm:text-xl font-bold">Content Delivery</h2>
@@ -771,7 +733,7 @@ export default function DealDetailPage() {
             )}
           </div>
 
-          {/* Creator: Submit / Resubmit — ONLY at Content Submitted */}
+          {/* Creator: Submit / Resubmit */}
           {creatorCanSubmit && (
             <div className="mt-3">
               <label className="block text-xs text-white/60 mb-1">Content URL</label>

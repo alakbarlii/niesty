@@ -5,9 +5,10 @@ import type { CookieOptions } from '@supabase/ssr';
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
+  const { pathname } = req.nextUrl;
 
-  //  This client is only kept here in case you use cookies later
-  createServerClient(
+  // Build Supabase client bound to middleware cookies
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -25,12 +26,37 @@ export async function middleware(req: NextRequest) {
     }
   );
 
-  //  This is enough for now — don't redirect based on session
+  // Protect admin paths only
+  const isAdminPath =
+    pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
+
+  if (!isAdminPath) {
+    return res; // all other paths unchanged
+  }
+
+  // Require signed-in user
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/login';
+    url.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(url);
+  }
+
+  // Require admin via RPC (uses the anon key + user session cookies)
+  const { data: isAdmin, error } = await supabase.rpc('is_admin', { uid: user.id });
+  if (error || !isAdmin) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/403';
+    return NextResponse.redirect(url);
+  }
+
   return res;
 }
 
 export const config = {
   matcher: [
+    // your existing protected app areas
     '/dashboard/:path*',
     '/deals/:path*',
     '/earnings/:path*',
@@ -39,5 +65,8 @@ export const config = {
     '/report/:path*',
     '/search/:path*',
     '/settings/:path*',
+    // NEW: admin gate
+    '/admin/:path*',
+    '/api/admin/:path*',
   ],
 };

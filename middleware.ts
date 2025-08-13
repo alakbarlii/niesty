@@ -1,3 +1,4 @@
+// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
@@ -7,7 +8,11 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
   const { pathname } = req.nextUrl;
 
-  // Build Supabase client bound to middleware cookies
+  // Only guard admin surfaces
+  const isAdminPath = pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
+  if (!isAdminPath) return res;
+
+  // Supabase client bound to middleware cookies
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -26,14 +31,6 @@ export async function middleware(req: NextRequest) {
     }
   );
 
-  // Protect admin paths only
-  const isAdminPath =
-    pathname.startsWith('/admin') || pathname.startsWith('/api/admin/');
-
-  if (!isAdminPath) {
-    return res; // all other paths unchanged
-  }
-
   // Require signed-in user
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -43,9 +40,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Require admin via RPC (uses the anon key + user session cookies)
-  const { data: isAdmin, error } = await supabase.rpc('is_admin', { uid: user.id });
-  if (error || !isAdmin) {
+  // Require admin via RPC (uses existing public.is_admin(uid))
+  const { data: isAdmin } = await supabase.rpc('is_admin', { uid: user.id });
+  if (!isAdmin) {
     const url = req.nextUrl.clone();
     url.pathname = '/403';
     return NextResponse.redirect(url);
@@ -55,18 +52,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    // your existing protected app areas
-    '/dashboard/:path*',
-    '/deals/:path*',
-    '/earnings/:path*',
-    '/notifications/:path*',
-    '/profile/:path*',
-    '/report/:path*',
-    '/search/:path*',
-    '/settings/:path*',
-    // NEW: admin gate
-    '/admin/:path*',
-    '/api/admin/:path*',
-  ],
+  matcher: ['/admin/:path*', '/api/admin/:path*'],
 };

@@ -1,3 +1,7 @@
+
+
+
+
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -68,11 +72,6 @@ interface Deal {
   payout_requested_at?: string | null;
   payout_status?: 'requested' | 'paid' | null;
   payment_released_at?: string | null;
-
-  // Rejection markers (any one may exist depending on schema)
-  rejected_at?: string | null;
-  is_rejected?: boolean | null;
-  status?: string | null; // e.g. 'rejected'
 
   // UI helpers
   sender_info?: ProfileLite;
@@ -158,15 +157,8 @@ export default function DealDetailPage() {
           return;
         }
 
-        // ===== STOP auto-advance if the deal was rejected
-        const rejected =
-          data.is_rejected === true ||
-          !!data.rejected_at ||
-          data.status === 'rejected' ||
-          data.deal_stage === 'Rejected';
-
-        // Auto-advance to Negotiating on accept (only if NOT rejected)
-        if (!rejected && data.accepted_at && data.deal_stage === 'Waiting for Response') {
+        // Auto-advance to Negotiating on accept
+        if (data.accepted_at && data.deal_stage === 'Waiting for Response') {
           await supabase.from('deals').update({ deal_stage: 'Negotiating Terms' }).eq('id', data.id);
           data.deal_stage = 'Negotiating Terms';
         }
@@ -199,6 +191,7 @@ export default function DealDetailPage() {
         setDraftAmount(Number.isFinite(Number(data.deal_value)) ? Number(data.deal_value) : '');
         setDraftDeadline(ag.deadline ? ag.deadline.slice(0, 10) : '');
         setDraftScope(ag.scope ?? (typeof data.agreement_terms === 'string' ? data.agreement_terms : ''));
+
       } catch {
         setError('Failed to load deal.');
       } finally {
@@ -221,14 +214,6 @@ export default function DealDetailPage() {
   const submissionStatus: SubmissionStatus =
     (latestSubmission?.status as SubmissionStatus) ?? null;
   const rejectionReason = latestSubmission?.rejection_reason ?? null;
-
-  // Was the INITIAL offer rejected? (support multiple possible fields)
-  const isDealRejected =
-    !!deal &&
-    (deal.is_rejected === true ||
-      !!deal.rejected_at ||
-      deal.status === 'rejected' ||
-      deal.deal_stage === 'Rejected');
 
   // Payment progress detection
   const payoutInFlight = !!deal?.approved_at && !deal?.payment_released_at;
@@ -293,13 +278,9 @@ export default function DealDetailPage() {
 
   const nowISO = () => new Date().toISOString();
 
-  // ===== Actions (all blocked if deal is rejected) =====
+  // ===== Actions =====
   const handleAcceptOffer = async () => {
     if (!deal) return;
-    if (isDealRejected) {
-      alert('This offer was rejected and cannot be accepted.');
-      return;
-    }
     const { error: err } = await supabase
       .from('deals')
       .update({
@@ -316,10 +297,6 @@ export default function DealDetailPage() {
 
   const handleSaveAgreementDraft = async () => {
     if (!deal) return;
-    if (isDealRejected) {
-      alert('This deal was rejected and cannot be modified.');
-      return;
-    }
     const amount = Number(draftAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
       alert('Enter a valid amount.');
@@ -365,10 +342,6 @@ export default function DealDetailPage() {
 
   const handleConfirmAgreement = async () => {
     if (!deal || !userId) return;
-    if (isDealRejected) {
-      alert('This deal was rejected and cannot be confirmed.');
-      return;
-    }
 
     // 0) enforce: amount + deadline must be saved on the record
     const amount = Number(deal.deal_value || 0);
@@ -428,10 +401,6 @@ export default function DealDetailPage() {
   // Submission (creator)
   const handleSubmitContent = async (url: string) => {
     if (!deal || !isCreator || !userId) return;
-    if (isDealRejected) {
-      alert('This deal was rejected. You cannot submit content.');
-      return;
-    }
     try {
       await submitSubmission(deal.id, url, userId);
       setDeliverUrl('');
@@ -444,10 +413,6 @@ export default function DealDetailPage() {
   // Business reject (with reason)
   const handleRejectContent = async (reason: string) => {
     if (!deal || !isBusiness || !latestSubmission) return;
-    if (isDealRejected) {
-      alert('This deal was rejected already.');
-      return;
-    }
     try {
       await rejectSubmission(latestSubmission.id, deal.id, reason);
       await refreshDeal(deal.id);
@@ -459,10 +424,6 @@ export default function DealDetailPage() {
   // Business approve
   const handleApproval = async () => {
     if (!deal || !isBusiness || !latestSubmission) return;
-    if (isDealRejected) {
-      alert('This deal was rejected already.');
-      return;
-    }
     try {
       await approveSubmission(latestSubmission.id, deal.id);
       await refreshDeal(deal.id);
@@ -494,12 +455,11 @@ export default function DealDetailPage() {
   const isValidHttpUrl = (url: string): boolean => /^https?:\/\/\S+/i.test(url);
   const latestIsRework = submissionStatus === 'rework';
   const creatorCanSubmit =
-    !isDealRejected &&
     !!isCreator &&
     (deal.deal_stage === 'Platform Escrow' || deal.deal_stage === 'Content Submitted') &&
     (latestIsRework || !submissionUrl);
 
-  const businessCanReview = !isDealRejected && !!isBusiness && submissionStatus === 'pending';
+  const businessCanReview = !!isBusiness && submissionStatus === 'pending';
 
   // Deadlines display
   const lockedDeadline = agreementFromDb.deadline
@@ -520,13 +480,6 @@ export default function DealDetailPage() {
           <span className="text-sm">Chat</span>
         </button>
       </div>
-
-      {/* Rejected banner */}
-      {isDealRejected && (
-        <div className="mb-4 p-3 rounded-xl border border-red-500/40 bg-red-900/20 text-red-200 text-sm">
-          This offer was <b>rejected</b>. It can’t be accepted or progressed.
-        </div>
-      )}
 
       {/* Meta */}
       <div className="bg-white/10 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-sm sm:text-base font-semibold text-white mb-4 gap-3 sm:gap-0">
@@ -549,9 +502,8 @@ export default function DealDetailPage() {
               <span className="font-semibold">Offer:</span> {deal.message}
             </p>
 
-            {/* Accept (receiver only) — hidden if rejected */}
-            {!isDealRejected &&
-              !deal.accepted_at &&
+            {/* Accept (receiver only) */}
+            {!deal.accepted_at &&
               deal.deal_stage === 'Waiting for Response' &&
               !isSender && (
                 <div className="mb-4 p-3 sm:p-4 rounded-2xl border border-white/10 bg-black/30 text-white">
@@ -588,7 +540,7 @@ export default function DealDetailPage() {
 
         {/* RIGHT: Agreement Card */}
         <div className="space-y-4">
-          {deal.deal_stage === 'Negotiating Terms' && !bothAgreed && !isDealRejected && (
+          {deal.deal_stage === 'Negotiating Terms' && !bothAgreed && (
             <div className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-black/30 text-white">
               <div className="mb-3">
                 <p className="font-semibold text-base sm:text-lg">Deal Agreement</p>
@@ -617,6 +569,8 @@ export default function DealDetailPage() {
                   </ul>
                 </div>
               </div>
+
+             
 
               {/* NEW: Matching Card (forces same amount + date before confirming) */}
               {userId && (
@@ -662,7 +616,7 @@ export default function DealDetailPage() {
             </div>
           )}
 
-          {bothAgreed && !isDealRejected && (
+          {bothAgreed && (
             <div className="p-4 sm:p-5 rounded-2xl border border-emerald-700/40 bg-emerald-900/20 text-white">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-emerald-300 font-semibold text-base sm:text-lg">
@@ -691,123 +645,121 @@ export default function DealDetailPage() {
       </div>
 
       {/* ======= CONTENT DELIVERY ======= */}
-      {!isDealRejected && (
-        <div className="mt-6 border border-white/10 bg-black/40 rounded-2xl p-4 sm:p-5 text-white">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg sm:text-xl font-bold">Content Delivery</h2>
-            <span className="text-xs text-white/60">
-              Stage: <span className="font-semibold">{deal.deal_stage}</span>
-            </span>
-          </div>
+      <div className="mt-6 border border-white/10 bg-black/40 rounded-2xl p-4 sm:p-5 text-white">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg sm:text-xl font-bold">Content Delivery</h2>
+          <span className="text-xs text-white/60">
+            Stage: <span className="font-semibold">{deal.deal_stage}</span>
+          </span>
+        </div>
 
-          {/* Status / latest link */}
-          <div className="text-sm mb-3">
-            {submissionUrl ? (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <span className="text-white/70">Latest submission:</span>
-                <a
-                  href={submissionUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300 underline break-all"
-                >
-                  {submissionUrl}
-                </a>
-              </div>
-            ) : (
-              <span className="text-white/60">No submission yet.</span>
-            )}
-            {rejectionReason && (
-              <div className="mt-2 text-red-400 text-sm">
-                <span className="font-semibold">Rework requested:</span> {rejectionReason}
-              </div>
-            )}
-          </div>
+        {/* Status / latest link */}
+        <div className="text-sm mb-3">
+          {submissionUrl ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <span className="text-white/70">Latest submission:</span>
+              <a
+                href={submissionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline break-all"
+              >
+                {submissionUrl}
+              </a>
+            </div>
+          ) : (
+            <span className="text-white/60">No submission yet.</span>
+          )}
+          {rejectionReason && (
+            <div className="mt-2 text-red-400 text-sm">
+              <span className="font-semibold">Rework requested:</span> {rejectionReason}
+            </div>
+          )}
+        </div>
 
-          {/* Creator: Submit / Resubmit */}
-          {creatorCanSubmit && (
-            <div className="mt-3">
-              <label className="block text-xs text-white/60 mb-1">Content URL</label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="url"
-                  inputMode="url"
-                  autoComplete="off"
-                  placeholder="https://your-content-url.com"
-                  value={deliverUrl}
-                  onChange={(e) => setDeliverUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const url = deliverUrl.trim();
-                      if (!isValidHttpUrl(url)) {
-                        alert('Enter a valid URL starting with http:// or https://');
-                        return;
-                      }
-                      void handleSubmitContent(url);
-                    }
-                  }}
-                  className="flex-1 text-sm p-2 rounded bg-gray-900 border border-white/10 text-white"
-                  aria-label="Content URL"
-                />
-                <button
-                  onClick={() => {
+        {/* Creator: Submit / Resubmit */}
+        {creatorCanSubmit && (
+          <div className="mt-3">
+            <label className="block text-xs text-white/60 mb-1">Content URL</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                placeholder="https://your-content-url.com"
+                value={deliverUrl}
+                onChange={(e) => setDeliverUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
                     const url = deliverUrl.trim();
                     if (!isValidHttpUrl(url)) {
                       alert('Enter a valid URL starting with http:// or https://');
                       return;
                     }
                     void handleSubmitContent(url);
-                  }}
-                  className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600 text-sm"
-                >
-                  {latestIsRework ? 'Resubmit' : 'Submit'}
-                </button>
-              </div>
-              <p className="text-xs text-white/50 mt-2">
-                {latestIsRework
-                  ? 'Your previous submission was rejected. Update and resubmit the correct link.'
-                  : 'Submit the final link to your content for review.'}
-              </p>
+                  }
+                }}
+                className="flex-1 text-sm p-2 rounded bg-gray-900 border border-white/10 text-white"
+                aria-label="Content URL"
+              />
+              <button
+                onClick={() => {
+                  const url = deliverUrl.trim();
+                  if (!isValidHttpUrl(url)) {
+                    alert('Enter a valid URL starting with http:// or https://');
+                    return;
+                  }
+                  void handleSubmitContent(url);
+                }}
+                className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold hover:bg-yellow-600 text-sm"
+              >
+                {latestIsRework ? 'Resubmit' : 'Submit'}
+              </button>
             </div>
-          )}
-
-          {/* Business: Approve / Reject */}
-          {businessCanReview && submissionUrl && (
-            <div className="mt-4">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                <button
-                  onClick={() => void handleApproval()}
-                  className="px-4 py-2 bg-emerald-500 text-black rounded font-semibold hover:bg-emerald-600 text-sm"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => {
-                    const reason = window.prompt('Reason for rejection:')?.trim();
-                    if (!reason) return;
-                    void handleRejectContent(reason);
-                  }}
-                  className="px-4 py-2 bg-red-500 text-white rounded font-semibold hover:bg-red-600 text-sm"
-                >
-                  Reject
-                </button>
-              </div>
-              <p className="text-xs text-white/50 mt-2">
-                Approval moves the deal to <span className="font-semibold">Approved</span>. Rejection returns to{' '}
-                <span className="font-semibold">Content Submitted</span> with your reason.
-              </p>
-            </div>
-          )}
-
-          {/* Payout in progress hint */}
-          {payoutInFlight && !deal.payment_released_at && (
-            <p className="mt-3 text-xs text-yellow-300">
-              Payment is being released. <span className="opacity-80">Final stage shows a pending clock until funds land.</span>
+            <p className="text-xs text-white/50 mt-2">
+              {latestIsRework
+                ? 'Your previous submission was rejected. Update and resubmit the correct link.'
+                : 'Submit the final link to your content for review.'}
             </p>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+
+        {/* Business: Approve / Reject */}
+        {businessCanReview && submissionUrl && (
+          <div className="mt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <button
+                onClick={() => void handleApproval()}
+                className="px-4 py-2 bg-emerald-500 text-black rounded font-semibold hover:bg-emerald-600 text-sm"
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => {
+                  const reason = window.prompt('Reason for rejection:')?.trim();
+                  if (!reason) return;
+                  void handleRejectContent(reason);
+                }}
+                className="px-4 py-2 bg-red-500 text-white rounded font-semibold hover:bg-red-600 text-sm"
+              >
+                Reject
+              </button>
+            </div>
+            <p className="text-xs text-white/50 mt-2">
+              Approval moves the deal to <span className="font-semibold">Approved</span>. Rejection returns to{' '}
+              <span className="font-semibold">Content Submitted</span> with your reason.
+            </p>
+          </div>
+        )}
+
+        {/* Payout in progress hint */}
+        {payoutInFlight && !deal.payment_released_at && (
+          <p className="mt-3 text-xs text-yellow-300">
+            Payment is being released. <span className="opacity-80">Final stage shows a pending clock until funds land.</span>
+          </p>
+        )}
+      </div>
 
       {/* Chat */}
       {showChat && userId && (
@@ -825,3 +777,6 @@ export default function DealDetailPage() {
     </div>
   );
 }
+
+
+

@@ -1,53 +1,52 @@
+// app/api/admin/waitlist/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-function bad(msg: string, code = 400) {
-  return NextResponse.json({ ok: false, error: msg }, { status: code });
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+type Role = 'creator' | 'business' | null;
+
+export interface WaitlistRow {
+  id: string;
+  email: string | null;
+  role: Role;
+  full_name: string | null;
 }
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const email = (url.searchParams.get('email') || '').trim().toLowerCase();
-  if (!email) return bad('Missing email');
+interface Ok<T> {
+  ok: true;
+  data: T;
+}
+interface Fail {
+  ok: false;
+  error: string;
+}
 
+function ok<T>(data: T, status = 200) {
+  return NextResponse.json<Ok<T>>({ ok: true, data }, { status });
+}
+function fail(msg: string, status = 400) {
+  return NextResponse.json<Fail>({ ok: false, error: msg }, { status });
+}
+
+export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return bad('Server misconfig', 500);
+
+  if (!supabaseUrl) return fail('Missing NEXT_PUBLIC_SUPABASE_URL', 500);
+  if (!serviceKey) return fail('Missing SUPABASE_SERVICE_ROLE_KEY', 500);
 
   const s = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-  // 1) Try waitlist (case-insensitive)
-  const { data: wl, error: wlErr } = await s
+  // Select only columns that we KNOW exist on your table
+  const { data, error } = await s
     .from('waitlist')
-    .select('id, role, full_name')
-    .ilike('email', email)  // case-insensitive
-    .limit(1);
+    .select('id,email,role,full_name')
+    // UUIDs are unordered; this is still deterministic and avoids unknown timestamp cols
+    .order('id', { ascending: false })
+    .limit(1000);
 
-  if (wlErr) return bad(wlErr.message, 500);
-  const w = (wl ?? [])[0];
-  if (w) {
-    return NextResponse.json(
-      { ok: true, role: w.role ?? null, full_name: w.full_name ?? null },
-      { status: 200 }
-    );
-  }
-
-  // 2) Fallback: if a profile already exists, allow login (grandfathered users)
-  const { data: pf, error: pfErr } = await s
-    .from('profiles')
-    .select('id, role, full_name')
-    .ilike('email', email)
-    .limit(1);
-
-  if (pfErr) return bad(pfErr.message, 500);
-  const p = (pf ?? [])[0];
-  if (p) {
-    return NextResponse.json(
-      { ok: true, role: p.role ?? null, full_name: p.full_name ?? null },
-      { status: 200 }
-    );
-  }
-
-  // Not allowed
-  return NextResponse.json({ ok: false }, { status: 200 });
+  if (error) return fail(error.message, 500);
+  return ok<WaitlistRow[]>(data ?? [], 200);
 }

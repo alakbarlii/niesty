@@ -1,107 +1,64 @@
 'use client';
-
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase'; 
+import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErr(null);
     setLoading(true);
 
-    // Check if the email exists in the waitlist first
-    const { data: waitlistMatch, error: checkError } = await supabase
-      .from('waitlist')
-      .select('*')
-      .eq('email', email)
-      .single();
+    const normalized = email.trim().toLowerCase();
 
-    if (!waitlistMatch || checkError) {
-      setLoading(false);
-      alert('This email is not registered in the waitlist.');
-      return;
-    }
-
-    // Ensure a profile exists for the user if it doesn't already
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('user_id')
-      .eq('email', email)
-      .maybeSingle();
-
-    if (!existingProfile) {
-      const { error: insertError } = await supabase
-        .from('profiles')
-        .insert({
-          email: waitlistMatch.email,
-          name: waitlistMatch.name || '',
-          role: waitlistMatch.role,
-        });
-
-      if (insertError) {
-        console.error('Failed to create profile:', insertError);
+    try {
+      const res = await fetch(`/api/waitlist?email=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
+      const { ok } = await res.json();
+      if (!ok) {
+        alert('This email is not registered in the waitlist.'); // your UX
+        setLoading(false);
+        return;
       }
-    }
 
-    // Proceed to send magic login link
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/callback`,
-      },
-    });
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalized,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
 
-    setLoading(false);
-    if (!error) setSent(true);
-    else {
-      console.error(error);
-      alert('Something went wrong. Please try again.');
+      if (error) setErr(error.message);
+      else setSent(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Login failed.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-black via-[#0b0b0b] to-[#111] px-4">
-      <div className="w-full max-w-xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10 shadow-[0_0_30px_rgba(255,255,255,0.05)] transition-all duration-300">
+      <div className="w-full max-w-xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10">
         <div className="flex flex-col items-center mb-10">
-          <Image
-            src="/niesty_header.png"
-            alt="Niesty Logo"
-            width={160}
-            height={160}
-            className="mb-5"
-          />
-          <h1 className="text-4xl font-extrabold text-white text-center mb-4.5 tracking-tight">Login to your Niesty!</h1>
-          <p className="text-white/60 text-sm text-center leading-relaxed">
-            Where creators and sponsors connect.<br />
-            Every day with new sponsorship deals!
-          </p>
+          <Image src="/niesty_header.png" alt="Niesty Logo" width={160} height={160} className="mb-5" />
+          <h1 className="text-4xl font-extrabold text-white text-center mb-4.5">Login to your Niesty!</h1>
         </div>
 
         {sent ? (
-          <p className="text-green-400 text-center text-lg font-medium">
-            Check your email for the login link!
-          </p>
+          <p className="text-green-400 text-center text-lg font-medium">Check your email for the login link!</p>
         ) : (
           <form onSubmit={handleLogin} className="space-y-5">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+            <input type="email" required value={email} onChange={(e)=>setEmail(e.target.value)}
               placeholder="Enter your email"
-              className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 active:scale-95 transition-all duration-200"
-            >
+              className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50" />
+            <button type="submit" disabled={loading}
+              className="w-full py-4 bg-yellow-400 text-black font-bold rounded-xl disabled:opacity-60">
               {loading ? 'Sending...' : 'Get Login Link'}
             </button>
+            {err && <p className="text-red-400 text-sm text-center">{err}</p>}
           </form>
         )}
       </div>

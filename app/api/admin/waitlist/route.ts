@@ -1,4 +1,3 @@
-// app/api/waitlist/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -15,24 +14,40 @@ export async function GET(req: Request) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) return bad('Server misconfig', 500);
 
-  // Service-role client (bypasses RLS) — safe on server only
   const s = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-  const { data, error } = await s
+  // 1) Try waitlist (case-insensitive)
+  const { data: wl, error: wlErr } = await s
     .from('waitlist')
     .select('id, role, full_name')
-    .eq('email', email)
+    .ilike('email', email)  // case-insensitive
     .limit(1);
 
-  if (error) return bad(error.message, 500);
+  if (wlErr) return bad(wlErr.message, 500);
+  const w = (wl ?? [])[0];
+  if (w) {
+    return NextResponse.json(
+      { ok: true, role: w.role ?? null, full_name: w.full_name ?? null },
+      { status: 200 }
+    );
+  }
 
-  const row = (data ?? [])[0];
-  return NextResponse.json(
-    {
-      ok: !!row,
-      role: row?.role ?? null,
-      full_name: row?.full_name ?? null,
-    },
-    { status: 200 }
-  );
+  // 2) Fallback: if a profile already exists, allow login (grandfathered users)
+  const { data: pf, error: pfErr } = await s
+    .from('profiles')
+    .select('id, role, full_name')
+    .ilike('email', email)
+    .limit(1);
+
+  if (pfErr) return bad(pfErr.message, 500);
+  const p = (pf ?? [])[0];
+  if (p) {
+    return NextResponse.json(
+      { ok: true, role: p.role ?? null, full_name: p.full_name ?? null },
+      { status: 200 }
+    );
+  }
+
+  // Not allowed
+  return NextResponse.json({ ok: false }, { status: 200 });
 }

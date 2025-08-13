@@ -475,7 +475,7 @@ export default function DealDetailPage() {
       'Waiting for Response': deal.created_at ?? null,
       'Negotiating Terms': deal.accepted_at ?? null,
       'Platform Escrow': bothAgreedAt,
-      'Content Submitted': latestSubmittedAt,
+      'Content Submitted'  : latestSubmittedAt,  
       'Approved': deal.approved_at ?? null,
       'Payment Released': deal.payment_released_at ?? null,
     };
@@ -731,7 +731,7 @@ export default function DealDetailPage() {
                 
               </div>
               <p className="text-xs text-emerald-300 mt-2">
-                Next: Business deposits funds in <b>Platform Escrow</b>. Only then content submission opens.
+                 Business deposits funds in <b>Platform Escrow</b>. Only then content submission opens.
               </p>
             </div>
           </div>

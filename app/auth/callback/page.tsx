@@ -1,3 +1,4 @@
+// app/auth/callback/page.tsx
 'use client';
 
 import { useEffect } from 'react';
@@ -8,73 +9,64 @@ export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log(' Waiting for auth state...');
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session) {
-        console.warn('⚠️ No session found after redirect.');
         router.replace('/login');
         return;
       }
 
       const user = session.user;
-      console.log(' Session restored:', user.email, user.id);
+      const email = (user.email || '').toLowerCase();
 
-      // Check if profile exists
-      const { data: existingProfile, error: fetchError } = await supabase
-        .from('profiles')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // 1) Ensure the email is in waitlist (server-side check)
+      try {
+        const res = await fetch(`/api/waitlist?email=${encodeURIComponent(email)}`, { cache: 'no-store' });
+        const json = await res.json();
 
-      if (fetchError) {
-        console.error('❌ Fetch profile error:', fetchError.message);
-        router.replace('/login');
-        return;
-      }
+        if (!res.ok || !json.ok) {
+          // Not in waitlist → back to login
+          router.replace('/login');
+          return;
+        }
 
-      if (existingProfile) {
-        console.log(' Existing profile found. Redirecting to dashboard...');
+        const role: 'creator' | 'business' | null = json.role ?? null;
+
+        // 2) If profile exists, redirect to dashboard
+        const { data: existingProfile, error: fetchError } = await supabase
+          .from('profiles')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (fetchError) {
+          router.replace('/login');
+          return;
+        }
+
+        if (!existingProfile) {
+          // 3) Create profile for this user (RLS policy allows self insert/update)
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              user_id: user.id,
+              email,
+              role,
+              full_name: user.user_metadata?.name || null,
+              created_at: new Date().toISOString(),
+            });
+
+          if (insertError) {
+            // If insert fails (e.g., unique constraints), still try to proceed
+            // so the user isn't stuck.
+            // console.error('Profile insert error:', insertError.message);
+          }
+        }
+
+        // 4) Go to dashboard
         router.replace('/dashboard');
-        return;
-      }
-
-      console.log('ℹ️ No profile found. Checking waitlist...');
-
-      const { data: waitlistEntry, error: waitlistError } = await supabase
-        .from('waitlist')
-        .select('email, role')
-        .eq('email', user.email)
-        .single();
-
-      if (waitlistError || !waitlistEntry) {
-        console.error('❌ Waitlist fetch failed:', waitlistError?.message || 'not found');
+      } catch {
         router.replace('/login');
-        return;
       }
-
-      console.log(' Waitlist entry found:', waitlistEntry);
-
-      const { error: insertError } = await supabase
-        .from('profiles')
-        .insert({
-          user_id: user.id,
-          email: user.email,
-          role: waitlistEntry.role,
-          name: user.user_metadata?.name || '',
-          created_at: new Date().toISOString(),
-        });
-
-      if (insertError) {
-        console.error('❌ Profile insert error:', insertError.message);
-        router.replace('/login');
-        return;
-      }
-
-      console.log(' New profile inserted successfully. Redirecting to dashboard...');
-      router.replace('/dashboard');
     });
 
     return () => {

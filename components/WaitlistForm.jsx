@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
 
 export default function WaitlistForm() {
@@ -22,99 +21,52 @@ export default function WaitlistForm() {
       return;
     }
 
-    let existing = [];
-    let checkError = null;
-    
-    try {
-      const { data, error } = await supabase
-        .from('waitlist')
-        .select('id')
-        .eq('email', email);
-    
-      existing = data ?? [];
-      checkError = error;
-    } catch (err) {
-      console.error('Error checking existing email:', err);
-      setError('Something went wrong. Please try again.');
-      return;
-    }
-    
-    if (checkError) {
-      console.error('Supabase error:', checkError);
-      setError('Something went wrong. Please try again.');
-      return;
-    }
-    
-    if (existing.length > 0) {
-      setError('This email is already registered.');
-      return;
-    }
-    
-    if (checkError) {
-      setError('Something went wrong. Please try again.');
-      console.error('Check error:', checkError);
-      return;
-    }
-
-    if (existing && existing.length > 0) {
-      setError('This email is already registered.');
-      return;
-    }
-
-    const { error: insertError } = await supabase
-      .from('waitlist')
-      .insert([{ email, full_name: fullName, role }]);
-
-    if (insertError) {
-      console.error('Insert error:', insertError);
-      setError('Something went wrong. Please try again.');
-      return;
-    }
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-        await supabase.from('profiles').upsert([
-             {
-                 user_id: user.id,
-                  role: role
-                 }
-                 ]);
-    }
-    
+    const normalized = email.trim().toLowerCase();
 
     try {
-      await fetch('/api/send-confirmation', {
+      // Check if already in waitlist
+      const chk = await fetch(`/api/waitlist?email=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
+      const chkJson = await chk.json();
+      if (chk.ok && chkJson?.ok) {
+        setError('This email is already registered.');
+        return;
+      }
+
+      // Submit to waitlist (server uses service role)
+      const res = await fetch('/api/waitlist/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email }),
+        body: JSON.stringify({ email: normalized, full_name: fullName, role }),
       });
-    } catch (e) {
-      console.error('⚠️ Email failed to send:', e);
-    }
+      const j = await res.json();
+      if (!res.ok || !j?.ok) {
+        throw new Error(j?.error || 'Submit failed');
+      }
 
-    setEmail('');
-    setFullName('');
-    setRole(null);
-    setShowSuccess(true);
+      // fire-and-forget confirmation email
+      fetch('/api/send-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName, email: normalized }),
+      }).catch(() => {});
+
+      setEmail('');
+      setFullName('');
+      setRole(null);
+      setShowSuccess(true);
+    } catch (err) {
+      console.error(err);
+      setError('Something went wrong. Please try again.');
+    }
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-black via-[#0b0b0b] to-[#111] px-4">
-      <div className="w-full max-w-xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10 shadow-[0_0_30px_rgba(255,255,255,0.05)] transition-all duration-300">
+      <div className="w-full max-w-xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10">
         <div className="flex flex-col items-center mb-10">
-          <Image
-            src="/niesty_header.png"
-            alt="Niesty Logo"
-            width={160}
-            height={160}
-            className="mb-5"
-          />
-          <h1 className="text-4xl font-extrabold text-white text-center mb-2 tracking-tight">Join Niesty!</h1>
-          <p className="text-white/60 text-sm text-center leading-relaxed">
-            Where creators and sponsors connect.<br />
-            Every day with new sponsorship deals.
-          </p>
-          
+          <Image src="/niesty_header.png" alt="Niesty Logo" width={160} height={160} className="mb-5" />
+          <h1 className="text-4xl font-extrabold text-white text-center mb-2">Join Niesty!</h1>
+          <p className="text-white/60 text-sm text-center">Where creators and sponsors connect.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 w-full text-white relative z-10">
@@ -124,7 +76,7 @@ export default function WaitlistForm() {
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             required
-            className="w-full p-4 rounded-xl border border-white/20 bg-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            className="w-full p-4 rounded-xl border border-white/20 bg-white/10 text-white placeholder-white/50"
           />
           <input
             type="email"
@@ -132,7 +84,7 @@ export default function WaitlistForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full p-4 rounded-xl border border-white/20 bg-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            className="w-full p-4 rounded-xl border border-white/20 bg-white/10 text-white placeholder-white/50"
           />
 
           <div className="space-y-3">
@@ -168,7 +120,7 @@ export default function WaitlistForm() {
 
           <button
             type="submit"
-            className="w-full py-4 bg-yellow-400 text-black font-bold rounded-xl text-xl hover:bg-yellow-300 active:scale-95 transition-all duration-200"
+            className="w-full py-4 bg-yellow-400 text-black font-bold rounded-xl text-xl hover:bg-yellow-300"
           >
             Join the Waitlist
           </button>

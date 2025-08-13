@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase'; 
+import { supabase } from '@/lib/supabase';
 
 export default function Page() {
   const router = useRouter();
@@ -31,22 +31,22 @@ export default function Page() {
       }
 
       const userId = user.id;
-      const userEmail = user.email || '';
+      const userEmail = (user.email || '').toLowerCase();
 
-      const { data: profileData, error: profileError } = await supabase
+      // Load existing profile (RLS allows self read)
+      const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (profileError || !profileData) {
-        const { data: waitlistData } = await supabase
-          .from('waitlist')
-          .select('full_name')
-          .eq('email', userEmail)
-          .single();
-
-        if (waitlistData?.full_name) setFullName(waitlistData.full_name);
+      if (!profileData) {
+        // Prefill from waitlist via server API (service role)
+        try {
+          const res = await fetch(`/api/waitlist?email=${encodeURIComponent(userEmail)}`, { cache: 'no-store' });
+          const j = await res.json();
+          if (res.ok && j?.ok && j?.full_name) setFullName(j.full_name as string);
+        } catch { /* ignore */ }
       } else {
         setUsername(profileData.username || '');
         setFullName(profileData.full_name || '');
@@ -55,13 +55,11 @@ export default function Page() {
         setProfileUrl(profileData.profile_url || null);
 
         if (!profileData.full_name) {
-          const { data: waitlistData } = await supabase
-            .from('waitlist')
-            .select('full_name')
-            .eq('email', userEmail)
-            .single();
-
-          if (waitlistData?.full_name) setFullName(waitlistData.full_name);
+          try {
+            const res = await fetch(`/api/waitlist?email=${encodeURIComponent(userEmail)}`, { cache: 'no-store' });
+            const j = await res.json();
+            if (res.ok && j?.ok && j?.full_name) setFullName(j.full_name as string);
+          } catch { /* ignore */ }
         }
       }
 
@@ -87,10 +85,11 @@ export default function Page() {
     }
 
     const userId = user.id;
-    const userEmail = user.email;
+    const userEmail = user.email ?? null;
 
     let uploadedProfileUrl = profileUrl;
 
+    // Optional avatar upload (public storage bucket: profiles)
     if (profileFile) {
       const fileExt = profileFile.name.split('.').pop();
       const fileName = `${userId}-${Date.now()}.${fileExt}`;
@@ -100,7 +99,7 @@ export default function Page() {
         .from('profiles')
         .select('profile_url')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (existing?.profile_url) {
         const oldPath = existing.profile_url.split('/storage/v1/object/public/')[1];
@@ -115,23 +114,23 @@ export default function Page() {
         const { data: publicUrlData } = supabase.storage
           .from('profiles')
           .getPublicUrl(filePath);
-
         uploadedProfileUrl = publicUrlData?.publicUrl || null;
       } else {
         console.error('❌ Profile picture upload failed:', uploadError.message);
       }
     }
 
+    // Upsert self profile (RLS self-insert/update policy)
     const { error: updateError } = await supabase
       .from('profiles')
       .upsert(
         {
           user_id: userId,
-          full_name: fullName,
-          username,
-          description,
-          website,
-          profile_url: uploadedProfileUrl || undefined,
+          full_name: fullName || null,
+          username: username || null,
+          description: description || null,
+          website: website || null,
+          profile_url: uploadedProfileUrl || null,
           role: 'business',
           email: userEmail,
         },

@@ -7,8 +7,6 @@ import StatBadge from '@/components/StatBadge';
 import { useRouter } from 'next/navigation';
 
 export default function CreatorProfileView() {
-  
-
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('');
@@ -30,32 +28,30 @@ export default function CreatorProfileView() {
         } = await supabase.auth.getSession();
 
         const userId = session?.user?.id;
-        const userEmail = session?.user?.email;
-
+        const userEmail = (session?.user?.email || '').toLowerCase();
         if (!userId || !userEmail) throw new Error('No user session found');
 
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('user_id', userId)
-          .single();
+          .maybeSingle();
 
         const { count } = await supabase
           .from('deals')
           .select('*', { count: 'exact', head: true })
-          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-          .eq('status', 'accepted');
+          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
 
         setDealCount(count || 0);
 
         if (!profile || profileError) {
-          const { data: waitlistData } = await supabase
-            .from('waitlist')
-            .select('full_name')
-            .eq('email', userEmail)
-            .single();
+          // Fallback full name from waitlist via server
+          try {
+            const res = await fetch(`/api/waitlist?email=${encodeURIComponent(userEmail)}`, { cache: 'no-store' });
+            const j = await res.json();
+            if (res.ok && j?.ok && j?.full_name) setFullName(j.full_name as string);
+          } catch { /* ignore */ }
 
-          if (waitlistData?.full_name) setFullName(waitlistData.full_name);
           setUsername('');
           setPlatforms([]);
         } else {
@@ -75,12 +71,11 @@ export default function CreatorProfileView() {
           }
 
           if (!profile.full_name) {
-            const { data: waitlistData } = await supabase
-              .from('waitlist')
-              .select('full_name')
-              .eq('email', userEmail)
-              .single();
-            if (waitlistData?.full_name) setFullName(waitlistData.full_name);
+            try {
+              const res = await fetch(`/api/waitlist?email=${encodeURIComponent(userEmail)}`, { cache: 'no-store' });
+              const j = await res.json();
+              if (res.ok && j?.ok && j?.full_name) setFullName(j.full_name as string);
+            } catch { /* ignore */ }
           }
         }
       } catch (err) {
@@ -112,7 +107,7 @@ export default function CreatorProfileView() {
           />
         </div>
 
-        <div className="flex-1 w-full bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-4 sm:p-6 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+        <div className="flex-1 w-full bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start mb-6 gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold mb-1 text-white">{fullName || 'Unnamed'}</h1>

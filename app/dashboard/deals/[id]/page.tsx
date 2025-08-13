@@ -689,7 +689,12 @@ export default function DealDetailPage() {
                 <p>
                   <span className="text-white/70">Deadline:</span> {lockedDeadline}
                 </p>
-                
+                <p className="truncate">
+                  <span className="text-white/70">Scope:</span>{' '}
+                  <span className="whitespace-pre-wrap">
+                    {agreement.scope || '—'}
+                  </span>
+                </p>
               </div>
               <p className="text-xs text-emerald-300 mt-2">
                 Next: Business deposits funds in <b>Platform Escrow</b>. Only then content submission opens.

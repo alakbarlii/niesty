@@ -13,6 +13,7 @@ export const DEAL_STAGES = [
 ] as const;
 
 type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
+type StageTimes = Partial<Record<(typeof DEAL_STAGES)[number], string | null | undefined>>;
 
 export interface DealProgressProps {
   /** Zero-based index of the current stage. Pass -1 to render all stages as not-started (gray). */
@@ -29,6 +30,9 @@ export interface DealProgressProps {
   isCreator?: boolean;
   isSender?: boolean;
   submissionStatus?: SubmissionStatus;
+
+  /** NEW: optional per-stage timestamps (ISO strings). Shows compact “At: …” beneath each stage. */
+  stageTimes?: StageTimes;
 }
 
 export default function DealProgress({
@@ -45,6 +49,7 @@ export default function DealProgress({
   isCreator = false,
   isSender: _isSender = false,
   submissionStatus = null,
+  stageTimes,
 }: DealProgressProps) {
   // silence unused-args warnings
   void _isEditable; void _onApprove; void _onReject; void _onAgree; void _canApprove; void _isSender;
@@ -69,7 +74,7 @@ export default function DealProgress({
     }
   };
 
-  // NEW: allow -1 = “no stage started” (everything gray)
+  // allow -1 = “no stage started” (everything gray)
   const noStageStarted = Number.isInteger(currentStage) && currentStage < 0;
 
   const safeStageIndex =
@@ -79,6 +84,22 @@ export default function DealProgress({
 
   const latestIsRework = submissionStatus === 'rework';
   const showResubmit = latestIsRework || !contentLink;
+
+  const fmt = (ts?: string | null) => {
+    if (!ts) return '—';
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      }).format(new Date(ts));
+    } catch {
+      return '—';
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -107,6 +128,9 @@ export default function DealProgress({
             showCheck = true;
           }
 
+          const atTs = stageTimes?.[stageLabel];
+          const at = fmt(atTs ?? null);
+
           return (
             <li key={stageLabel} className="mb-6 ml-4">
               <div className="absolute w-3 h-3 rounded-full -left-1.5 border border-gray-500 flex items-center justify-center bg-gray-900">
@@ -131,6 +155,9 @@ export default function DealProgress({
                 >
                   {stageLabel}
                 </p>
+
+                {/* NEW: timestamp under every stage */}
+                <p className="text-xs text-gray-400 mt-0.5">At: {at}</p>
 
                 {stageLabel === 'Content Submitted' && (
                   <div className="mt-1 space-y-1">

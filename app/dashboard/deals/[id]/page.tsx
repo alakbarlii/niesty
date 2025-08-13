@@ -237,6 +237,10 @@ export default function DealDetailPage() {
   const currentStageIndex = useMemo(() => {
     if (!deal) return 0;
 
+    // *** Only change: if rejected, render the timeline as "never started"
+    // This makes "Waiting for Response" use the same gray dot style as untouched stages.
+    if (isDealRejected) return -1;
+
     if (deal.payment_released_at) {
       return DEAL_STAGES.indexOf('Payment Released');
     }
@@ -256,7 +260,7 @@ export default function DealDetailPage() {
     // Fallback to DB stage
     const idx = DEAL_STAGES.indexOf(deal.deal_stage as DealStage);
     return idx >= 0 ? idx : 0;
-  }, [deal, submissionStatus]);
+  }, [deal, submissionStatus, isDealRejected]);
 
   // Display submission status for timeline:
   const timelineSubmissionStatus: SubmissionStatus =

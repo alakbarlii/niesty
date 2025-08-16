@@ -1,4 +1,4 @@
-// middleware.ts (root)
+// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
@@ -7,8 +7,7 @@ import type { CookieOptions } from '@supabase/ssr';
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
 
-  // Keep client available for future cookie use; currently no redirects enforced
-  createServerClient(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -26,10 +25,17 @@ export async function middleware(req: NextRequest) {
     }
   );
 
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    return NextResponse.redirect(new URL('/login', req.url));
+  }
+
   return res;
 }
 
-// IMPORTANT: only run on admin pages for now
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/admin/:path*'],
 };

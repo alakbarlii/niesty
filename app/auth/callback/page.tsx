@@ -38,16 +38,26 @@ export default function AuthCallbackPage() {
         // Clean URL
         window.history.replaceState({}, document.title, url.pathname);
 
-        // 2) Verify session
+        // 2) Verify session & get tokens for cookie bridge
         const { data: { session }, error: sessErr } = await supabase.auth.getSession();
         if (sessErr || !session) throw sessErr || new Error('No session after callback');
+
+        // 3) Write HttpOnly cookies on the server so middleware can see auth
+        await fetch('/api/auth/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token!,
+          }),
+        });
 
         const user = session.user;
         const email = (user.email || '').toLowerCase();
 
-        // 3) Waitlist gate (server-protected)
+        // 4) Waitlist gate (server-protected)
         const res = await fetch(`/api/waitlist?email=${encodeURIComponent(email)}`, { cache: 'no-store' });
-        const body: WaitlistCheck = await res.json();
+        const body = (await res.json()) as WaitlistCheck;
         if (!body.ok) {
           await supabase.auth.signOut();
           router.replace('/login');
@@ -55,12 +65,11 @@ export default function AuthCallbackPage() {
         }
         const roleFromWaitlist = body.role ?? null;
 
-        // 4) Server-side profile bootstrap (no client PostgREST calls)
+        // 5) Server-side profile bootstrap (uses service role on server)
         await fetch('/api/bootstrap-profile', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            // pass the current session JWT so server can verify who is calling
             Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
@@ -70,7 +79,7 @@ export default function AuthCallbackPage() {
           }),
         }).catch(() => { /* non-blocking */ });
 
-        // 5) Go in
+        // 6) Go in (now middleware sees cookies and lets you through)
         const next = new URLSearchParams(window.location.search).get('next') || '/dashboard';
         router.replace(next);
       } catch (err) {

@@ -7,12 +7,10 @@ import type { CookieOptions } from '@supabase/ssr';
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // ✅ Never intercept auth or API — avoids breaking the callback exchange
   if (pathname.startsWith('/auth') || pathname.startsWith('/api')) {
     return NextResponse.next();
   }
 
-  // Guard only these sections (matcher also restricts)
   const needsAuth = pathname.startsWith('/dashboard') || pathname.startsWith('/admin');
   if (!needsAuth) return NextResponse.next();
 

@@ -1,20 +1,17 @@
-'use client';
+import './globals.css';
+import { Inter } from 'next/font/google';
+import { SupabaseProvider } from '@/lib/supabase/supabase-provider';
 
-import Sidebar from '@/components/Sidebar';
+const inter = Inter({ subsets: ['latin'] });
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-[#00040E] text-white">
-      {/* Fixed sidebar */}
-      <Sidebar />
-
-      {/* Spacer so content doesn’t slide under sidebar */}
-      <div className="w-[80px] lg:w-[250px] shrink-0" />
-
-      {/* Main content with padding */}
-      <main className="flex-1 p-6">
-        {children}
-      </main>
-    </div>
+    <html lang="en">
+      <body className={inter.className}>
+        <SupabaseProvider>
+          {children}
+        </SupabaseProvider>
+      </body>
+    </html>
   );
 }

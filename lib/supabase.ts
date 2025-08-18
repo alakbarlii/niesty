@@ -7,28 +7,23 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase env vars: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY');
 }
 
-/** Minimal in-memory storage fallback for environments where localStorage is unavailable. */
+// DEBUG: verify envs are present in the browser bundle
+if (typeof window !== 'undefined') {
+  // safe to print prefixes only
+  console.log('[SB] URL:', supabaseUrl);
+  console.log('[SB] ANON prefix:', (supabaseAnonKey ?? '').slice(0, 8));
+}
+
 const memoryStorage = (() => {
   const store = new Map<string, string>();
   return {
-    getItem: (key: string) => (store.has(key) ? (store.get(key) as string) : null),
-    setItem: (key: string, value: string) => {
-      store.set(key, value);
-    },
-    removeItem: (key: string) => {
-      store.delete(key);
-    },
+    getItem: (k: string) => (store.has(k) ? (store.get(k) as string) : null),
+    setItem: (k: string, v: string) => { store.set(k, v); },
+    removeItem: (k: string) => { store.delete(k); },
   };
 })();
 
-/** Safely test localStorage availability (handles Safari private mode, iframes, etc.). */
-function getSafeLocalStorage():
-  | Storage
-  | {
-      getItem: (k: string) => string | null;
-      setItem: (k: string, v: string) => void;
-      removeItem: (k: string) => void;
-    } {
+function getSafeLocalStorage() {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return memoryStorage;
     const testKey = '__niesty_ls_test__';
@@ -40,11 +35,6 @@ function getSafeLocalStorage():
   }
 }
 
-/**
- * Stable per-tab id:
- * - Stored in sessionStorage (tab-scoped)
- * - Used to create a unique storageKey per tab so different tabs don't overwrite each other
- */
 function getTabId(): string {
   if (typeof window === 'undefined') return 'ssr';
   const KEY = 'niesty_tab_id';
@@ -56,24 +46,16 @@ function getTabId(): string {
     }
     return id;
   } catch {
-    // If sessionStorage is blocked, fall back to a random id per load (still isolates tabs reasonably)
     return `${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
   }
 }
 
 let _client: SupabaseClient | null = null;
-
-// Type-safe auth options
 type AuthOptions = NonNullable<SupabaseClientOptions<unknown>['auth']>;
 
 function makeClient(): SupabaseClient {
   const isBrowser = typeof window !== 'undefined';
-
-  const auth: AuthOptions = {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  };
+  const auth: AuthOptions = { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true };
 
   if (isBrowser) {
     const tabId = getTabId();
@@ -84,14 +66,12 @@ function makeClient(): SupabaseClient {
   return createClient(supabaseUrl, supabaseAnonKey, { auth });
 }
 
-/** Singleton client */
 export const supabase: SupabaseClient = (() => {
   if (_client) return _client;
   _client = makeClient();
   return _client;
 })();
 
-/** Back-compat: always return the singleton */
 export function createBrowserClient(): SupabaseClient {
   return supabase;
 }

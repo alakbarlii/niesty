@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect } from 'react';
@@ -25,11 +24,9 @@ export default function AuthCallbackPage() {
 
         // 1) Establish session
         if (hasCode) {
-          // PKCE/OAuth flow
           const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
           if (error) throw error;
         } else {
-          // Magic-link flow (#access_token, #refresh_token)
           const { access_token, refresh_token } = parseHashTokens(window.location.hash);
           if (access_token && refresh_token) {
             const { error } = await supabase.auth.setSession({ access_token, refresh_token });
@@ -37,17 +34,17 @@ export default function AuthCallbackPage() {
           }
         }
 
-        // Clean URL (remove query/hash)
+        // Clean URL
         window.history.replaceState({}, document.title, url.pathname);
 
         // 2) Verify session
-        const { data: { session }, error: getSessionErr } = await supabase.auth.getSession();
-        if (getSessionErr || !session) throw getSessionErr || new Error('No session after callback');
+        const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+        if (sessErr || !session) throw sessErr || new Error('No session after callback');
 
         const user = session.user;
         const email = (user.email || '').toLowerCase();
 
-        // 3) Waitlist gate (server-protected)
+        // 3) Waitlist gate
         const res = await fetch(`/api/waitlist?email=${encodeURIComponent(email)}`, { cache: 'no-store' });
         const body: WaitlistCheck = await res.json();
         if (!body.ok) {
@@ -57,7 +54,7 @@ export default function AuthCallbackPage() {
         }
         const roleFromWaitlist = body.role ?? null;
 
-        // 4) Ensure profile exists (best-effort; won’t block if RLS is tight)
+        // 4) Best-effort profile bootstrap (don’t block on RLS)
         try {
           const { data: existing } = await supabase
             .from('profiles')
@@ -74,12 +71,10 @@ export default function AuthCallbackPage() {
               created_at: new Date().toISOString(),
             });
           }
-        } catch (profileErr) {
-          console.warn('[profiles bootstrap skipped]', profileErr);
-          // don’t block login; RLS will be fixed in Step 2
+        } catch (e) {
+          console.warn('[profiles bootstrap skipped]', e);
         }
 
-        // 5) Go in
         router.replace('/dashboard');
       } catch (err) {
         console.error('[Auth callback error]', err);

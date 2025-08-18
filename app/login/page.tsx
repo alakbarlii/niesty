@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -12,35 +13,41 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return; // guard double-submit
     setErr(null);
     setLoading(true);
 
     try {
       const normalized = email.trim().toLowerCase();
 
-      // Verify against waitlist via API (server-protected)
-      const res = await fetch(`/api/waitlist?email=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
+      // 1) Waitlist gate (server-protected using service role)
+      const res = await fetch(
+        `/api/waitlist?email=${encodeURIComponent(normalized)}`,
+        { cache: 'no-store' }
+      );
       const { ok } = await res.json();
       if (!ok) {
-        alert('This email is not registered in the waitlist.');
+        setErr('This email is not registered in the waitlist.');
         setLoading(false);
         return;
       }
 
-      // Send magic link
+      // 2) Send magic link
       const { error } = await supabase.auth.signInWithOtp({
         email: normalized,
         options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
 
       if (error) {
-        console.error(error);
-        setErr(error.message);
+        console.error('[signInWithOtp]', error);
+        setErr(error.message || 'Something went wrong. Please try again.');
       } else {
         setSent(true);
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Login failed.');
+      const msg = e instanceof Error ? e.message : 'Login failed.';
+      console.error('[login]', e);
+      setErr(msg);
     } finally {
       setLoading(false);
     }
@@ -62,24 +69,26 @@ export default function LoginPage() {
 
         {sent ? (
           <p className="text-green-400 text-center text-lg font-medium">
-            Check your email for the login link!
+            Check your email for the login link.
           </p>
         ) : (
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-5" aria-busy={loading}>
             <input
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
               className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              disabled={loading}
             />
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !email.trim()}
               className="w-full py-4 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 active:scale-95 transition-all duration-200 disabled:opacity-60"
             >
-              {loading ? 'Sending...' : 'Get Login Link'}
+              {loading ? 'Sending…' : 'Get Login Link'}
             </button>
             {err && <p className="text-red-400 text-sm text-center">{err}</p>}
           </form>

@@ -22,7 +22,7 @@ const ProfileNavItem = () => {
       const { data } = await supabase
         .from('profiles')
         .select('role')
-        .eq('user_id', userId) // ✅ keep this matching your DB structure
+        .eq('user_id', userId) 
         .single();
 
       if (data?.role === 'creator') {
@@ -81,7 +81,7 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-[80px] lg:w-[250px] bg-[#010718] border-r border-white/5 py-6 flex flex-col justify-between min-h-screen transition-all duration-200">
+    <aside className="fixed top-0 left-0 h-screen w-[80px] lg:w-[250px] bg-[#010718] border-r border-white/5 py-6 flex flex-col justify-between transition-all duration-200 z-50">
       {/* Logo */}
       <div className="flex items-center justify-center lg:justify-start px-2 lg:px-4">
         <Image

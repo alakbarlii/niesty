@@ -1,4 +1,4 @@
-
+// lib/supabase.ts
 import { createClient, type SupabaseClient, type SupabaseClientOptions } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -8,7 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase env vars: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY');
 }
 
-// DEBUG: verify envs are present in the browser bundle (safe)
+// DEBUG (safe): proves envs reached the browser bundle
 if (typeof window !== 'undefined') {
   console.log('[SB] URL:', supabaseUrl);
   console.log('[SB] ANON prefix:', (supabaseAnonKey ?? '').slice(0, 8));

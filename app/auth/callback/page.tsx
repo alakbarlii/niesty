@@ -45,7 +45,7 @@ export default function AuthCallbackPage() {
         const user = session.user;
         const email = (user.email || '').toLowerCase();
 
-        // 3) Waitlist gate (server-protected; no service key on client)
+        // 3) Waitlist gate (server-protected)
         const res = await fetch(`/api/waitlist?email=${encodeURIComponent(email)}`, { cache: 'no-store' });
         const body: WaitlistCheck = await res.json();
         if (!body.ok) {
@@ -55,26 +55,20 @@ export default function AuthCallbackPage() {
         }
         const roleFromWaitlist = body.role ?? null;
 
-        // 4) Best-effort profile bootstrap (don’t block on RLS)
-        try {
-          const { data: existing } = await supabase
-            .from('profiles')
-            .select('user_id')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-          if (!existing) {
-            await supabase.from('profiles').insert({
-              user_id: user.id,
-              email,
-              full_name: user.user_metadata?.name ?? null,
-              role: roleFromWaitlist,
-              created_at: new Date().toISOString(),
-            });
-          }
-        } catch (e) {
-          console.warn('[profiles bootstrap skipped]', e);
-        }
+        // 4) Server-side profile bootstrap (no client PostgREST calls)
+        await fetch('/api/bootstrap-profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // pass the current session JWT so server can verify who is calling
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            email,
+            full_name: user.user_metadata?.name ?? null,
+            role: roleFromWaitlist,
+          }),
+        }).catch(() => { /* non-blocking */ });
 
         // 5) Go in
         const next = new URLSearchParams(window.location.search).get('next') || '/dashboard';

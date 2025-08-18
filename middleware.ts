@@ -12,7 +12,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Guard only these sections (double-safety; matcher also restricts)
+  // Guard only these sections (matcher also restricts)
   const needsAuth = pathname.startsWith('/dashboard') || pathname.startsWith('/admin');
   if (!needsAuth) return NextResponse.next();
 
@@ -43,7 +43,6 @@ export async function middleware(req: NextRequest) {
   if (!session) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
-    // optional: return the user back after login
     url.searchParams.set('next', pathname);
     return NextResponse.redirect(url);
   }

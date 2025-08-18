@@ -1,114 +1,17 @@
-'use client';
+import './globals.css';
+import { Inter } from 'next/font/google';
+import { SupabaseProvider } from '@/lib/supabase/supabase-provider';
 
-import { useEffect, useState, useRef } from 'react';
-import { useHeartbeat } from '@/hooks/useHeartbeat';
-import { supabase } from '@/lib/supabase';
-import { usePathname, useRouter } from 'next/navigation';
-import { Search, Bell, User, DollarSign, Briefcase } from 'lucide-react';
-import Sidebar from '@/components/Sidebar';
+const inter = Inter({ subsets: ['latin'] });
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const [userId, setUserId] = useState<string | null>(null);
-  const cleanupTimer = useRef<number | null>(null);
-
-  // Get current user ID
-  useEffect(() => {
-    const getUser = async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) {
-          console.error('[❌ GetUser ERROR]', error.message);
-          return;
-        }
-        if (data?.user?.id) setUserId(data.user.id);
-      } catch (err) {
-        console.error('[❌ GetUser EXCEPTION]', err);
-      }
-    };
-    getUser();
-  }, []);
-
-  // Heartbeat only if userId exists
-  useHeartbeat(userId);
-
-  // Throttled stale "online" cleanup — only when tab is visible
-  useEffect(() => {
-    if (!userId) return;
-
-    const runCleanup = async () => {
-      try {
-        const { error } = await supabase.rpc('fix_stale_online_flags');
-        if (error) console.error('[❌ RPC ERROR]', error.message);
-      } catch (err) {
-        console.error('[❌ RPC EXCEPTION]', err);
-      }
-    };
-
-    const start = () => {
-      if (cleanupTimer.current !== null) return;
-      runCleanup();
-      cleanupTimer.current = window.setInterval(runCleanup, 60_000);
-    };
-
-    const stop = () => {
-      if (cleanupTimer.current !== null) {
-        clearInterval(cleanupTimer.current);
-        cleanupTimer.current = null;
-      }
-    };
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') start();
-      else stop();
-    };
-
-    handleVisibility();
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-      stop();
-    };
-  }, [userId]);
-
-  const navItems = [
-    { icon: <Search size={22} />, path: '/dashboard/search' },
-    { icon: <Briefcase size={22} />, path: '/dashboard/deals' },
-    { icon: <DollarSign size={22} />, path: '/dashboard/earnings' },
-    { icon: <Bell size={22} />, path: '/dashboard/notifications' },
-    { icon: <User size={22} />, path: '/dashboard/profile' },
-  ];
-
-  // Reset scroll on page change
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#00040E] text-white">
-      {/* Fixed sidebar on md+ */}
-      <Sidebar />
-
-      {/* ✅ Push content right so it never sits under the sidebar */}
-      <main className="min-h-screen px-4 md:px-6 pt-6 md:pl-[80px] lg:pl-[250px]">
-        {children}
-      </main>
-
-      {/* Bottom nav (mobile only) */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[#0c0c14] border-t border-white/10 backdrop-blur-sm z-50 flex justify-around py-3">
-        {navItems.map(({ icon, path }) => (
-          <button
-            key={path}
-            onClick={() => router.push(path)}
-            className={`flex flex-col items-center ${
-              pathname === path ? 'text-yellow-400' : 'text-white/60'
-            }`}
-          >
-            {icon}
-          </button>
-        ))}
-      </nav>
-    </div>
+    <html lang="en">
+      <body className={inter.className}>
+        <SupabaseProvider>
+          {children}
+        </SupabaseProvider>
+      </body>
+    </html>
   );
 }

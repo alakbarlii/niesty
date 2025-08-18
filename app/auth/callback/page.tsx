@@ -23,12 +23,13 @@ export default function AuthCallbackPage() {
         const url = new URL(window.location.href);
         const hasCode = !!url.searchParams.get('code');
 
+        // 1) Establish session
         if (hasCode) {
-          // OAuth/PKCE style callback
+          // PKCE/OAuth flow
           const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
           if (error) throw error;
         } else {
-          // Magic-link style callback (tokens are in the URL hash)
+          // Magic-link flow (#access_token, #refresh_token)
           const { access_token, refresh_token } = parseHashTokens(window.location.hash);
           if (access_token && refresh_token) {
             const { error } = await supabase.auth.setSession({ access_token, refresh_token });
@@ -36,21 +37,17 @@ export default function AuthCallbackPage() {
           }
         }
 
-        // Clean query/hash from the URL bar
+        // Clean URL (remove query/hash)
         window.history.replaceState({}, document.title, url.pathname);
 
-        // Verify session exists
-        const {
-          data: { session },
-          error: getSessionErr,
-        } = await supabase.auth.getSession();
+        // 2) Verify session
+        const { data: { session }, error: getSessionErr } = await supabase.auth.getSession();
         if (getSessionErr || !session) throw getSessionErr || new Error('No session after callback');
 
         const user = session.user;
         const email = (user.email || '').toLowerCase();
 
-        // ---- Waitlist gate (server-protected) ----
-        let roleFromWaitlist: string | null = null;
+        // 3) Waitlist gate (server-protected)
         const res = await fetch(`/api/waitlist?email=${encodeURIComponent(email)}`, { cache: 'no-store' });
         const body: WaitlistCheck = await res.json();
         if (!body.ok) {
@@ -58,33 +55,34 @@ export default function AuthCallbackPage() {
           router.replace('/login');
           return;
         }
-        roleFromWaitlist = body.role ?? null;
+        const roleFromWaitlist = body.role ?? null;
 
-        // ---- Ensure profile exists (RLS: user can upsert own row) ----
-        const { data: existing } = await supabase
-          .from('profiles')
-          .select('user_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
+        // 4) Ensure profile exists (best-effort; won’t block if RLS is tight)
+        try {
+          const { data: existing } = await supabase
+            .from('profiles')
+            .select('user_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
 
-        if (!existing) {
-          await supabase.from('profiles').upsert(
-            {
+          if (!existing) {
+            await supabase.from('profiles').insert({
               user_id: user.id,
               email,
               full_name: user.user_metadata?.name ?? null,
               role: roleFromWaitlist,
               created_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id' }
-          );
+            });
+          }
+        } catch (profileErr) {
+          console.warn('[profiles bootstrap skipped]', profileErr);
+          // don’t block login; RLS will be fixed in Step 2
         }
 
-        // ---- In! ----
+        // 5) Go in
         router.replace('/dashboard');
       } catch (err) {
         console.error('[Auth callback error]', err);
-        // Hard reset to login on any failure
         router.replace('/login');
       }
     };

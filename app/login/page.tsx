@@ -1,4 +1,4 @@
-
+// app/login/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -13,18 +13,15 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading) return; // guard double-submit
+    if (loading) return;
     setErr(null);
     setLoading(true);
 
     try {
       const normalized = email.trim().toLowerCase();
 
-      // 1) Waitlist gate (server-protected using service role)
-      const res = await fetch(
-        `/api/waitlist?email=${encodeURIComponent(normalized)}`,
-        { cache: 'no-store' }
-      );
+      // 1) Waitlist gate (server-protected)
+      const res = await fetch(`/api/waitlist?email=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
       const { ok } = await res.json();
       if (!ok) {
         setErr('This email is not registered in the waitlist.');

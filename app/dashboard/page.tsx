@@ -21,14 +21,11 @@ export default async function DashboardPage() {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // ✅ Fallback if user is not logged in
   if (!session) {
     return (
       <div className="text-white text-center mt-20">
         <h1 className="text-2xl">Not logged in</h1>
-        <a href="/login" className="underline text-blue-400">
-          Go to Login
-        </a>
+        <a href="/login" className="underline text-blue-400">Go to Login</a>
       </div>
     );
   }

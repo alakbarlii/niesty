@@ -23,7 +23,7 @@ export default function AuthCallbackPage() {
         const url = new URL(window.location.href);
         const hasCode = !!url.searchParams.get('code');
 
-        // 1) Establish session
+        // 1) Establish session for both flows
         if (hasCode) {
           const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
           if (error) throw error;
@@ -45,7 +45,7 @@ export default function AuthCallbackPage() {
         const user = session.user;
         const email = (user.email || '').toLowerCase();
 
-        // 3) Waitlist gate
+        // 3) Waitlist gate (server-protected; no service key on client)
         const res = await fetch(`/api/waitlist?email=${encodeURIComponent(email)}`, { cache: 'no-store' });
         const body: WaitlistCheck = await res.json();
         if (!body.ok) {
@@ -76,7 +76,9 @@ export default function AuthCallbackPage() {
           console.warn('[profiles bootstrap skipped]', e);
         }
 
-        router.replace('/dashboard');
+        // 5) Go in
+        const next = new URLSearchParams(window.location.search).get('next') || '/dashboard';
+        router.replace(next);
       } catch (err) {
         console.error('[Auth callback error]', err);
         router.replace('/login');

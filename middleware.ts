@@ -5,6 +5,17 @@ import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
 
 export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // ✅ Never intercept auth or API — avoids breaking the callback exchange
+  if (pathname.startsWith('/auth') || pathname.startsWith('/api')) {
+    return NextResponse.next();
+  }
+
+  // Guard only these sections (double-safety; matcher also restricts)
+  const needsAuth = pathname.startsWith('/dashboard') || pathname.startsWith('/admin');
+  if (!needsAuth) return NextResponse.next();
+
   const res = NextResponse.next();
 
   const supabase = createServerClient(
@@ -30,7 +41,11 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return NextResponse.redirect(new URL('/login', req.url));
+    const url = req.nextUrl.clone();
+    url.pathname = '/login';
+    // optional: return the user back after login
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
   }
 
   return res;

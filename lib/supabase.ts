@@ -1,3 +1,4 @@
+
 import { createClient, type SupabaseClient, type SupabaseClientOptions } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -7,9 +8,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase env vars: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY');
 }
 
-// DEBUG: verify envs are present in the browser bundle
+// DEBUG: verify envs are present in the browser bundle (safe)
 if (typeof window !== 'undefined') {
-  // safe to print prefixes only
   console.log('[SB] URL:', supabaseUrl);
   console.log('[SB] ANON prefix:', (supabaseAnonKey ?? '').slice(0, 8));
 }

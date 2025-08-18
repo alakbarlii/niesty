@@ -40,9 +40,7 @@ const ProfileNavItem = () => {
   }, []);
 
   if (!sessionLoaded) {
-    return (
-      <div className="w-full animate-pulse bg-white/10 rounded-lg h-10" />
-    );
+    return <div className="w-full animate-pulse bg-white/10 rounded-lg h-10" />;
   }
 
   if (!profileHref) return null;
@@ -81,7 +79,8 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="fixed top-0 left-0 h-screen w-[80px] lg:w-[250px] bg-[#010718] border-r border-white/5 py-6 flex flex-col justify-between transition-all duration-200 z-50">
+    // ✅ Hide on mobile; fixed on md+ so it never moves or stretches with content
+    <aside className="hidden md:flex fixed top-0 left-0 h-screen w-[80px] lg:w-[250px] bg-[#010718] border-r border-white/5 py-6 flex-col justify-between transition-all duration-200 z-50">
       {/* Logo */}
       <div className="flex items-center justify-center lg:justify-start px-2 lg:px-4">
         <Image
@@ -98,10 +97,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <div className="flex flex-col items-center lg:items-start gap-6 px-2 lg:px-4">
         {navItems.map((item) => {
-          if (item.label === 'Profile') {
-            return <ProfileNavItem key="profile" />;
-          }
-
+          if (item.label === 'Profile') return <ProfileNavItem key="profile" />;
           if (!item.href) return null;
 
           const isActive = pathname === item.href;

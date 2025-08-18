@@ -6,10 +6,12 @@ import { Search, FileText, User, Settings, BarChart2 } from 'lucide-react';
 import Image from 'next/image';
 import NotificationIcon from '@/components/NotificationIcon';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase'; 
+import { supabase } from '@/lib/supabase';
 
 const ProfileNavItem = () => {
+  // ✅ Hook called at top-level (not conditionally)
   const pathname = usePathname();
+
   const [profileHref, setProfileHref] = useState<string | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
 
@@ -22,7 +24,7 @@ const ProfileNavItem = () => {
       const { data } = await supabase
         .from('profiles')
         .select('role')
-        .eq('user_id', userId) 
+        .eq('user_id', userId)
         .single();
 
       if (data?.role === 'creator') {
@@ -42,7 +44,6 @@ const ProfileNavItem = () => {
   if (!sessionLoaded) {
     return <div className="w-full animate-pulse bg-white/10 rounded-lg h-10" />;
   }
-
   if (!profileHref) return null;
 
   const isActive = pathname === profileHref;
@@ -64,6 +65,7 @@ const ProfileNavItem = () => {
 };
 
 export default function Sidebar() {
+  // ✅ Used for active states below (no unused var warning)
   const pathname = usePathname();
 
   const navItems = [
@@ -79,65 +81,72 @@ export default function Sidebar() {
   ];
 
   return (
-    // ✅ Hide on mobile; fixed on md+ so it never moves or stretches with content
-    <aside className="hidden md:flex fixed top-0 left-0 h-screen w-[80px] lg:w-[250px] bg-[#010718] border-r border-white/5 py-6 flex-col justify-between transition-all duration-200 z-50">
-      {/* Logo */}
-      <div className="flex items-center justify-center lg:justify-start px-2 lg:px-4">
-        <Image
-          src="/niesty_header.png"
-          alt="Niesty Logo"
-          width={70}
-          height={70}
-          className="h-[70px] w-auto m-1 p-0 -translate-y-1"
-          priority
-        />
-        <span className="text-white font-semibold text-[30px] leading-none -ml-3.5 hidden lg:inline-block">Niesty</span>
-      </div>
+    <>
+      {/* Fixed, pinned sidebar (desktop/tablet only) */}
+      <aside className="hidden md:flex fixed top-0 left-0 h-screen w-[80px] lg:w-[250px] bg-[#010718] border-r border-white/5 py-6 flex-col justify-between transition-all duration-200 z-50">
+        {/* Logo */}
+        <div className="flex items-center justify-center lg:justify-start px-2 lg:px-4">
+          <Image
+            src="/niesty_header.png"
+            alt="Niesty Logo"
+            width={70}
+            height={70}
+            className="h-[70px] w-auto m-1 p-0 -translate-y-1"
+            priority
+          />
+          <span className="text-white font-semibold text-[30px] leading-none -ml-3.5 hidden lg:inline-block">
+            Niesty
+          </span>
+        </div>
 
-      {/* Navigation */}
-      <div className="flex flex-col items-center lg:items-start gap-6 px-2 lg:px-4">
-        {navItems.map((item) => {
-          if (item.label === 'Profile') return <ProfileNavItem key="profile" />;
-          if (!item.href) return null;
+        {/* Navigation */}
+        <div className="flex flex-col items-center lg:items-start gap-6 px-2 lg:px-4">
+          {navItems.map((item) => {
+            if (item.label === 'Profile') return <ProfileNavItem key="profile" />;
+            if (!item.href) return null;
 
-          const isActive = pathname === item.href;
-          return (
-            <Link key={item.href} href={item.href} className="w-full">
-              <div
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
-                  isActive
-                    ? 'bg-yellow-400 text-black font-bold scale-105'
-                    : 'text-white opacity-70 hover:opacity-100'
-                }`}
-              >
-                <div className="text-xl">{item.icon}</div>
-                <span className="hidden lg:inline-block text-base">{item.label}</span>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
+            const isActive = pathname === item.href;
+            return (
+              <Link key={item.href} href={item.href} className="w-full">
+                <div
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
+                    isActive
+                      ? 'bg-yellow-400 text-black font-bold scale-105'
+                      : 'text-white opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <div className="text-xl">{item.icon}</div>
+                  <span className="hidden lg:inline-block text-base">{item.label}</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
 
-      {/* Settings */}
-      <div className="flex flex-col items-center lg:items-start gap-6 px-2 lg:px-4">
-        {bottomItems.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link key={item.href} href={item.href} className="w-full">
-              <div
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
-                  isActive
-                    ? 'bg-yellow-400 text-black font-bold scale-105'
-                    : 'text-white opacity-70 hover:opacity-100'
-                }`}
-              >
-                <div className="text-xl">{item.icon}</div>
-                <span className="hidden lg:inline-block text-base">{item.label}</span>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-    </aside>
+        {/* Settings */}
+        <div className="flex flex-col items-center lg:items-start gap-6 px-2 lg:px-4">
+          {bottomItems.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link key={item.href} href={item.href} className="w-full">
+                <div
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
+                    isActive
+                      ? 'bg-yellow-400 text-black font-bold scale-105'
+                      : 'text-white opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <div className="text-xl">{item.icon}</div>
+                  <span className="hidden lg:inline-block text-base">{item.label}</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* Spacer reserves horizontal room so content never goes under the fixed bar (works even with zoom) */}
+      <div aria-hidden="true" className="hidden md:block w-[88px] lg:w-[258px] shrink-0" />
+    </>
   );
 }

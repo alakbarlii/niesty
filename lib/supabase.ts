@@ -8,12 +8,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase env vars: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY');
 }
 
-// DEBUG (safe): proves envs reached the browser bundle
-if (typeof window !== 'undefined') {
-  console.log('[SB] URL:', supabaseUrl);
-  console.log('[SB] ANON prefix:', (supabaseAnonKey ?? '').slice(0, 8));
-}
-
 const memoryStorage = (() => {
   const store = new Map<string, string>();
   return {

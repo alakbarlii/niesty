@@ -1,6 +1,7 @@
+// app/dashboard/layout.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useHeartbeat } from '@/hooks/useHeartbeat';
 import { supabase } from '@/lib/supabase';
 import { usePathname, useRouter } from 'next/navigation';
@@ -11,6 +12,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
+  const cleanupTimer = useRef<number | null>(null);
 
   // Get current user ID
   useEffect(() => {
@@ -34,24 +36,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Heartbeat only if userId exists
   useHeartbeat(userId);
 
-  // Clean up stale "online" flags
+  // Throttled stale "online" cleanup — only when tab is visible
   useEffect(() => {
     if (!userId) return;
 
-    const cleanupStaleUsers = async () => {
+    const runCleanup = async () => {
       try {
+        // lightweight: let the RPC be SECURITY DEFINER on the DB so this call is cheap
         const { error } = await supabase.rpc('fix_stale_online_flags');
-        if (error) {
-          console.error('[❌ RPC ERROR]', error.message);
-        }
+        if (error) console.error('[❌ RPC ERROR]', error.message);
       } catch (err) {
         console.error('[❌ RPC EXCEPTION]', err);
       }
     };
 
-    cleanupStaleUsers();
-    const interval = setInterval(cleanupStaleUsers, 10000); // every 10s
-    return () => clearInterval(interval);
+    const start = () => {
+      if (cleanupTimer.current !== null) return;
+      // run once immediately, then every 60s (was 10s)
+      runCleanup();
+      cleanupTimer.current = window.setInterval(runCleanup, 60_000);
+    };
+
+    const stop = () => {
+      if (cleanupTimer.current !== null) {
+        clearInterval(cleanupTimer.current);
+        cleanupTimer.current = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') start();
+      else stop();
+    };
+
+    // start only if visible
+    handleVisibility();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // cleanup on unmount/tab close
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      stop();
+    };
   }, [userId]);
 
   const navItems = [

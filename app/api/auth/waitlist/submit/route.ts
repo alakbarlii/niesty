@@ -1,4 +1,3 @@
-// app/api/waitlist/submit/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -13,23 +12,33 @@ type Body = {
 };
 
 async function verifyTurnstile(token?: string, ip?: string | null) {
-  if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE !== '1') return; // skip in dev if disabled
+  if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE !== '1') {
+    if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') console.log('[WL] DEBUG: skipping captcha (flag off)');
+    return;
+  }
   if (!token) throw new Error('Captcha token missing');
 
   const secret = process.env.CAPTCHA_SECRET_KEY;
   if (!secret) throw new Error('Server misconfigured: CAPTCHA_SECRET_KEY missing');
 
-  const body = new URLSearchParams();
-  body.append('secret', secret);
-  body.append('response', token);
-  if (ip) body.append('remoteip', ip);
+  const params = new URLSearchParams();
+  params.append('secret', secret);
+  params.append('response', token);
+  if (ip) params.append('remoteip', ip);
 
-  const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+  const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
     method: 'POST',
-    body,
+    body: params,
   });
-  const data = await r.json();
-  if (!data.success) throw new Error('Captcha failed');
+  const data = await resp.json();
+
+  if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
+    console.log('[WL] verifyTurnstile:', JSON.stringify(data));
+  }
+
+  if (!data.success) {
+    throw new Error(`Captcha failed: ${data['error-codes']?.join(',') || 'unknown'}`);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -55,10 +64,10 @@ export async function POST(req: NextRequest) {
       .upsert({ email: normalized, full_name, role }, { onConflict: 'email' });
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
+    if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') console.error('[WL] ERROR', msg);
     return NextResponse.json({ ok: false, error: msg }, { status: 400 });
   }
 }

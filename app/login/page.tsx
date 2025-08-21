@@ -1,17 +1,23 @@
-// app/login/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
-import { Turnstile } from '@marsidev/react-turnstile'; // + CAPTCHA
+import TurnstileWidget from '@/components/Turnstile';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [captchaToken, setCaptchaToken] = useState<string>(''); // + CAPTCHA
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+
+  const handleToken = useCallback((t: string | null) => {
+    if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
+      console.log('[LOGIN] token set:', t ? `len=${t.length}` : 'null');
+    }
+    setCaptchaToken(t);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,14 +28,15 @@ export default function LoginPage() {
     try {
       const normalized = email.trim().toLowerCase();
 
-      // + CAPTCHA: require token only if feature flag is on
-      if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && !captchaToken) {
-        setErr('Please complete the CAPTCHA.');
-        setLoading(false);
-        return;
+      if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1') {
+        if (!captchaToken) {
+          setErr('Please complete the CAPTCHA.');
+          setLoading(false);
+          return;
+        }
       }
 
-      // 1) Waitlist gate (server-protected)
+      // Waitlist gate (no change)
       const res = await fetch(`/api/waitlist?email=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
       const { ok } = await res.json();
       if (!ok) {
@@ -38,18 +45,25 @@ export default function LoginPage() {
         return;
       }
 
-      // 2) Send magic link (+ pass CAPTCHA token)
+      if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
+        console.log('[LOGIN] calling signInWithOtp with captchaToken len=', captchaToken?.length);
+      }
+
       const { error } = await supabase.auth.signInWithOtp({
         email: normalized,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
-          captchaToken: process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? captchaToken : undefined, // + CAPTCHA
+          captchaToken:
+            process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? (captchaToken as string) : undefined,
         },
       });
 
       if (error) {
         console.error('[signInWithOtp]', error);
-        setErr(error.message || 'Something went wrong. Please try again.');
+        const msg = /captcha/i.test(error.message)
+          ? 'CAPTCHA failed. Try again.'
+          : (error.message || 'Something went wrong. Please try again.');
+        setErr(msg);
       } else {
         setSent(true);
       }
@@ -93,15 +107,8 @@ export default function LoginPage() {
               disabled={loading}
             />
 
-            {/* + CAPTCHA: rendered only if flag is enabled */}
             {process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && (
-              <Turnstile
-                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                onSuccess={(token) => setCaptchaToken(token)}
-                onExpire={() => setCaptchaToken('')}
-                onError={() => setCaptchaToken('')}
-                options={{ theme: 'auto' }}
-              />
+              <TurnstileWidget onToken={handleToken} />
             )}
 
             <button

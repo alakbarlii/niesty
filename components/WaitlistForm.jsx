@@ -34,9 +34,19 @@ export default function WaitlistForm() {
     const normalized = email.trim().toLowerCase();
 
     try {
+      // DEBUG
+      console.log('[WL] submit start', {
+        email: normalized,
+        role,
+        tokenLen: captchaToken ? captchaToken.length : 0,
+      });
+
       // Check if already in waitlist
       const chk = await fetch(`/api/waitlist?email=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
-      const chkJson = await chk.json();
+      let chkJson = {};
+      try { chkJson = await chk.json(); } catch { /* ignore parse errors */ }
+      console.log('[WL] check exists', chk.status, chkJson);
+
       if (chk.ok && chkJson?.ok) {
         setError('This email is already registered.');
         return;
@@ -54,9 +64,24 @@ export default function WaitlistForm() {
         }),
       });
 
-      const j = await res.json();
+      // DEBUG
+      console.log('[WL] submit response status', res.status);
+
+      // If the route isn't deployed, you'll get 405 here.
+      if (res.status === 405) {
+        setError('Server route missing: /api/waitlist/submit (405). Deploy app/api/waitlist/submit/route.ts');
+        return;
+      }
+
+      let j = {};
+      try {
+        j = await res.json();
+      } catch (e) {
+        console.warn('[WL] submit json parse failed', e);
+      }
+
       if (!res.ok || !j?.ok) {
-        throw new Error(j?.error || 'Submit failed');
+        throw new Error(j?.error || `Submit failed (${res.status})`);
       }
 
       // fire-and-forget confirmation email (kept as-is)
@@ -71,9 +96,13 @@ export default function WaitlistForm() {
       setRole(null);
       setShowSuccess(true);
       setStatus('You’re on the waitlist!');
+
+      // DEBUG: clear token after success so we see widget re-issue next time
+      setCaptchaToken('');
+      console.log('[WL] success');
     } catch (err) {
-      console.error(err);
-      setError('Something went wrong. Please try again.');
+      console.error('[WL] error', err);
+      setError(err?.message || 'Something went wrong. Please try again.');
     }
   };
 
@@ -135,13 +164,22 @@ export default function WaitlistForm() {
             </p>
           </div>
 
-          {/* NEW: Turnstile widget (gated by flag) */}
+          {/* Turnstile widget (no other changes) */}
           {process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && (
             <Turnstile
               siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-              onSuccess={(token) => setCaptchaToken(token)}
-              onExpire={() => setCaptchaToken('')}
-              onError={() => setCaptchaToken('')}
+              onSuccess={(token) => {
+                console.log('[WL] Turnstile onSuccess token len=', token?.length || 0);
+                setCaptchaToken(token);
+              }}
+              onExpire={() => {
+                console.log('[WL] Turnstile expired');
+                setCaptchaToken('');
+              }}
+              onError={(e) => {
+                console.log('[WL] Turnstile error', e);
+                setCaptchaToken('');
+              }}
               options={{ theme: 'auto' }}
             />
           )}

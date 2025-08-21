@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 export default function WaitlistForm() {
   const [email, setEmail] = useState('');
@@ -11,6 +12,9 @@ export default function WaitlistForm() {
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
+  // NEW: captcha token
+  const [captchaToken, setCaptchaToken] = useState('');
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -18,6 +22,12 @@ export default function WaitlistForm() {
 
     if (!role) {
       setError('Please select a role: Brand or Creator.');
+      return;
+    }
+
+    // require captcha ONLY if feature flag enabled
+    if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && !captchaToken) {
+      setError('Please complete the CAPTCHA.');
       return;
     }
 
@@ -32,18 +42,24 @@ export default function WaitlistForm() {
         return;
       }
 
-      // Submit to waitlist (server uses service role)
+      // Submit to waitlist (server verifies Turnstile)
       const res = await fetch('/api/waitlist/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalized, full_name: fullName, role }),
+        body: JSON.stringify({
+          email: normalized,
+          full_name: fullName,
+          role,
+          token: process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? captchaToken : undefined, // NEW
+        }),
       });
+
       const j = await res.json();
       if (!res.ok || !j?.ok) {
         throw new Error(j?.error || 'Submit failed');
       }
 
-      // fire-and-forget confirmation email
+      // fire-and-forget confirmation email (kept as-is)
       fetch('/api/send-confirmation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -54,6 +70,7 @@ export default function WaitlistForm() {
       setFullName('');
       setRole(null);
       setShowSuccess(true);
+      setStatus('You’re on the waitlist!');
     } catch (err) {
       console.error(err);
       setError('Something went wrong. Please try again.');
@@ -117,6 +134,17 @@ export default function WaitlistForm() {
               Choose the role that describes you best. We'll tailor Niesty to fit your needs.
             </p>
           </div>
+
+          {/* NEW: Turnstile widget (gated by flag) */}
+          {process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && (
+            <Turnstile
+              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+              onSuccess={(token) => setCaptchaToken(token)}
+              onExpire={() => setCaptchaToken('')}
+              onError={() => setCaptchaToken('')}
+              options={{ theme: 'auto' }}
+            />
+          )}
 
           <button
             type="submit"

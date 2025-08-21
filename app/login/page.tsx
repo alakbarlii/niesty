@@ -4,12 +4,14 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
+import { Turnstile } from '@marsidev/react-turnstile'; // + CAPTCHA
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string>(''); // + CAPTCHA
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,6 +22,13 @@ export default function LoginPage() {
     try {
       const normalized = email.trim().toLowerCase();
 
+      // + CAPTCHA: require token only if feature flag is on
+      if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && !captchaToken) {
+        setErr('Please complete the CAPTCHA.');
+        setLoading(false);
+        return;
+      }
+
       // 1) Waitlist gate (server-protected)
       const res = await fetch(`/api/waitlist?email=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
       const { ok } = await res.json();
@@ -29,10 +38,13 @@ export default function LoginPage() {
         return;
       }
 
-      // 2) Send magic link
+      // 2) Send magic link (+ pass CAPTCHA token)
       const { error } = await supabase.auth.signInWithOtp({
         email: normalized,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          captchaToken: process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? captchaToken : undefined, // + CAPTCHA
+        },
       });
 
       if (error) {
@@ -80,6 +92,18 @@ export default function LoginPage() {
               className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
               disabled={loading}
             />
+
+            {/* + CAPTCHA: rendered only if flag is enabled */}
+            {process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && (
+              <Turnstile
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                onSuccess={(token) => setCaptchaToken(token)}
+                onExpire={() => setCaptchaToken('')}
+                onError={() => setCaptchaToken('')}
+                options={{ theme: 'auto' }}
+              />
+            )}
+
             <button
               type="submit"
               disabled={loading || !email.trim()}

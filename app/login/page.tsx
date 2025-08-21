@@ -12,6 +12,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Pull site key at build time; if Vercel env is missing, this is ''
+  const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
+
   // CAPTCHA token + widget refresh key
   const [captchaToken, setCaptchaToken] = useState<string>('');
   const [widgetKey, setWidgetKey] = useState(0);
@@ -25,7 +28,14 @@ export default function LoginPage() {
     try {
       const normalized = email.trim().toLowerCase();
 
-      // ALWAYS require a token because Supabase Attack Protection is enabled
+      // Hard guard: widget misconfigured
+      if (!SITE_KEY) {
+        setErr('CAPTCHA misconfigured: missing NEXT_PUBLIC_TURNSTILE_SITE_KEY in Vercel env.');
+        setLoading(false);
+        return;
+      }
+
+      // Always require a token because Supabase Attack Protection is enabled
       if (!captchaToken) {
         setErr('Please complete the CAPTCHA.');
         setLoading(false);
@@ -50,7 +60,7 @@ export default function LoginPage() {
         email: normalized,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
-          captchaToken, // <-- ALWAYS pass it
+          captchaToken, // ALWAYS pass it
         },
       });
 
@@ -112,24 +122,30 @@ export default function LoginPage() {
             />
 
             {/* Turnstile widget: always render; force refresh via key */}
-            <div key={widgetKey}>
-              <Turnstile
-                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                onSuccess={(token) => {
-                  console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
-                  setCaptchaToken(token || '');
-                }}
-                onExpire={() => {
-                  console.log('[LOGIN] Turnstile expired');
-                  setCaptchaToken('');
-                }}
-                onError={(e) => {
-                  console.log('[LOGIN] Turnstile error', e);
-                  setCaptchaToken('');
-                }}
-                options={{ theme: 'auto' }}
-              />
-            </div>
+            {SITE_KEY ? (
+              <div key={widgetKey}>
+                <Turnstile
+                  siteKey={SITE_KEY}
+                  onSuccess={(token) => {
+                    console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
+                    setCaptchaToken(token || '');
+                  }}
+                  onExpire={() => {
+                    console.log('[LOGIN] Turnstile expired');
+                    setCaptchaToken('');
+                  }}
+                  onError={(e) => {
+                    console.log('[LOGIN] Turnstile error', e);
+                    setCaptchaToken('');
+                  }}
+                  options={{ theme: 'auto' }}
+                />
+              </div>
+            ) : (
+              <p className="text-red-400 text-sm text-center">
+                CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
+              </p>
+            )}
 
             <button
               type="submit"

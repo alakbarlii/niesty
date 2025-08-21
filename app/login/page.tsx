@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // NEW: capture captcha token + force refresh key
+  // CAPTCHA token + widget refresh key
   const [captchaToken, setCaptchaToken] = useState<string>('');
   const [widgetKey, setWidgetKey] = useState(0);
 
@@ -25,8 +25,8 @@ export default function LoginPage() {
     try {
       const normalized = email.trim().toLowerCase();
 
-      // Require CAPTCHA token when feature flag is on
-      if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && !captchaToken) {
+      // ALWAYS require a token because Supabase Attack Protection is enabled
+      if (!captchaToken) {
         setErr('Please complete the CAPTCHA.');
         setLoading(false);
         return;
@@ -38,20 +38,19 @@ export default function LoginPage() {
       if (!ok) {
         setErr('This email is not registered in the waitlist.');
         setLoading(false);
-        // refresh widget so the next attempt gets a fresh token
+        // refresh widget so next attempt gets a fresh token
         setWidgetKey((k) => k + 1);
         setCaptchaToken('');
         return;
       }
 
       // 2) Send magic link (with CAPTCHA token)
-      console.log('[LOGIN] calling signInWithOtp with captchaToken len=', captchaToken?.length);
+      console.log('[LOGIN] signInWithOtp captchaToken len =', captchaToken.length);
       const { error } = await supabase.auth.signInWithOtp({
         email: normalized,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
-          captchaToken:
-            process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? captchaToken : undefined,
+          captchaToken, // <-- ALWAYS pass it
         },
       });
 
@@ -61,7 +60,7 @@ export default function LoginPage() {
           ? 'CAPTCHA failed. Try again.'
           : (error.message || 'Something went wrong. Please try again.');
         setErr(msg);
-        // always refresh widget after error to avoid stale token
+        // refresh widget after error to avoid stale/duplicate token
         setWidgetKey((k) => k + 1);
         setCaptchaToken('');
       } else {
@@ -112,27 +111,25 @@ export default function LoginPage() {
               disabled={loading}
             />
 
-            {/* NEW: Turnstile widget (forced refresh via key) */}
-            {process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && (
-              <div key={widgetKey}>
-                <Turnstile
-                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                  onSuccess={(token) => {
-                    console.log('[LOGIN] Turnstile onSuccess len=', token?.length || 0);
-                    setCaptchaToken(token || '');
-                  }}
-                  onExpire={() => {
-                    console.log('[LOGIN] Turnstile expired');
-                    setCaptchaToken('');
-                  }}
-                  onError={(e) => {
-                    console.log('[LOGIN] Turnstile error', e);
-                    setCaptchaToken('');
-                  }}
-                  options={{ theme: 'auto' }}
-                />
-              </div>
-            )}
+            {/* Turnstile widget: always render; force refresh via key */}
+            <div key={widgetKey}>
+              <Turnstile
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                onSuccess={(token) => {
+                  console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
+                  setCaptchaToken(token || '');
+                }}
+                onExpire={() => {
+                  console.log('[LOGIN] Turnstile expired');
+                  setCaptchaToken('');
+                }}
+                onError={(e) => {
+                  console.log('[LOGIN] Turnstile error', e);
+                  setCaptchaToken('');
+                }}
+                options={{ theme: 'auto' }}
+              />
+            </div>
 
             <button
               type="submit"

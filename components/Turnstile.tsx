@@ -13,7 +13,7 @@ export default function TurnstileWidget({ onToken, className }: Props) {
   if (!siteKey) console.error('[TS] Missing NEXT_PUBLIC_TURNSTILE_SITE_KEY');
 
   return (
-    <div className={className ?? 'my-3'}>
+    <div className={className ?? ' w-full my-3'}>
       <Turnstile
         siteKey={siteKey}
         onSuccess={(t) => {

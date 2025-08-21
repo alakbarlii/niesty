@@ -12,9 +12,11 @@ export default function WaitlistForm() {
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // NEW: captcha token
+  // Use the same approach as login: show widget if a site key exists
+  const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
+
+  // captcha token + force-refresh key (fresh token each attempt)
   const [captchaToken, setCaptchaToken] = useState('');
-  // NEW: force a re-render of the widget to always get a fresh token
   const [widgetKey, setWidgetKey] = useState(0);
 
   const handleSubmit = async (e) => {
@@ -27,8 +29,8 @@ export default function WaitlistForm() {
       return;
     }
 
-    // require captcha ONLY if feature flag enabled
-    if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && !captchaToken) {
+    // If we expect a captcha (SITE_KEY present), require a token
+    if (SITE_KEY && !captchaToken) {
       setError('Please complete the CAPTCHA.');
       return;
     }
@@ -46,12 +48,12 @@ export default function WaitlistForm() {
 
       if (chk.ok && chkJson?.ok) {
         setError('This email is already registered.');
-        setWidgetKey((k) => k + 1);
+        setWidgetKey((k) => k + 1); // refresh widget for next attempt
         setCaptchaToken('');
         return;
       }
 
-      // Submit to waitlist (server verifies Turnstile)
+      // Submit (server verifies Turnstile if token provided)
       const res = await fetch('/api/waitlist/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -59,7 +61,7 @@ export default function WaitlistForm() {
           email: normalized,
           full_name: fullName,
           role,
-          token: process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? captchaToken : undefined,
+          token: SITE_KEY ? captchaToken : undefined,
         }),
       });
 
@@ -79,7 +81,7 @@ export default function WaitlistForm() {
         throw new Error(j?.error || `Submit failed (${res.status})`);
       }
 
-      // fire-and-forget confirmation email (kept as-is)
+      // fire-and-forget confirmation email
       fetch('/api/send-confirmation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,21 +94,20 @@ export default function WaitlistForm() {
       setShowSuccess(true);
       setStatus('You’re on the waitlist!');
 
-      setWidgetKey((k) => k + 1);
+      setWidgetKey((k) => k + 1); // refresh widget after success
       setCaptchaToken('');
       console.log('[WL] success');
     } catch (err) {
       console.error('[WL] error', err);
       setError(err?.message || 'Something went wrong. Please try again.');
-      setWidgetKey((k) => k + 1);
+      setWidgetKey((k) => k + 1); // refresh widget after error
       setCaptchaToken('');
     }
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-black via-[#0b0b0b] to-[#111] px-4">
-      {/* centered & responsive width */}
-      <div className="w-full max-w-xl md:max-w-2xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10">
+      <div className="w-full max-w-xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10">
         <div className="flex flex-col items-center mb-10">
           <Image src="/niesty_header.png" alt="Niesty Logo" width={160} height={160} className="mb-5" />
           <h1 className="text-4xl font-extrabold text-white text-center mb-2">Join Niesty!</h1>
@@ -165,14 +166,14 @@ export default function WaitlistForm() {
             </p>
           </div>
 
-          {/* Turnstile widget: full-width + responsive */}
-          {process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && (
-            <div key={widgetKey} className="w-full">
+          {/* Turnstile widget — render if site key exists; responsive width */}
+          {SITE_KEY ? (
+            <div key={widgetKey}>
               <Turnstile
-                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+                siteKey={SITE_KEY}
                 onSuccess={(token) => {
                   console.log('[WL] Turnstile onSuccess len=', token?.length || 0);
-                  setCaptchaToken(token);
+                  setCaptchaToken(token || '');
                 }}
                 onExpire={() => {
                   console.log('[WL] Turnstile expired');
@@ -182,12 +183,14 @@ export default function WaitlistForm() {
                   console.log('[WL] Turnstile error', e);
                   setCaptchaToken('');
                 }}
-                options={{
-                  theme: 'auto',
-                  size: 'flexible',   // <— makes iframe follow container width
-                }}
+                options={{ theme: 'auto', size: 'flexible' }}
+                className="w-full" // let it expand to the input width
               />
             </div>
+          ) : (
+            <p className="text-red-400 text-sm text-center">
+              CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
+            </p>
           )}
 
           <button

@@ -11,6 +11,18 @@ type SetBody = {
   refresh_token: string;
 };
 
+/* === NEW: quiet stray requests so you don't see 405s in console === */
+export async function GET() {
+  return NextResponse.json(
+    { ok: true, note: 'Use POST to set auth cookies.' },
+    { status: 200 }
+  );
+}
+export async function OPTIONS() {
+  return NextResponse.json({ ok: true }, { status: 200 });
+}
+/* ================================================================= */
+
 export async function POST(req: NextRequest) {
   const { access_token, refresh_token } = (await req.json()) as Partial<SetBody>;
 

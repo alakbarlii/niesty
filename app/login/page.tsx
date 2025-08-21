@@ -1,23 +1,20 @@
+// app/login/page.tsx
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
-import TurnstileWidget from '@/components/Turnstile';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
-  const handleToken = useCallback((t: string | null) => {
-    if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
-      console.log('[LOGIN] token set:', t ? `len=${t.length}` : 'null');
-    }
-    setCaptchaToken(t);
-  }, []);
+  // NEW: capture captcha token + force refresh key
+  const [captchaToken, setCaptchaToken] = useState<string>('');
+  const [widgetKey, setWidgetKey] = useState(0);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,33 +25,33 @@ export default function LoginPage() {
     try {
       const normalized = email.trim().toLowerCase();
 
-      if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1') {
-        if (!captchaToken) {
-          setErr('Please complete the CAPTCHA.');
-          setLoading(false);
-          return;
-        }
+      // Require CAPTCHA token when feature flag is on
+      if (process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && !captchaToken) {
+        setErr('Please complete the CAPTCHA.');
+        setLoading(false);
+        return;
       }
 
-      // Waitlist gate (no change)
+      // 1) Waitlist gate (server-protected)
       const res = await fetch(`/api/waitlist?email=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
       const { ok } = await res.json();
       if (!ok) {
         setErr('This email is not registered in the waitlist.');
         setLoading(false);
+        // refresh widget so the next attempt gets a fresh token
+        setWidgetKey((k) => k + 1);
+        setCaptchaToken('');
         return;
       }
 
-      if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
-        console.log('[LOGIN] calling signInWithOtp with captchaToken len=', captchaToken?.length);
-      }
-
+      // 2) Send magic link (with CAPTCHA token)
+      console.log('[LOGIN] calling signInWithOtp with captchaToken len=', captchaToken?.length);
       const { error } = await supabase.auth.signInWithOtp({
         email: normalized,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           captchaToken:
-            process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? (captchaToken as string) : undefined,
+            process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? captchaToken : undefined,
         },
       });
 
@@ -64,13 +61,21 @@ export default function LoginPage() {
           ? 'CAPTCHA failed. Try again.'
           : (error.message || 'Something went wrong. Please try again.');
         setErr(msg);
+        // always refresh widget after error to avoid stale token
+        setWidgetKey((k) => k + 1);
+        setCaptchaToken('');
       } else {
         setSent(true);
+        // refresh widget after success too
+        setWidgetKey((k) => k + 1);
+        setCaptchaToken('');
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Login failed.';
       console.error('[login]', e);
       setErr(msg);
+      setWidgetKey((k) => k + 1);
+      setCaptchaToken('');
     } finally {
       setLoading(false);
     }
@@ -107,8 +112,26 @@ export default function LoginPage() {
               disabled={loading}
             />
 
+            {/* NEW: Turnstile widget (forced refresh via key) */}
             {process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && (
-              <TurnstileWidget onToken={handleToken} />
+              <div key={widgetKey}>
+                <Turnstile
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                  onSuccess={(token) => {
+                    console.log('[LOGIN] Turnstile onSuccess len=', token?.length || 0);
+                    setCaptchaToken(token || '');
+                  }}
+                  onExpire={() => {
+                    console.log('[LOGIN] Turnstile expired');
+                    setCaptchaToken('');
+                  }}
+                  onError={(e) => {
+                    console.log('[LOGIN] Turnstile error', e);
+                    setCaptchaToken('');
+                  }}
+                  options={{ theme: 'auto' }}
+                />
+              </div>
             )}
 
             <button

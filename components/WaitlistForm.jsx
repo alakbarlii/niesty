@@ -114,7 +114,10 @@ export default function WaitlistForm() {
         <div className="flex flex-col items-center mb-10">
           <Image src="/niesty_header.png" alt="Niesty Logo" width={160} height={160} className="mb-5" />
           <h1 className="text-4xl font-extrabold text-white text-center mb-2">Join Niesty!</h1>
-          <p className="text-white/60 text-sm text-center">Where creators and sponsors connect.</p>
+          <p className="text-white/60 text-sm text-center leading-relaxed">
+            Where creators and sponsors connect.<br />
+            Every day with new sponsorship deals!
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 w-full text-white relative z-10">

@@ -14,7 +14,6 @@ export default function WaitlistForm() {
 
   // NEW: captcha token
   const [captchaToken, setCaptchaToken] = useState('');
-
   // NEW: force a re-render of the widget to always get a fresh token
   const [widgetKey, setWidgetKey] = useState(0);
 
@@ -47,7 +46,6 @@ export default function WaitlistForm() {
 
       if (chk.ok && chkJson?.ok) {
         setError('This email is already registered.');
-        // NEW: refresh widget so token is not stale next time
         setWidgetKey((k) => k + 1);
         setCaptchaToken('');
         return;
@@ -61,7 +59,7 @@ export default function WaitlistForm() {
           email: normalized,
           full_name: fullName,
           role,
-          token: process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? captchaToken : undefined, // NEW
+          token: process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' ? captchaToken : undefined,
         }),
       });
 
@@ -69,7 +67,6 @@ export default function WaitlistForm() {
 
       if (res.status === 405) {
         setError('Server route missing: /api/waitlist/submit (405). Deploy app/api/waitlist/submit/route.ts');
-        // refresh widget
         setWidgetKey((k) => k + 1);
         setCaptchaToken('');
         return;
@@ -95,14 +92,12 @@ export default function WaitlistForm() {
       setShowSuccess(true);
       setStatus('You’re on the waitlist!');
 
-      // NEW: refresh widget + token after success
       setWidgetKey((k) => k + 1);
       setCaptchaToken('');
       console.log('[WL] success');
     } catch (err) {
       console.error('[WL] error', err);
       setError(err?.message || 'Something went wrong. Please try again.');
-      // NEW: refresh widget + token after any error
       setWidgetKey((k) => k + 1);
       setCaptchaToken('');
     }
@@ -110,7 +105,8 @@ export default function WaitlistForm() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-black via-[#0b0b0b] to-[#111] px-4">
-      <div className="w-full max-w-xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10">
+      {/* centered & responsive width */}
+      <div className="w-full max-w-xl md:max-w-2xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10">
         <div className="flex flex-col items-center mb-10">
           <Image src="/niesty_header.png" alt="Niesty Logo" width={160} height={160} className="mb-5" />
           <h1 className="text-4xl font-extrabold text-white text-center mb-2">Join Niesty!</h1>
@@ -169,9 +165,9 @@ export default function WaitlistForm() {
             </p>
           </div>
 
-          {/* Turnstile widget (UNCHANGED LOOK) — only added key + logging */}
+          {/* Turnstile widget: full-width + responsive */}
           {process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && (
-            <div key={widgetKey}>
+            <div key={widgetKey} className="w-full">
               <Turnstile
                 siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
                 onSuccess={(token) => {
@@ -186,7 +182,10 @@ export default function WaitlistForm() {
                   console.log('[WL] Turnstile error', e);
                   setCaptchaToken('');
                 }}
-                options={{ theme: 'auto' }}
+                options={{
+                  theme: 'auto',
+                  size: 'flexible',   // <— makes iframe follow container width
+                }}
               />
             </div>
           )}

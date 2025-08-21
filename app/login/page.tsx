@@ -92,7 +92,8 @@ export default function LoginPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-black via-[#0b0b0b] to-[#111] px-4">
-      <div className="w-full max-w-xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+      {/* centered & responsive width (matches WaitlistForm) */}
+      <div className="w-full max-w-xl md:max-w-2xl bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
         <div className="flex flex-col items-center mb-10">
           <Image src="/niesty_header.png" alt="Niesty Logo" width={160} height={160} className="mb-5" />
           <h1 className="text-4xl font-extrabold text-white text-center mb-4 tracking-tight">
@@ -121,9 +122,9 @@ export default function LoginPage() {
               disabled={loading}
             />
 
-            {/* Turnstile widget: always render; force refresh via key */}
+            {/* Turnstile widget: full-width + responsive; force refresh via key */}
             {SITE_KEY ? (
-              <div key={widgetKey}>
+              <div key={widgetKey} className="w-full">
                 <Turnstile
                   siteKey={SITE_KEY}
                   onSuccess={(token) => {
@@ -138,7 +139,10 @@ export default function LoginPage() {
                     console.log('[LOGIN] Turnstile error', e);
                     setCaptchaToken('');
                   }}
-                  options={{ theme: 'auto' }}
+                  options={{
+                    theme: 'auto',
+                    size: 'flexible', // <— makes iframe follow container width
+                  }}
                 />
               </div>
             ) : (

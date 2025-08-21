@@ -118,22 +118,23 @@ export default function WaitlistForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 w-full text-white relative z-10">
-          <input
-            type="text"
-            placeholder="Full Name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            required
-            className="w-full p-4 rounded-xl border border-white/20 bg-white/10 text-white placeholder-white/50"
-          />
-          <input
-            type="email"
-            placeholder="Email Address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full p-4 rounded-xl border border-white/20 bg-white/10 text-white placeholder-white/50"
-          />
+        <input
+        type="text"
+        placeholder="Full Name"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        required
+        className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+       />
+       <input
+         type="email"
+         placeholder="Email Address"
+         value={email}
+         onChange={(e) => setEmail(e.target.value)}
+         required
+         className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+         />
+
 
           <div className="space-y-3">
             <h2 className="text-xl font-bold text-center">Who are you here as?</h2>

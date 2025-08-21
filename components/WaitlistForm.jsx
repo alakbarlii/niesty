@@ -15,6 +15,9 @@ export default function WaitlistForm() {
   // NEW: captcha token
   const [captchaToken, setCaptchaToken] = useState('');
 
+  // NEW: force a re-render of the widget to always get a fresh token
+  const [widgetKey, setWidgetKey] = useState(0);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -34,21 +37,19 @@ export default function WaitlistForm() {
     const normalized = email.trim().toLowerCase();
 
     try {
-      // DEBUG
-      console.log('[WL] submit start', {
-        email: normalized,
-        role,
-        tokenLen: captchaToken ? captchaToken.length : 0,
-      });
+      console.log('[WL] submit', { email: normalized, role, tokenLen: captchaToken?.length || 0 });
 
       // Check if already in waitlist
       const chk = await fetch(`/api/waitlist?email=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
       let chkJson = {};
-      try { chkJson = await chk.json(); } catch { /* ignore parse errors */ }
+      try { chkJson = await chk.json(); } catch {}
       console.log('[WL] check exists', chk.status, chkJson);
 
       if (chk.ok && chkJson?.ok) {
         setError('This email is already registered.');
+        // NEW: refresh widget so token is not stale next time
+        setWidgetKey((k) => k + 1);
+        setCaptchaToken('');
         return;
       }
 
@@ -64,21 +65,18 @@ export default function WaitlistForm() {
         }),
       });
 
-      // DEBUG
-      console.log('[WL] submit response status', res.status);
+      console.log('[WL] submit response', res.status);
 
-      // If the route isn't deployed, you'll get 405 here.
       if (res.status === 405) {
         setError('Server route missing: /api/waitlist/submit (405). Deploy app/api/waitlist/submit/route.ts');
+        // refresh widget
+        setWidgetKey((k) => k + 1);
+        setCaptchaToken('');
         return;
       }
 
       let j = {};
-      try {
-        j = await res.json();
-      } catch (e) {
-        console.warn('[WL] submit json parse failed', e);
-      }
+      try { j = await res.json(); } catch (e2) { console.warn('[WL] json parse failed', e2); }
 
       if (!res.ok || !j?.ok) {
         throw new Error(j?.error || `Submit failed (${res.status})`);
@@ -97,12 +95,16 @@ export default function WaitlistForm() {
       setShowSuccess(true);
       setStatus('You’re on the waitlist!');
 
-      // DEBUG: clear token after success so we see widget re-issue next time
+      // NEW: refresh widget + token after success
+      setWidgetKey((k) => k + 1);
       setCaptchaToken('');
       console.log('[WL] success');
     } catch (err) {
       console.error('[WL] error', err);
       setError(err?.message || 'Something went wrong. Please try again.');
+      // NEW: refresh widget + token after any error
+      setWidgetKey((k) => k + 1);
+      setCaptchaToken('');
     }
   };
 
@@ -164,24 +166,26 @@ export default function WaitlistForm() {
             </p>
           </div>
 
-          {/* Turnstile widget (no other changes) */}
+          {/* Turnstile widget (UNCHANGED LOOK) — only added key + logging */}
           {process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === '1' && (
-            <Turnstile
-              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-              onSuccess={(token) => {
-                console.log('[WL] Turnstile onSuccess token len=', token?.length || 0);
-                setCaptchaToken(token);
-              }}
-              onExpire={() => {
-                console.log('[WL] Turnstile expired');
-                setCaptchaToken('');
-              }}
-              onError={(e) => {
-                console.log('[WL] Turnstile error', e);
-                setCaptchaToken('');
-              }}
-              options={{ theme: 'auto' }}
-            />
+            <div key={widgetKey}>
+              <Turnstile
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+                onSuccess={(token) => {
+                  console.log('[WL] Turnstile onSuccess len=', token?.length || 0);
+                  setCaptchaToken(token);
+                }}
+                onExpire={() => {
+                  console.log('[WL] Turnstile expired');
+                  setCaptchaToken('');
+                }}
+                onError={(e) => {
+                  console.log('[WL] Turnstile error', e);
+                  setCaptchaToken('');
+                }}
+                options={{ theme: 'auto' }}
+              />
+            </div>
           )}
 
           <button

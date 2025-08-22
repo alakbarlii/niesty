@@ -169,30 +169,31 @@ export default function WaitlistForm() {
 
           {/* Turnstile widget — render if site key exists; responsive width */}
           {SITE_KEY ? (
-            <div key={widgetKey}>
-              <Turnstile
-                siteKey={SITE_KEY}
-                onSuccess={(token) => {
-                  console.log('[WL] Turnstile onSuccess len=', token?.length || 0);
-                  setCaptchaToken(token || '');
-                }}
-                onExpire={() => {
-                  console.log('[WL] Turnstile expired');
-                  setCaptchaToken('');
-                }}
-                onError={(e) => {
-                  console.log('[WL] Turnstile error', e);
-                  setCaptchaToken('');
-                }}
-                options={{ theme: 'auto', size: 'flexible' }}
-                className="w-full" // let it expand to the input width
-              />
-            </div>
-          ) : (
-            <p className="text-red-400 text-sm text-center">
-              CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
-            </p>
-          )}
+          <div key={widgetKey}>
+          <Turnstile
+          siteKey={SITE_KEY}
+           options={{ action: "waitlist_submit", cData: "wl:waitlist", theme: "auto", size: "flexible" }}
+           onSuccess={(token) => {
+           console.log("[WL] Turnstile onSuccess len=", token?.length || 0);
+             setCaptchaToken(token || "");
+          }}
+           onExpire={() => {
+            console.log("[WL] Turnstile expired");
+            setCaptchaToken("");
+          }}
+             onError={(e) => {
+            console.log("[WL] Turnstile error", e);
+        setCaptchaToken("");
+            }}
+         className="w-full"
+        />
+       </div>
+       ) : (
+         <p className="text-red-400 text-sm text-center">
+        CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
+     </p>
+)}
+
 
           <button
             type="submit"

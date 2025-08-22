@@ -126,24 +126,27 @@ export default function LoginPage() {
             {SITE_KEY ? (
               <div key={widgetKey} className="w-full">
                 <Turnstile
-                  siteKey={SITE_KEY}
-                  onSuccess={(token) => {
-                    console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
-                    setCaptchaToken(token || '');
-                  }}
-                  onExpire={() => {
-                    console.log('[LOGIN] Turnstile expired');
-                    setCaptchaToken('');
-                  }}
-                  onError={(e) => {
-                    console.log('[LOGIN] Turnstile error', e);
-                    setCaptchaToken('');
-                  }}
-                  options={{
-                    theme: 'auto',
-                    size: 'flexible', // <— makes iframe follow container width
-                  }}
-                />
+  siteKey={SITE_KEY}
+  onSuccess={(token) => {
+    console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
+    setCaptchaToken(token || '');
+  }}
+  onExpire={() => {
+    console.log('[LOGIN] Turnstile expired');
+    setCaptchaToken('');
+  }}
+  onError={(e) => {
+    console.log('[LOGIN] Turnstile error', e);
+    setCaptchaToken('');
+  }}
+  options={{
+    action: "login_magic_link",   
+    cData: "lg:login",            
+    theme: 'auto',
+    size: 'flexible',
+  }}
+/>
+
               </div>
             ) : (
               <p className="text-red-400 text-sm text-center">

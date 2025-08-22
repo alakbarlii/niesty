@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 4) Verify Turnstile (strict action + cdata semantics)
-    await verifyTurnstile(token, ip, "waitlist_submit", "wl:");
+    await verifyTurnstile(token, ip, "waitlist_submit", "wl_"); // <-- underscore to match client
 
     // 5) Upsert waitlist (service role only)
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;

@@ -166,46 +166,46 @@ export default function WaitlistForm() {
             </p>
           </div>
 
-          {/* Turnstile widget — render if site key exists; responsive width */}
-          {SITE_KEY ? (
-            <div key={widgetKey}>
-            <Turnstile
-              siteKey={SITE_KEY}
-              options={{ action: 'waitlist_submit', cData: 'wl_waitlist', theme: 'auto', size: 'flexible' }}
-              onSuccess={(token) => {
-                console.log('[WL] Turnstile onSuccess len=', token?.length || 0);
-                setCaptchaToken(token || '');
-          
-                // DEV helper: stash & copy token when debug flag is on
-                if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
-                  try {
-                    window.__WL_TOKEN__ = token || '';
-                    if (token && navigator?.clipboard?.writeText) {
-                      navigator.clipboard.writeText(token);
-                      console.log('[WL] token copied to clipboard');
-                    }
-                  } catch (e) {
-                    console.warn('[WL] token copy failed', e);
-                  }
-                }
-              }}
-              onExpire={() => {
-                console.log('[WL] Turnstile expired');
-                setCaptchaToken('');
-              }}
-              onError={(e) => {
-                console.log('[WL] Turnstile error', e);
-                setCaptchaToken('');
-              }}
-              className="w-full"
-            />
-          </div>
-          
-          ) : (
-            <p className="text-red-400 text-sm text-center">
-              CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
-            </p>
-          )}
+          {/* Turnstile widget */}
+{SITE_KEY ? (
+  <div key={widgetKey}>
+    <Turnstile
+      siteKey={SITE_KEY}
+      options={{ action: 'waitlist_submit', cData: 'wl_waitlist', theme: 'auto', size: 'flexible' }}
+      onSuccess={(token) => {
+        console.log('[WL] Turnstile onSuccess len=', token?.length || 0);
+        setCaptchaToken(token || '');
+
+        // DEV helper: stash token for debugging if flag is on
+        if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
+          try {
+            window.__WL_TOKEN__ = token || '';
+            if (token) {
+              sessionStorage.setItem('__WL_TOKEN__', token);
+              console.log('[WL] token stored in sessionStorage + window.__WL_TOKEN__');
+            }
+          } catch (e) {
+            console.warn('[WL] debug token stash failed', e);
+          }
+        }
+      }}
+      onExpire={() => {
+        console.log('[WL] Turnstile expired');
+        setCaptchaToken('');
+      }}
+      onError={(e) => {
+        console.log('[WL] Turnstile error', e);
+        setCaptchaToken('');
+      }}
+      className="w-full"
+    />
+  </div>
+) : (
+  <p className="text-red-400 text-sm text-center">
+    CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
+  </p>
+)}
+
 
           <button
             type="submit"

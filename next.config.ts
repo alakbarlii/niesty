@@ -1,11 +1,12 @@
 // next.config.ts
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 const nextConfig: NextConfig = {
   images: {
     domains: ["kjoiummoobdqrsfkoqva.supabase.co"],
   },
-
   async headers() {
     return [
       {
@@ -15,10 +16,9 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self';",
-              // Turnstile requires these:
-              "script-src 'self' https://challenges.cloudflare.com;",
+              // ⬇️ allow inline scripts so Next.js can boot
+              `script-src 'self' ${isDev ? "'unsafe-eval'" : ""} 'unsafe-inline' https://challenges.cloudflare.com;`,
               "frame-src https://challenges.cloudflare.com;",
-              // hygiene
               "style-src 'self' 'unsafe-inline';",
               "img-src 'self' data: https:;",
               "font-src 'self' data:;",

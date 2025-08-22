@@ -125,34 +125,19 @@ export default function LoginPage() {
       siteKey={SITE_KEY}
       options={{
         action: 'login_magic_link',
-        cData: 'lg_login',   // no colon; matches server check "lg_"
+        cData: 'lg_login',
         theme: 'auto',
         size: 'flexible',
       }}
       onSuccess={(token) => {
         console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
         setCaptchaToken(token || '');
-
-        // DEV helper: stash & copy token without using `any`
-        if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
-          try {
-            const w = window as Window & { __LOGIN_TOKEN__?: string };
-            w.__LOGIN_TOKEN__ = token || '';
-            if (token && navigator?.clipboard?.writeText) {
-              void navigator.clipboard.writeText(token);
-              console.log('[LOGIN] token copied to clipboard');
-            }
-          } catch (e) {
-            console.warn('[LOGIN] token copy failed', e);
-          }
-        }
       }}
       onExpire={() => {
         console.log('[LOGIN] Turnstile expired');
         setCaptchaToken('');
       }}
-      onError={(e) => {
-        console.log('[LOGIN] Turnstile error', e);
+      onError={() => {
         setCaptchaToken('');
       }}
     />

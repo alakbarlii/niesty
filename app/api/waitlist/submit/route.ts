@@ -21,20 +21,13 @@ type TurnstileVerifyResponse = {
   cdata?: string;
 };
 
+// ---- HARD-ENFORCED Turnstile verification (no feature flag bypass) ----
 async function verifyTurnstile(
   token: string | undefined,
   ip: string | null,
   expectedAction: string,
   expectedCdataPrefix: string
 ): Promise<void> {
-  const featureOn = process.env.NEXT_PUBLIC_FEATURE_TURNSTILE === "1";
-  if (!featureOn) {
-    if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === "1") {
-      console.log("[WL] DEBUG: captcha disabled via flag");
-    }
-    return;
-  }
-
   if (!token) throw new Error("Captcha token missing");
 
   const secret = process.env.CAPTCHA_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY;
@@ -49,11 +42,9 @@ async function verifyTurnstile(
     method: "POST",
     body,
   });
-
   if (!resp.ok) throw new Error(`Captcha verify request failed with ${resp.status}`);
 
   const data = (await resp.json()) as TurnstileVerifyResponse;
-
   if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === "1") {
     console.log("[WL] verifyTurnstile:", JSON.stringify(data));
   }
@@ -71,9 +62,10 @@ async function verifyTurnstile(
 
 export async function POST(req: NextRequest) {
   try {
-    // Origin allowlist (403 on mismatch)
+    // 1) Origin allowlist (403 on mismatch)
     assertAllowedOrigin(req as unknown as Request);
 
+    // 2) Parse body + basic field validation
     const ip = req.headers.get("x-forwarded-for");
     const { email, full_name, role, token } = (await req.json()) as Body;
 
@@ -82,10 +74,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
     }
 
-    // Verify captcha
+    // 3) HARD BLOCK: no token -> reject immediately (fixes your 200 case)
+    if (!token) {
+      return NextResponse.json({ ok: false, error: "Captcha token missing" }, { status: 400 });
+    }
+
+    // 4) Verify Turnstile (strict action + cdata semantics)
     await verifyTurnstile(token, ip, "waitlist_submit", "wl:");
 
-    // Supabase client (service role)
+    // 5) Upsert waitlist (service role only)
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const admin = createClient(url, serviceKey, {
@@ -101,7 +98,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true }, { status: 200 });
+    // Optional debug header to confirm enforced path (remove later if you want)
+    const res = NextResponse.json({ ok: true }, { status: 200 });
+    if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === "1") res.headers.set("x-turnstile", "enforced");
+    return res;
   } catch (e) {
     if (e instanceof HttpError) {
       return NextResponse.json({ ok: false, error: e.message }, { status: e.status });

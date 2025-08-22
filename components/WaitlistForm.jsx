@@ -12,7 +12,7 @@ export default function WaitlistForm() {
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // Use the same approach as login: show widget if a site key exists
+  // Show widget only if a site key exists
   const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
 
   // captcha token + force-refresh key (fresh token each attempt)
@@ -118,23 +118,22 @@ export default function WaitlistForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 w-full text-white relative z-10">
-        <input
-        type="text"
-        placeholder="Full Name"
-        value={fullName}
-        onChange={(e) => setFullName(e.target.value)}
-        required
-        className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-       />
-       <input
-         type="email"
-         placeholder="Email Address"
-         value={email}
-         onChange={(e) => setEmail(e.target.value)}
-         required
-         className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-         />
-
+          <input
+            type="text"
+            placeholder="Full Name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+            className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          />
+          <input
+            type="email"
+            placeholder="Email Address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          />
 
           <div className="space-y-3">
             <h2 className="text-xl font-bold text-center">Who are you here as?</h2>
@@ -169,31 +168,30 @@ export default function WaitlistForm() {
 
           {/* Turnstile widget — render if site key exists; responsive width */}
           {SITE_KEY ? (
-          <div key={widgetKey}>
-          <Turnstile
-          siteKey={SITE_KEY}
-           options={{ action: "waitlist_submit", cData: "wl:waitlist", theme: "auto", size: "flexible" }}
-           onSuccess={(token) => {
-           console.log("[WL] Turnstile onSuccess len=", token?.length || 0);
-             setCaptchaToken(token || "");
-          }}
-           onExpire={() => {
-            console.log("[WL] Turnstile expired");
-            setCaptchaToken("");
-          }}
-             onError={(e) => {
-            console.log("[WL] Turnstile error", e);
-        setCaptchaToken("");
-            }}
-         className="w-full"
-        />
-       </div>
-       ) : (
-         <p className="text-red-400 text-sm text-center">
-        CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
-     </p>
-)}
-
+            <div key={widgetKey}>
+              <Turnstile
+                siteKey={SITE_KEY}
+                options={{ action: 'waitlist_submit', cData: 'wl_waitlist', theme: 'auto', size: 'flexible' }} // ← fixed (no colon)
+                onSuccess={(token) => {
+                  console.log('[WL] Turnstile onSuccess len=', token?.length || 0);
+                  setCaptchaToken(token || '');
+                }}
+                onExpire={() => {
+                  console.log('[WL] Turnstile expired');
+                  setCaptchaToken('');
+                }}
+                onError={(e) => {
+                  console.log('[WL] Turnstile error', e);
+                  setCaptchaToken('');
+                }}
+                className="w-full"
+              />
+            </div>
+          ) : (
+            <p className="text-red-400 text-sm text-center">
+              CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
+            </p>
+          )}
 
           <button
             type="submit"

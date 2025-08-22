@@ -48,7 +48,6 @@ export default function LoginPage() {
       if (!ok) {
         setErr('This email is not registered in the waitlist.');
         setLoading(false);
-        // refresh widget so next attempt gets a fresh token
         setWidgetKey((k) => k + 1);
         setCaptchaToken('');
         return;
@@ -70,12 +69,10 @@ export default function LoginPage() {
           ? 'CAPTCHA failed. Try again.'
           : (error.message || 'Something went wrong. Please try again.');
         setErr(msg);
-        // refresh widget after error to avoid stale/duplicate token
         setWidgetKey((k) => k + 1);
         setCaptchaToken('');
       } else {
         setSent(true);
-        // refresh widget after success too
         setWidgetKey((k) => k + 1);
         setCaptchaToken('');
       }
@@ -92,7 +89,6 @@ export default function LoginPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-black via-[#0b0b0b] to-[#111] px-4">
-      {/* centered & responsive width (matches WaitlistForm) */}
       <div className="w-full max-w-xl  bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-10 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
         <div className="flex flex-col items-center mb-10">
           <Image src="/niesty_header.png" alt="Niesty Logo" width={160} height={160} className="mb-5" />
@@ -126,27 +122,26 @@ export default function LoginPage() {
             {SITE_KEY ? (
               <div key={widgetKey} className="w-full">
                 <Turnstile
-  siteKey={SITE_KEY}
-  onSuccess={(token) => {
-    console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
-    setCaptchaToken(token || '');
-  }}
-  onExpire={() => {
-    console.log('[LOGIN] Turnstile expired');
-    setCaptchaToken('');
-  }}
-  onError={(e) => {
-    console.log('[LOGIN] Turnstile error', e);
-    setCaptchaToken('');
-  }}
-  options={{
-    action: "login_magic_link",   
-    cData: "lg:login",            
-    theme: 'auto',
-    size: 'flexible',
-  }}
-/>
-
+                  siteKey={SITE_KEY}
+                  onSuccess={(token) => {
+                    console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
+                    setCaptchaToken(token || '');
+                  }}
+                  onExpire={() => {
+                    console.log('[LOGIN] Turnstile expired');
+                    setCaptchaToken('');
+                  }}
+                  onError={(e) => {
+                    console.log('[LOGIN] Turnstile error', e);
+                    setCaptchaToken('');
+                  }}
+                  options={{
+                    action: 'login_magic_link',
+                    cData: 'lg_login',   // ← fixed (no colon)
+                    theme: 'auto',
+                    size: 'flexible',
+                  }}
+                />
               </div>
             ) : (
               <p className="text-red-400 text-sm text-center">

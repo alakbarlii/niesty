@@ -120,34 +120,50 @@ export default function LoginPage() {
 
             {/* Turnstile widget: full-width + responsive; force refresh via key */}
             {SITE_KEY ? (
-              <div key={widgetKey} className="w-full">
-                <Turnstile
-                  siteKey={SITE_KEY}
-                  onSuccess={(token) => {
-                    console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
-                    setCaptchaToken(token || '');
-                  }}
-                  onExpire={() => {
-                    console.log('[LOGIN] Turnstile expired');
-                    setCaptchaToken('');
-                  }}
-                  onError={(e) => {
-                    console.log('[LOGIN] Turnstile error', e);
-                    setCaptchaToken('');
-                  }}
-                  options={{
-                    action: 'login_magic_link',
-                    cData: 'lg_login',   // ← fixed (no colon)
-                    theme: 'auto',
-                    size: 'flexible',
-                  }}
-                />
-              </div>
-            ) : (
-              <p className="text-red-400 text-sm text-center">
-                CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
-              </p>
-            )}
+  <div key={widgetKey} className="w-full">
+    <Turnstile
+      siteKey={SITE_KEY}
+      options={{
+        action: 'login_magic_link',
+        cData: 'lg_login',   // no colon; matches server check "lg_"
+        theme: 'auto',
+        size: 'flexible',
+      }}
+      onSuccess={(token) => {
+        console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
+        setCaptchaToken(token || '');
+
+        // DEV helper: stash & copy token without using `any`
+        if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
+          try {
+            const w = window as Window & { __LOGIN_TOKEN__?: string };
+            w.__LOGIN_TOKEN__ = token || '';
+            if (token && navigator?.clipboard?.writeText) {
+              void navigator.clipboard.writeText(token);
+              console.log('[LOGIN] token copied to clipboard');
+            }
+          } catch (e) {
+            console.warn('[LOGIN] token copy failed', e);
+          }
+        }
+      }}
+      onExpire={() => {
+        console.log('[LOGIN] Turnstile expired');
+        setCaptchaToken('');
+      }}
+      onError={(e) => {
+        console.log('[LOGIN] Turnstile error', e);
+        setCaptchaToken('');
+      }}
+    />
+  </div>
+) : (
+  <p className="text-red-400 text-sm text-center">
+    CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
+  </p>
+)}
+
+
 
             <button
               type="submit"

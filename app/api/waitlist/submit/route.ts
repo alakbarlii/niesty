@@ -37,7 +37,6 @@ async function verifyTurnstile(
 
   if (!token) throw new Error("Captcha token missing");
 
-  // Support either var name; prefer CAPTCHA_SECRET_KEY if set
   const secret = process.env.CAPTCHA_SECRET_KEY || process.env.TURNSTILE_SECRET_KEY;
   if (!secret) throw new Error("Server misconfigured: CAPTCHA_SECRET_KEY missing");
 
@@ -50,6 +49,9 @@ async function verifyTurnstile(
     method: "POST",
     body,
   });
+
+  if (!resp.ok) throw new Error(`Captcha verify request failed with ${resp.status}`);
+
   const data = (await resp.json()) as TurnstileVerifyResponse;
 
   if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === "1") {
@@ -60,10 +62,10 @@ async function verifyTurnstile(
     throw new Error(`Captcha failed: ${data["error-codes"]?.join(",") || "unknown"}`);
   }
   if (data.action !== expectedAction) {
-    throw new Error("Captcha wrong action");
+    throw new Error(`Captcha wrong action: expected=${expectedAction}, got=${data.action}`);
   }
   if (data.cdata && !data.cdata.startsWith(expectedCdataPrefix)) {
-    throw new Error("Captcha wrong cdata");
+    throw new Error(`Captcha wrong cdata: expected prefix=${expectedCdataPrefix}`);
   }
 }
 
@@ -80,9 +82,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
     }
 
-    // Enforce Turnstile semantics
+    // Verify captcha
     await verifyTurnstile(token, ip, "waitlist_submit", "wl:");
 
+    // Supabase client (service role)
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const admin = createClient(url, serviceKey, {
@@ -91,17 +94,20 @@ export async function POST(req: NextRequest) {
 
     const { error } = await admin
       .from("waitlist")
-      .upsert({ email: normalized, full_name, role }, { onConflict: "email" });
+      .upsert({ email: normalized, full_name: full_name.trim(), role }, { onConflict: "email" });
 
     if (error) {
+      console.error("[WL] DB error:", error);
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
+
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (e) {
     if (e instanceof HttpError) {
       return NextResponse.json({ ok: false, error: e.message }, { status: e.status });
     }
     const msg = e instanceof Error ? e.message : "Unknown error";
+    console.error("[WL] Request failed:", msg);
     return NextResponse.json({ ok: false, error: msg }, { status: 400 });
   }
 }

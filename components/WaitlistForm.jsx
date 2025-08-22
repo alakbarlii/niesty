@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Turnstile } from '@marsidev/react-turnstile';
 
 export default function WaitlistForm() {
+  const DEBUG = process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1';
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState(null);
@@ -164,9 +165,7 @@ export default function WaitlistForm() {
             <p className="text-sm text-center opacity-70">
               Choose the role that describes you best. We'll tailor Niesty to fit your needs.
             </p>
-          </div>
-
-          {/* Turnstile widget */}
+          </div> {/* Turnstile widget */}
 {SITE_KEY ? (
   <div key={widgetKey}>
     <Turnstile
@@ -176,22 +175,20 @@ export default function WaitlistForm() {
         console.log('[WL] Turnstile onSuccess len=', token?.length || 0);
         setCaptchaToken(token || '');
 
-        // DEV helper: stash token for debugging if flag is on
-        if (process.env.NEXT_PUBLIC_DEBUG_CAPTCHA === '1') {
-          try {
-            window.__WL_TOKEN__ = token || '';
-            if (token) {
-              sessionStorage.setItem('__WL_TOKEN__', token);
-              console.log('[WL] token stored in sessionStorage + window.__WL_TOKEN__');
-            }
-          } catch (e) {
-            console.warn('[WL] debug token stash failed', e);
-          }
+        // Always stash so we can pull it from DevTools or the debug button
+        try {
+          // @ts-ignore
+          window.__WL_TOKEN__ = token || '';
+          sessionStorage.setItem('__WL_TOKEN__', token || '');
+          console.log('[WL] token stored in sessionStorage + window.__WL_TOKEN__');
+        } catch (e) {
+          console.warn('[WL] token stash failed', e);
         }
       }}
       onExpire={() => {
         console.log('[WL] Turnstile expired');
         setCaptchaToken('');
+        sessionStorage.removeItem('__WL_TOKEN__');
       }}
       onError={(e) => {
         console.log('[WL] Turnstile error', e);
@@ -199,12 +196,36 @@ export default function WaitlistForm() {
       }}
       className="w-full"
     />
+
+    {/* Debug-only helper: visible only when NEXT_PUBLIC_DEBUG_CAPTCHA=1 */}
+    {DEBUG && (
+      <div className="mt-2 text-xs text-white/70 flex items-center gap-2">
+        <span>Token captured.</span>
+        <button
+          type="button"
+          onClick={() => {
+            const t = sessionStorage.getItem('__WL_TOKEN__') || '';
+            if (!t) { console.warn('No token in sessionStorage'); return; }
+            navigator.clipboard.writeText(t)
+              .then(() => console.log('[WL] token copied to clipboard'))
+              .catch((err) => console.warn('[WL] token copy failed', err));
+          }}
+          className="px-2 py-1 rounded bg-white/10 border border-white/20 hover:bg-white/15"
+        >
+          Copy token
+        </button>
+        <span className="opacity-60">(click to copy — needed for browser permission)</span>
+      </div>
+    )}
   </div>
 ) : (
   <p className="text-red-400 text-sm text-center">
     CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
   </p>
 )}
+
+
+         
 
 
           <button

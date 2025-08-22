@@ -1,18 +1,30 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
-export default function TestPage() {
-  async function runQuery() {
-    const { data, error } = await supabase.from('profiles').select('*').limit(5);
-    console.log("Profiles:", data, error);
-  }
+export default function ProtectedPage() {
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error("Auth error:", error);
+        setUser(null);
+        return;
+      }
+      setUser(data?.user ?? null);
+    }
+    loadUser();
+  }, []);
+
+  if (!user) return <p className="text-white">Not logged in</p>;
 
   return (
-    <div className="text-white p-10">
-      <button onClick={runQuery} className="px-4 py-2 bg-blue-600 rounded">
-        Test Supabase
-      </button>
-    </div>
+    <p className="text-white">
+      Welcome {user.email}, you are logged in ✅
+    </p>
   );
 }

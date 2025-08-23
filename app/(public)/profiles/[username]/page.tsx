@@ -4,28 +4,18 @@ import { notFound } from 'next/navigation'
 import { supabaseServer } from '@/lib/supabaseServer'
 import { getSignedAvatarUrl } from '@/lib/storage'
 
-type ProfilePublic = {
-  user_id: string
-  full_name: string | null
-  username: string
-  avatar_path: string | null
-}
-
 export default async function ProfilePage(
-  props: { params: { username: string } }  // <- plain, no PageProps
+  { params }: { params: { username: string } }
 ) {
-  const { params } = props
   const supabase = await supabaseServer()
 
-  const { data: profile, error } = await supabase
+  const { data: profile } = await supabase
     .from('profiles_public')
     .select('user_id, full_name, username, avatar_path')
     .eq('username', params.username)
-    .maybeSingle() as { data: ProfilePublic | null, error: unknown | null }
+    .maybeSingle()
 
-  if (error || !profile) {
-    notFound()
-  }
+  if (!profile) notFound()
 
   const signedUrl = profile.avatar_path
     ? await getSignedAvatarUrl(profile.avatar_path, 60)

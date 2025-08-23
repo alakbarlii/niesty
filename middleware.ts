@@ -10,6 +10,10 @@ export async function middleware(req: NextRequest) {
   // Create a response we can attach headers to for ALL requests
   const res = NextResponse.next()
 
+  // --- CSP Nonce per request (ADD THIS, directly below res creation) ---
+  const nonce = crypto.randomUUID()
+  res.headers.set('X-CSP-Nonce', nonce)
+
   // --- Security Headers (global) ---
   res.headers.set('X-Frame-Options', 'DENY')
   res.headers.set('X-Content-Type-Options', 'nosniff')
@@ -35,7 +39,8 @@ export async function middleware(req: NextRequest) {
     "object-src 'none'",
     // Turnstile challenge frame/scripts
     "frame-src 'self' https://challenges.cloudflare.com",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https: https://challenges.cloudflare.com",
+    // ADD nonce but keep unsafe-* in dev to avoid breakage
+    `script-src 'self' 'unsafe-eval' 'unsafe-inline' 'nonce-${nonce}' https: https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline' https:",
     "img-src 'self' data: blob: https:",
     "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
@@ -49,25 +54,25 @@ export async function middleware(req: NextRequest) {
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    // Turnstile
     "frame-src 'self' https://challenges.cloudflare.com",
-    "script-src 'self' https: https://challenges.cloudflare.com",
-    "style-src 'self' https:",
+    // ADD nonce; keep external https + Turnstile
+    `script-src 'self' 'nonce-${nonce}' https: https://challenges.cloudflare.com`,
+    // If you ever add inline <style>, you can nonce it too:
+    `style-src 'self' 'nonce-${nonce}' https:`,
     "img-src 'self' data: blob:",
     "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
     "font-src 'self' https: data:",
     "media-src 'self' https: blob:",
-    "upgrade-insecure-requests",
   ].join('; ')
 
   res.headers.set('Content-Security-Policy', isProd ? cspProd : cspDev)
 
   // --- Host allowlist (blocks domain fronting) ---
-  const allowedHosts = (process.env.ALLOWED_HOSTS || 'localhost:3000,niesty.vercel.app')
-    .split(',')
-    .map(h => h.trim().toLowerCase())
-
   const host = (req.headers.get('host') || '').toLowerCase()
+  const allowedHosts = [
+    'localhost:3000',
+    'niesty.vercel.app', // add your prod domain when you buy it
+  ]
   if (!allowedHosts.includes(host)) {
     return new NextResponse('Forbidden host', { status: 403 })
   }
@@ -76,11 +81,16 @@ export async function middleware(req: NextRequest) {
   // Skip OPTIONS (preflight). If you add external webhooks later, add path exceptions.
   const method = req.method.toUpperCase()
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,https://niesty.vercel.app')
-      .split(',')
-      .map(o => o.trim())
-
     const origin = req.headers.get('origin') || ''
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://niesty.vercel.app', // add your prod origin
+    ]
+
+    // Example future exception:
+    // const isStripeWebhook = pathname.startsWith('/api/webhooks/stripe')
+    // if (!isStripeWebhook && !allowedOrigins.includes(origin)) ...
+
     if (!allowedOrigins.includes(origin)) {
       return new NextResponse('Bad origin', { status: 403 })
     }
@@ -121,8 +131,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Auth OK → proceed with secured response + no-store for private HTML
-  res.headers.set('Cache-Control', 'no-store')
+  // Auth OK → proceed with secured response
   return res
 }
 

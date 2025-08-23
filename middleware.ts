@@ -18,28 +18,46 @@ export async function middleware(req: NextRequest) {
   res.headers.set('Cross-Origin-Resource-Policy', 'same-site')
   // 1 week HSTS; increase after verifying HTTPS everywhere
   res.headers.set('Strict-Transport-Security', 'max-age=604800; includeSubDomains')
-  // Baseline CSP (tighten later)
-  res.headers.set(
-    'Content-Security-Policy',
-    [
-      "default-src 'self'",
-      "base-uri 'self'",
-      "frame-ancestors 'none'",
-      "object-src 'none'",
-      "img-src 'self' data: blob: https:",
-      "style-src 'self' 'unsafe-inline' https:",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https:",
-      "connect-src 'self' https: wss:",
-      "font-src 'self' https: data:",
-      "media-src 'self' https: blob:",
-    ].join('; ')
-  )
+
+  // --- Content Security Policy (env-based) ---
+  const isProd = process.env.NODE_ENV === 'production'
+
+  // Development: allow inline/eval to move fast
+  const cspDev = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "img-src 'self' data: blob: https:",
+    "style-src 'self' 'unsafe-inline' https:",
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https:",
+    // add exact hosts you call during dev if needed
+    "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
+    "font-src 'self' https: data:",
+    "media-src 'self' https: blob:",
+  ].join('; ')
+
+  // Production: strict (no inline/eval); whitelist only what we use
+  const cspProd = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "img-src 'self' data: blob:",
+    "style-src 'self' https:",
+    "script-src 'self' https:",
+    "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
+    "font-src 'self' https: data:",
+    "media-src 'self' https: blob:",
+  ].join('; ')
+
+  res.headers.set('Content-Security-Policy', isProd ? cspProd : cspDev)
 
   // --- Host allowlist (blocks domain fronting) ---
   const host = (req.headers.get('host') || '').toLowerCase()
   const allowedHosts = [
     'localhost:3000',
-    'niesty.vercel.app',        // add your prod domain when you buy it
+    'niesty.vercel.app', // add your prod domain when you buy it
   ]
   if (!allowedHosts.includes(host)) {
     return new NextResponse('Forbidden host', { status: 403 })

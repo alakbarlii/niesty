@@ -18,6 +18,11 @@ export async function middleware(req: NextRequest) {
   res.headers.set('Cross-Origin-Resource-Policy', 'same-site')
   // 1 week HSTS; increase after verifying HTTPS everywhere
   res.headers.set('Strict-Transport-Security', 'max-age=604800; includeSubDomains')
+  // Extra safe defaults (do not break your app)
+  res.headers.set('X-DNS-Prefetch-Control', 'off')
+  res.headers.set('Origin-Agent-Cluster', '?1')
+  // If you later need cross-origin embeds/windows, revisit COOP:
+  // res.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
 
   // --- Content Security Policy (env-based) ---
   const isProd = process.env.NODE_ENV === 'production'
@@ -28,24 +33,27 @@ export async function middleware(req: NextRequest) {
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    "img-src 'self' data: blob: https:",
+    // Turnstile challenge frame/scripts
+    "frame-src 'self' https://challenges.cloudflare.com",
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https: https://challenges.cloudflare.com",
     "style-src 'self' 'unsafe-inline' https:",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https:",
-    // add exact hosts you call during dev if needed
+    "img-src 'self' data: blob: https:",
     "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
     "font-src 'self' https: data:",
     "media-src 'self' https: blob:",
   ].join('; ')
 
-  // Production: strict (no inline/eval); whitelist only what we use
+  // Production: strict(er); still allow Turnstile & Supabase
   const cspProd = [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    "img-src 'self' data: blob:",
+    // Turnstile
+    "frame-src 'self' https://challenges.cloudflare.com",
+    "script-src 'self' https: https://challenges.cloudflare.com",
     "style-src 'self' https:",
-    "script-src 'self' https:",
+    "img-src 'self' data: blob:",
     "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
     "font-src 'self' https: data:",
     "media-src 'self' https: blob:",

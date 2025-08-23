@@ -5,14 +5,16 @@ import { supabaseServer } from '@/lib/supabaseServer'
 import { getSignedAvatarUrl } from '@/lib/storage'
 
 export default async function ProfilePage(
-  { params }: { params: { username: string } }
+  { params }: { params: Promise<{ username: string }> } // <- params is a Promise
 ) {
+  const { username } = await params
+
   const supabase = await supabaseServer()
 
   const { data: profile } = await supabase
     .from('profiles_public')
     .select('user_id, full_name, username, avatar_path')
-    .eq('username', params.username)
+    .eq('username', username)
     .maybeSingle()
 
   if (!profile) notFound()

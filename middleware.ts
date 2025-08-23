@@ -57,16 +57,17 @@ export async function middleware(req: NextRequest) {
     "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
     "font-src 'self' https: data:",
     "media-src 'self' https: blob:",
+    "upgrade-insecure-requests",
   ].join('; ')
 
   res.headers.set('Content-Security-Policy', isProd ? cspProd : cspDev)
 
   // --- Host allowlist (blocks domain fronting) ---
+  const allowedHosts = (process.env.ALLOWED_HOSTS || 'localhost:3000,niesty.vercel.app')
+    .split(',')
+    .map(h => h.trim().toLowerCase())
+
   const host = (req.headers.get('host') || '').toLowerCase()
-  const allowedHosts = [
-    'localhost:3000',
-    'niesty.vercel.app', // add your prod domain when you buy it
-  ]
   if (!allowedHosts.includes(host)) {
     return new NextResponse('Forbidden host', { status: 403 })
   }
@@ -75,16 +76,11 @@ export async function middleware(req: NextRequest) {
   // Skip OPTIONS (preflight). If you add external webhooks later, add path exceptions.
   const method = req.method.toUpperCase()
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,https://niesty.vercel.app')
+      .split(',')
+      .map(o => o.trim())
+
     const origin = req.headers.get('origin') || ''
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'https://niesty.vercel.app', // add your prod origin
-    ]
-
-    // Example future exception:
-    // const isStripeWebhook = pathname.startsWith('/api/webhooks/stripe')
-    // if (!isStripeWebhook && !allowedOrigins.includes(origin)) ...
-
     if (!allowedOrigins.includes(origin)) {
       return new NextResponse('Bad origin', { status: 403 })
     }
@@ -125,7 +121,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Auth OK → proceed with secured response
+  // Auth OK → proceed with secured response + no-store for private HTML
+  res.headers.set('Cache-Control', 'no-store')
   return res
 }
 

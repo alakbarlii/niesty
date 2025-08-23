@@ -11,21 +11,22 @@ type ProfilePublic = {
   avatar_path: string | null
 }
 
-export default async function ProfilePage({ params }: { params: { username: string } }) {
+export default async function ProfilePage(
+  props: { params: { username: string } }  // <- plain, no PageProps
+) {
+  const { params } = props
   const supabase = await supabaseServer()
 
   const { data: profile, error } = await supabase
     .from('profiles_public')
     .select('user_id, full_name, username, avatar_path')
     .eq('username', params.username)
-    .maybeSingle<ProfilePublic>() // let TS know the shape
+    .maybeSingle() as { data: ProfilePublic | null, error: unknown | null }
 
-  // Narrow: if not found or query error, 404
   if (error || !profile) {
     notFound()
   }
 
-  // Now profile is non-null
   const signedUrl = profile.avatar_path
     ? await getSignedAvatarUrl(profile.avatar_path, 60)
     : null

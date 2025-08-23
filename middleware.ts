@@ -11,7 +11,6 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
 
   // --- Security Headers (global) ---
-  // (Applied to all routes matched by config.matcher)
   res.headers.set('X-Frame-Options', 'DENY')
   res.headers.set('X-Content-Type-Options', 'nosniff')
   res.headers.set('Referrer-Policy', 'no-referrer')
@@ -19,7 +18,7 @@ export async function middleware(req: NextRequest) {
   res.headers.set('Cross-Origin-Resource-Policy', 'same-site')
   // 1 week HSTS; increase after verifying HTTPS everywhere
   res.headers.set('Strict-Transport-Security', 'max-age=604800; includeSubDomains')
-  // Baseline CSP (safe starter; tighten later if you remove inline/eval)
+  // Baseline CSP (tighten later)
   res.headers.set(
     'Content-Security-Policy',
     [
@@ -36,9 +35,37 @@ export async function middleware(req: NextRequest) {
     ].join('; ')
   )
 
+  // --- Host allowlist (blocks domain fronting) ---
+  const host = (req.headers.get('host') || '').toLowerCase()
+  const allowedHosts = [
+    'localhost:3000',
+    'niesty.vercel.app',        // add your prod domain when you buy it
+  ]
+  if (!allowedHosts.includes(host)) {
+    return new NextResponse('Forbidden host', { status: 403 })
+  }
+
+  // --- Same-origin protection for state-changing methods ---
+  // Skip OPTIONS (preflight). If you add external webhooks later, add path exceptions.
+  const method = req.method.toUpperCase()
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const origin = req.headers.get('origin') || ''
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://niesty.vercel.app', // add your prod origin
+    ]
+
+    // Example future exception:
+    // const isStripeWebhook = pathname.startsWith('/api/webhooks/stripe')
+    // if (!isStripeWebhook && !allowedOrigins.includes(origin)) ...
+
+    if (!allowedOrigins.includes(origin)) {
+      return new NextResponse('Bad origin', { status: 403 })
+    }
+  }
+
   // --- Auth guard only for protected areas ---
   const needsAuth = pathname.startsWith('/dashboard') || pathname.startsWith('/admin')
-
   if (!needsAuth) {
     // Not a protected path → just return the secured response
     return res

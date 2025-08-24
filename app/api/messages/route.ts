@@ -17,27 +17,26 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Enforce JSON, size limit, and schema
     const parsed = await requireJson(req, MessageSchema, { maxKB: 64 })
-    if (parsed instanceof Response) return parsed
+    if (parsed instanceof Response) {
+      void secLog('/api/messages', 'json_gate_fail', g.user.id)
+      return parsed
+    }
     const body = parsed.data
 
-    // Turnstile
-    const token = body.turnstileToken ?? null
     const ip =
       req.headers.get('cf-connecting-ip') ??
       req.headers.get('x-forwarded-for') ??
       undefined
-
-    const turnstile = await verifyTurnstile(token, ip)
-    if (!turnstile.ok) {
-      void secLog('/api/messages', `turnstile_fail:${turnstile.reason ?? 'unknown'}`, g.user.id)
+    const v = await verifyTurnstile(body.turnstileToken ?? null, ip)
+    if (!v.ok) {
+      void secLog('/api/messages', `turnstile_${v.reason ?? 'fail'}`, g.user.id)
       return jsonNoStore({ error: 'Bot' }, { status: 400 })
     }
 
     const supabase = await supabaseServer()
 
-    // Defense-in-depth: ensure current user is a participant on the deal
+    // Defense-in-depth: user must be a participant of the deal
     const { data: dealRow, error: dealErr } = await supabase
       .from('deals')
       .select('id, sender_id, receiver_id')

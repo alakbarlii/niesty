@@ -11,41 +11,47 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    // Must be authenticated
     const g = await requireUser()
     if (!g.user) {
       void secLog('/api/deals', 'unauthorized')
       return jsonNoStore({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Enforce JSON, size limit, and schema
+    // Enforce JSON + size + schema
     const parsed = await requireJson(req, DealSchema, { maxKB: 64 })
-    if (parsed instanceof Response) return parsed
+    if (parsed instanceof Response) {
+      void secLog('/api/deals', 'json_gate_fail', g.user.id)
+      return parsed
+    }
     const body = parsed.data
 
-    // Turnstile (supports your dev bypass if configured)
-    const token = body.turnstileToken ?? null
+    // Turnstile (dev bypass supported)
     const ip =
       req.headers.get('cf-connecting-ip') ??
       req.headers.get('x-forwarded-for') ??
       undefined
-
-    const turnstile = await verifyTurnstile(token, ip)
-    if (!turnstile.ok) {
-      void secLog('/api/deals', `turnstile_fail:${turnstile.reason ?? 'unknown'}`, g.user.id)
+    const v = await verifyTurnstile(body.turnstileToken ?? null, ip, 'submit_deal')
+    if (!v.ok) {
+      void secLog('/api/deals', `turnstile_${v.reason ?? 'fail'}`, g.user.id)
       return jsonNoStore({ error: 'Bot' }, { status: 400 })
     }
 
-    // Insert using your real columns
     const supabase = await supabaseServer()
-    const { data, error } = await supabase
+    const { data: deal, error } = await supabase
       .from('deals')
       .insert({
         sender_id: g.user.id,
-        receiver_id: body.recipient_id,
+        receiver_id: body.receiver_id,
         message: body.message,
+
+        // money
         offer_amount: body.offer_amount,
-        status: 'waiting_for_response',
+        offer_currency: body.offer_currency,
+        offer_pricing_mode: body.pricing_mode,
+
+        // optional
+        agreement_terms: body.agreement_terms ?? null,
+        // all other engine columns come from DB defaults
       })
       .select()
       .single()
@@ -55,7 +61,7 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: userSafe(error.message) }, { status: 400 })
     }
 
-    return jsonNoStore({ deal: data }, { status: 201 })
+    return jsonNoStore({ deal }, { status: 201 })
   } catch {
     void secLog('/api/deals', 'unhandled_error')
     return jsonNoStore({ error: 'Request failed' }, { status: 500 })

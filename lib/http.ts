@@ -8,11 +8,7 @@ export function jsonNoStore(body: unknown, init?: ResponseInit) {
   return res
 }
 
-/**
- * Enforce JSON Content-Type, hard size cap (even without Content-Length),
- * then validate with the provided zod schema.
- * If you want "no extra keys", make your schema .strict() at definition time.
- */
+/** Parse/limit/validate JSON. Returns {data} or a NextResponse. */
 export async function requireJson<T>(
   req: NextRequest,
   schema: ZodSchema<T>,
@@ -43,8 +39,22 @@ export async function requireJson<T>(
     return jsonNoStore({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const parsed = schema.safeParse(parsedBody) // <-- no .strict() here
+  const parsed = schema.safeParse(parsedBody)
   if (!parsed.success) {
+    // In development, show which fields failed so we never guess again
+    if (process.env.NODE_ENV !== 'production') {
+      return jsonNoStore(
+        {
+          error: 'Invalid payload',
+          issues: parsed.error.issues.map((i) => ({
+            path: i.path.join('.'),
+            message: i.message,
+            code: i.code,
+          })),
+        },
+        { status: 400 }
+      )
+    }
     return jsonNoStore({ error: 'Invalid payload' }, { status: 400 })
   }
 

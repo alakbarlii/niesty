@@ -1,10 +1,10 @@
 // app/api/deals/route.ts
 import type { NextRequest } from 'next/server'
-import { jsonNoStore } from '@/lib/http'
+import { jsonNoStore, requireJson } from '@/lib/http'
 import { userSafe } from '@/lib/errors'
 import { requireUser } from '@/lib/guards'
 import { supabaseServer } from '@/lib/supabaseServer'
-import { DealStartSchema } from '@/lib/validators'
+import { DealSchema } from '@/lib/validators'
 import { verifyTurnstile } from '@/lib/turnstile'
 import { secLog } from '@/lib/secLog'
 
@@ -12,54 +12,47 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    // must be signed in
     const g = await requireUser()
     if (!g.user) {
       void secLog('/api/deals', 'unauthorized')
       return jsonNoStore({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // parse body
-    const body = await req.json().catch(() => null)
-    const token: string | null = (body?.turnstileToken ?? null) as string | null
+    // ✅ parse + validate body (and show field issues in dev)
+    const parsed = await requireJson(req, DealSchema)
+    if (parsed instanceof Response) return parsed
+    const body = parsed.data
+
+    // ✅ Turnstile (with dev bypass already handled inside verifyTurnstile)
     const ip =
       req.headers.get('cf-connecting-ip') ||
       req.headers.get('x-forwarded-for') ||
-      ''
-
-    // bot check (dev bypass handled inside verifyTurnstile)
-    const ver = await verifyTurnstile(token ?? '', ip || undefined)
-    if (!ver.ok) {
-      void secLog('/api/deals', `turnstile_fail:${ver.reason ?? 'unknown'}`, g.user.id)
+      undefined
+    const vt = await verifyTurnstile(body.turnstileToken ?? null, ip, 'deal_create')
+    if (!vt.ok) {
+      void secLog('/api/deals', `turnstile_${vt.reason}`, g.user.id)
       return jsonNoStore({ error: 'Bot' }, { status: 400 })
     }
 
-    // validate payload against *your* shape
-    const parsed = DealStartSchema.safeParse(body)
-    if (!parsed.success) {
-      void secLog('/api/deals', 'zod_fail', g.user.id)
-      return jsonNoStore({ error: 'Invalid payload' }, { status: 400 })
-    }
-
-    const { receiver_id, message, amount } = parsed.data
-
-    // insert (column names exactly as in your table)
     const supabase = await supabaseServer()
     const { data, error } = await supabase
       .from('deals')
       .insert({
         sender_id: g.user.id,
-        receiver_id,
-        message,
-        deal_value: amount ?? null,
+        receiver_id: body.receiver_id,
+        message: body.message,
+        // optional pricing/context if provided
+        deal_value: body.deal_value ?? null,
+        offer_currency: body.offer_currency ?? null,
+        offer_pricing_mode: body.offer_pricing_mode ?? null,
         deal_stage: 'Waiting for Response',
-        status: null,
+        status: 'waiting_for_response',
       })
-      .select('*')
+      .select()
       .single()
 
     if (error) {
-      void secLog('/api/deals', `db_error:${error.code || ''}`, g.user.id)
+      void secLog('/api/deals', 'db_error', g.user.id)
       return jsonNoStore({ error: userSafe(error.message) }, { status: 400 })
     }
 

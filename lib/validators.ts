@@ -1,24 +1,31 @@
 // lib/validators.ts
 import { z } from 'zod'
 
-/**
- * Message payload (chat in a deal)
- */
+/** UUID helper that also blocks the all-zero placeholder */
+const uuidStrict = z.string().uuid().refine(
+  (v) => !/^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(v),
+  'receiver_id cannot be the all-zero placeholder'
+)
+
+/** Messages */
 export const MessageSchema = z.object({
   turnstileToken: z.string().nullable().optional(),
   deal_id: z.string().uuid(),
   content: z.string().min(1).max(5000),
 }).strict()
 
-/**
- * Start a deal
- * - receiver_id: the other party
- * - message: initial offer text
- * - amount is optional; if present we store into deal_value
- */
-export const DealStartSchema = z.object({
+/** Deals – aligned to your columns & create use-case */
+export const DealSchema = z.object({
   turnstileToken: z.string().nullable().optional(),
-  receiver_id: z.string().uuid(),
+
+  // IMPORTANT: your request must send `receiver_id`
+  receiver_id: uuidStrict,
+
+  // initial text of the offer
   message: z.string().min(1).max(5000),
-  amount: z.number().int().positive().max(1_000_000).optional(), // optional; maps to deal_value
+
+  // optional pricing context you showed in the console test
+  deal_value: z.number().int().positive().optional(),
+  offer_currency: z.string().length(3).transform((s) => s.toUpperCase()).optional(),
+  offer_pricing_mode: z.enum(['fixed', 'negotiable']).optional(),
 }).strict()

@@ -11,36 +11,38 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
+    // Must be authenticated
     const g = await requireUser()
     if (!g.user) {
       void secLog('/api/deals', 'unauthorized')
       return jsonNoStore({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Enforce JSON content-type, size, and schema
+    // Enforce JSON, size limit, and schema
     const parsed = await requireJson(req, DealSchema, { maxKB: 64 })
     if (parsed instanceof Response) return parsed
     const body = parsed.data
 
-    // Normalize token to a string (TS fix) and pull IP
-    const token: string = body.turnstileToken ?? ''
+    // Turnstile (supports your dev bypass if configured)
+    const token = body.turnstileToken ?? null
     const ip =
-      req.headers.get('cf-connecting-ip') ||
-      req.headers.get('x-forwarded-for') ||
-      ''
+      req.headers.get('cf-connecting-ip') ??
+      req.headers.get('x-forwarded-for') ??
+      undefined
 
-    const ok = await verifyTurnstile(token, ip)
-    if (!ok) {
-      void secLog('/api/deals', 'turnstile_fail', g.user.id)
+    const turnstile = await verifyTurnstile(token, ip)
+    if (!turnstile.ok) {
+      void secLog('/api/deals', `turnstile_fail:${turnstile.reason ?? 'unknown'}`, g.user.id)
       return jsonNoStore({ error: 'Bot' }, { status: 400 })
     }
 
+    // Insert using your real columns
     const supabase = await supabaseServer()
     const { data, error } = await supabase
       .from('deals')
       .insert({
-        creator_id: g.user.id,
-        sponsor_id: body.recipient_id,
+        sender_id: g.user.id,
+        receiver_id: body.recipient_id,
         message: body.message,
         offer_amount: body.offer_amount,
         status: 'waiting_for_response',
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) {
-      void secLog('/api/deals', 'db_error', g.user.id)
+      void secLog('/api/deals', `db_error:${error.code ?? 'unknown'}`, g.user.id)
       return jsonNoStore({ error: userSafe(error.message) }, { status: 400 })
     }
 

@@ -17,25 +17,38 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Enforce JSON content-type, size, and schema
+    // Enforce JSON, size limit, and schema
     const parsed = await requireJson(req, MessageSchema, { maxKB: 64 })
     if (parsed instanceof Response) return parsed
     const body = parsed.data
 
-    // Normalize token to a string (TS fix) and pull IP
-    const token: string = body.turnstileToken ?? ''
+    // Turnstile
+    const token = body.turnstileToken ?? null
     const ip =
-      req.headers.get('cf-connecting-ip') ||
-      req.headers.get('x-forwarded-for') ||
-      ''
+      req.headers.get('cf-connecting-ip') ??
+      req.headers.get('x-forwarded-for') ??
+      undefined
 
-    const ok = await verifyTurnstile(token, ip)
-    if (!ok) {
-      void secLog('/api/messages', 'turnstile_fail', g.user.id)
+    const turnstile = await verifyTurnstile(token, ip)
+    if (!turnstile.ok) {
+      void secLog('/api/messages', `turnstile_fail:${turnstile.reason ?? 'unknown'}`, g.user.id)
       return jsonNoStore({ error: 'Bot' }, { status: 400 })
     }
 
     const supabase = await supabaseServer()
+
+    // Defense-in-depth: ensure current user is a participant on the deal
+    const { data: dealRow, error: dealErr } = await supabase
+      .from('deals')
+      .select('id, sender_id, receiver_id')
+      .eq('id', body.deal_id)
+      .single()
+
+    if (dealErr || !dealRow || (dealRow.sender_id !== g.user.id && dealRow.receiver_id !== g.user.id)) {
+      void secLog('/api/messages', 'not_participant', g.user.id)
+      return jsonNoStore({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { data, error } = await supabase
       .from('deal_messages')
       .insert({
@@ -47,7 +60,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) {
-      void secLog('/api/messages', 'db_error', g.user.id)
+      void secLog('/api/messages', `db_error:${error.code ?? 'unknown'}`, g.user.id)
       return jsonNoStore({ error: userSafe(error.message) }, { status: 400 })
     }
 

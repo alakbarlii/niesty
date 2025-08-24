@@ -59,7 +59,7 @@ export async function middleware(req: NextRequest) {
     `script-src 'self' 'nonce-${nonce}' https: https://challenges.cloudflare.com`,
     // If you ever add inline <style>, you can nonce it too:
     `style-src 'self' 'nonce-${nonce}' https:`,
-    "img-src 'self' data: blob:",
+    "img-src 'self' data: blob: https:",
     "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
     "font-src 'self' https: data:",
     "media-src 'self' https: blob:",

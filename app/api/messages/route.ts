@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server'
-import { jsonNoStore } from '@/lib/http'
+import { jsonNoStore, requireJson } from '@/lib/http'
 import { userSafe } from '@/lib/errors'
 import { requireUser } from '@/lib/guards'
 import { supabaseServer } from '@/lib/supabaseServer'
@@ -17,15 +17,13 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body: unknown = await req.json().catch(() => null)
-    if (!body || typeof body !== 'object') {
-      void secLog('/api/messages', 'bad_json', g.user.id)
-      return jsonNoStore({ error: 'Invalid JSON' }, { status: 400 })
-    }
+    // Enforce JSON content-type, size, and schema
+    const parsed = await requireJson(req, MessageSchema, { maxKB: 64 })
+    if (parsed instanceof Response) return parsed
+    const body = parsed.data
 
-    // Normalize token to string for TS & verifier
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const token = typeof (body as any).turnstileToken === 'string' ? (body as any).turnstileToken : ''
+    // Normalize token to a string (TS fix) and pull IP
+    const token: string = body.turnstileToken ?? ''
     const ip =
       req.headers.get('cf-connecting-ip') ||
       req.headers.get('x-forwarded-for') ||
@@ -37,19 +35,13 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Bot' }, { status: 400 })
     }
 
-    const parsed = MessageSchema.safeParse(body)
-    if (!parsed.success) {
-      void secLog('/api/messages', 'zod_fail', g.user.id)
-      return jsonNoStore({ error: 'Invalid payload' }, { status: 400 })
-    }
-
     const supabase = await supabaseServer()
     const { data, error } = await supabase
       .from('deal_messages')
       .insert({
-        deal_id: parsed.data.deal_id,
+        deal_id: body.deal_id,
         sender_id: g.user.id,
-        content: parsed.data.content,
+        content: body.content,
       })
       .select()
       .single()

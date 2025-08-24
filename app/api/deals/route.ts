@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       ''
 
     // bot check (dev bypass handled inside verifyTurnstile)
-    const ver = await verifyTurnstile(token ?? '', ip || undefined, 'deal_start')
+    const ver = await verifyTurnstile(token ?? '', ip || undefined)
     if (!ver.ok) {
       void secLog('/api/deals', `turnstile_fail:${ver.reason ?? 'unknown'}`, g.user.id)
       return jsonNoStore({ error: 'Bot' }, { status: 400 })

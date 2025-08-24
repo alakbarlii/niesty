@@ -17,8 +17,15 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await req.json().catch(() => null)
-    const token = body?.turnstileToken ?? null
+    const body: unknown = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      void secLog('/api/deals', 'bad_json', g.user.id)
+      return jsonNoStore({ error: 'Invalid JSON' }, { status: 400 })
+    }
+
+    // Normalize token to string for TS & verifier
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const token = typeof (body as any).turnstileToken === 'string' ? (body as any).turnstileToken : ''
     const ip =
       req.headers.get('cf-connecting-ip') ||
       req.headers.get('x-forwarded-for') ||

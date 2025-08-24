@@ -17,24 +17,30 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Enforce JSON + size + schema
     const parsed = await requireJson(req, DealSchema, { maxKB: 64 })
     if (parsed instanceof Response) {
-      void secLog('/api/deals', 'json_gate_fail', g.user.id)
+      void secLog('/api/deals', 'json_gate_fail', g.user?.id)
       return parsed
     }
     const body = parsed.data
 
-    // Turnstile (dev bypass supported)
     const ip =
       req.headers.get('cf-connecting-ip') ??
       req.headers.get('x-forwarded-for') ??
       undefined
+
     const v = await verifyTurnstile(body.turnstileToken ?? null, ip, 'submit_deal')
     if (!v.ok) {
       void secLog('/api/deals', `turnstile_${v.reason ?? 'fail'}`, g.user.id)
       return jsonNoStore({ error: 'Bot' }, { status: 400 })
     }
+
+    // Normalize fields to your DB:
+    // - amount => deal_value
+    // - pricing_mode is already 'fixed' | 'negotiable'
+    const amount = (typeof body.offer_amount === 'number')
+      ? body.offer_amount
+      : (body.deal_value as number)
 
     const supabase = await supabaseServer()
     const { data: deal, error } = await supabase
@@ -44,14 +50,12 @@ export async function POST(req: NextRequest) {
         receiver_id: body.receiver_id,
         message: body.message,
 
-        // money
-        offer_amount: body.offer_amount,
-        offer_currency: body.offer_currency,
-        offer_pricing_mode: body.pricing_mode,
+        deal_value: amount,
+        offer_currency: body.offer_currency,          // already uppercased by schema
+        offer_pricing_mode: body.pricing_mode,        // 'fixed' | 'negotiable'
 
-        // optional
         agreement_terms: body.agreement_terms ?? null,
-        // all other engine columns come from DB defaults
+        // everything else (status/stage/flags/timestamps) via DB defaults
       })
       .select()
       .single()

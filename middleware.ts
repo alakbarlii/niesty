@@ -1,24 +1,109 @@
 // middleware.ts
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
+import type { CookieOptions } from '@supabase/ssr'
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Scope: this middleware only runs on /dashboard/* and /admin/* (see config below)
-  // Do NOT protect API/static here.
-
-  // Only enforce auth for actual HTML navigations (not RSC/data/assets)
-  const accept = req.headers.get('accept') || ''
-  const isHTML = accept.includes('text/html')
-  if (!isHTML) {
-    return NextResponse.next()
-  }
-
+  // Create a response we can attach headers to for ALL requests
   const res = NextResponse.next()
 
-  // Supabase SSR client (reads/writes auth cookies)
+  // --- CSP Nonce per request (ADD THIS, directly below res creation) ---
+  const nonce = crypto.randomUUID()
+  res.headers.set('X-CSP-Nonce', nonce)
+
+  // --- Security Headers (global) ---
+  res.headers.set('X-Frame-Options', 'DENY')
+  res.headers.set('X-Content-Type-Options', 'nosniff')
+  res.headers.set('Referrer-Policy', 'no-referrer')
+  res.headers.set('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=()')
+  res.headers.set('Cross-Origin-Resource-Policy', 'same-site')
+  // 1 week HSTS; increase after verifying HTTPS everywhere
+  res.headers.set('Strict-Transport-Security', 'max-age=604800; includeSubDomains')
+  // Extra safe defaults (do not break your app)
+  res.headers.set('X-DNS-Prefetch-Control', 'off')
+  res.headers.set('Origin-Agent-Cluster', '?1')
+  // If you later need cross-origin embeds/windows, revisit COOP:
+  // res.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+
+  // --- Content Security Policy (env-based) ---
+  const isProd = process.env.NODE_ENV === 'production'
+
+  // Development: allow inline/eval to move fast
+  const cspDev = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    // Turnstile challenge frame/scripts
+    "frame-src 'self' https://challenges.cloudflare.com",
+    // ADD nonce but keep unsafe-* in dev to avoid breakage
+    `script-src 'self' 'unsafe-eval' 'unsafe-inline' 'nonce-${nonce}' https: https://challenges.cloudflare.com`,
+    "style-src 'self' 'unsafe-inline' https:",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
+    "font-src 'self' https: data:",
+    "media-src 'self' https: blob:",
+  ].join('; ')
+
+  // Production: strict(er); still allow Turnstile & Supabase
+  const cspProd = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "frame-src 'self' https://challenges.cloudflare.com",
+    // ADD nonce; keep external https + Turnstile
+    `script-src 'self' 'nonce-${nonce}' https: https://challenges.cloudflare.com`,
+    // If you ever add inline <style>, you can nonce it too:
+    `style-src 'self' 'nonce-${nonce}' https:`,
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
+    "font-src 'self' https: data:",
+    "media-src 'self' https: blob:",
+  ].join('; ')
+
+  res.headers.set('Content-Security-Policy', isProd ? cspProd : cspDev)
+
+  // --- Host allowlist (blocks domain fronting) ---
+  const host = (req.headers.get('host') || '').toLowerCase()
+  const allowedHosts = [
+    'localhost:3000',
+    'niesty.vercel.app', // add your prod domain when you buy it
+  ]
+  if (!allowedHosts.includes(host)) {
+    return new NextResponse('Forbidden host', { status: 403 })
+  }
+
+  // --- Same-origin protection for state-changing methods ---
+  // Skip OPTIONS (preflight). If you add external webhooks later, add path exceptions.
+  const method = req.method.toUpperCase()
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const origin = req.headers.get('origin') || ''
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://niesty.vercel.app', // add your prod origin
+    ]
+
+    // Example future exception:
+    // const isStripeWebhook = pathname.startsWith('/api/webhooks/stripe')
+    // if (!isStripeWebhook && !allowedOrigins.includes(origin)) ...
+
+    if (!allowedOrigins.includes(origin)) {
+      return new NextResponse('Bad origin', { status: 403 })
+    }
+  }
+
+  // --- Auth guard only for protected areas ---
+  const needsAuth = pathname.startsWith('/dashboard') || pathname.startsWith('/admin')
+  if (!needsAuth) {
+    // Not a protected path → just return the secured response
+    return res
+  }
+
+  // For protected paths, verify Supabase session (server-side)
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -31,7 +116,7 @@ export async function middleware(req: NextRequest) {
           res.cookies.set(name, value, options)
         },
         remove(name: string, options: CookieOptions) {
-          res.cookies.set(name, '', { ...options, maxAge: 0 })
+          res.cookies.set(name, '', { ...options, maxAge: -1 })
         },
       },
     }
@@ -39,7 +124,6 @@ export async function middleware(req: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Gate: must be logged in for /dashboard/* and /admin/*
   if (!session) {
     const url = req.nextUrl.clone()
     url.pathname = '/login'
@@ -47,26 +131,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Additional admin gate
-  if (pathname.startsWith('/admin')) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('user_id', session.user.id)
-      .maybeSingle()
-
-    if (error || !data?.is_admin) {
-      const url = req.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
-    }
-  }
-
+  // Auth OK → proceed with secured response
   return res
 }
 
-// Only run on HTML page routes we actually want to protect.
-// This avoids touching images, CSS/JS, Next internals, and APIs entirely.
+// Run on all pages except static assets and Next image routes.
+// This lets us add security headers globally while only auth-gating
+// /dashboard and /admin inside the middleware function.
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|webp|svg)).*)',
+  ],
 }

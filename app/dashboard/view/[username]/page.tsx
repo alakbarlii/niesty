@@ -8,7 +8,7 @@ import { MoreVertical, Flag } from 'lucide-react';
 import { sendDealRequest } from '@/lib/supabase/deals';
 
 interface Profile {
-  id: string;
+  id: string; // profiles.id (UUID)
   username: string;
   full_name: string;
   role: 'creator' | 'business' | string;
@@ -19,11 +19,16 @@ interface Profile {
 }
 
 export default function PublicProfile() {
-  const { username } = useParams();
+  const { username } = useParams() as { username: string };
+
+  // viewed profile (target)
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [viewerId, setViewerId] = useState<string | null>(null);
+
+  // viewer (sender) context
+  const [viewerProfileId, setViewerProfileId] = useState<string | null>(null); // profiles.id of current user
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
 
+  // UI state
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -44,47 +49,54 @@ export default function PublicProfile() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const fetchProfileAndDeals = async () => {
-      const { data: profileData, error: profileError } = await supabase
+    const fetchAll = async () => {
+      // --- Load viewed profile by username ---
+      const { data: prof, error: profErr } = await supabase
         .from('profiles')
         .select('*')
         .eq('username', username)
         .single();
 
-      if (profileError || !profileData) return;
-
-      const { count, error: dealError } = await supabase
-        .from('deals')
-        .select('*', { count: 'exact', head: true })
-        .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
-        .eq('deal_stage', 'Payment Released');
-
-      if (!dealError) {
-        setProfile({
-          ...profileData,
-          deals_completed: count ?? 0,
-        });
-      } else {
-        setProfile(profileData);
+      if (profErr || !prof) {
+        // leave null => shows Loading.../or you can render a not-found
+        return;
       }
 
-      // viewer info (role + id)
+      // --- Count completed deals ONLY if we have a valid profiles.id to avoid eq.null 400s ---
+      let dealsCompleted = 0;
+      if (prof.id) {
+        const { count, error: countErr } = await supabase
+          .from('deals')
+          .select('*', { head: true, count: 'exact' })
+          .or(`sender_id.eq.${prof.id},receiver_id.eq.${prof.id}`)
+          .eq('deal_stage', 'Payment Released');
+
+        if (!countErr && typeof count === 'number') dealsCompleted = count;
+      }
+
+      setProfile({ ...(prof as Profile), deals_completed: dealsCompleted });
+
+      // --- Resolve viewer's profiles.id (senderId) + role ---
       const { data: me } = await supabase.auth.getUser();
       const uid = me?.user?.id ?? null;
-      setViewerId(uid);
 
       if (uid) {
         const { data: myProf } = await supabase
           .from('profiles')
-          .select('role')
+          .select('id, role')
           .eq('user_id', uid)
           .maybeSingle();
+
+        if (myProf?.id) setViewerProfileId(myProf.id);
         const r = myProf?.role;
         setViewerRole(r === 'creator' || r === 'business' ? r : null);
+      } else {
+        setViewerProfileId(null);
+        setViewerRole(null);
       }
     };
 
-    fetchProfileAndDeals();
+    void fetchAll();
   }, [username]);
 
   const handleCopy = async () => {
@@ -94,8 +106,9 @@ export default function PublicProfile() {
   };
 
   const handleReport = async () => {
+    if (!profile) return;
     await supabase.from('reports').insert({
-      reported_user: profile!.id,
+      reported_user: profile.id,
       message: reportMessage,
     });
     alert(`Reported with message: ${reportMessage || 'No message provided'}`);
@@ -106,20 +119,23 @@ export default function PublicProfile() {
 
   if (!profile) return <div className="text-white p-10">Loading...</div>;
 
-  const isSelf = !!viewerId && viewerId === profile.id;
+  const isSelf = !!viewerProfileId && viewerProfileId === profile.id;
   const sameRole =
     !!viewerRole &&
     (viewerRole === (profile.role === 'creator' ? 'creator' : profile.role === 'business' ? 'business' : 'x'));
 
   const canSendDeal =
-    !isSelf && !!viewerRole && (sameRole ? false : viewerRole === 'creator' || viewerRole === 'business');
+    !isSelf && !!viewerRole && !!viewerProfileId && (sameRole ? false : viewerRole === 'creator' || viewerRole === 'business');
 
   // ---- Confirm + Send helpers ----
   const validateAndOpenConfirm = async () => {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
-    if (!user) {
+    const { data } = await supabase.auth.getUser();
+    if (!data?.user) {
       alert('You must be logged in.');
+      return;
+    }
+    if (!viewerProfileId) {
+      alert('We could not resolve your profile (sender). Please open your profile page, save it once, and try again.');
       return;
     }
     if (isSelf) {
@@ -141,29 +157,26 @@ export default function PublicProfile() {
         return;
       }
     }
-    // Open the pretty confirmation modal
     setConfirmOpen(true);
   };
 
   const actuallySendDeal = async () => {
     setSubmitting(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      if (!user) {
-        alert('You must be logged in.');
+      if (!viewerProfileId) {
+        alert('We could not resolve your profile (sender). Please open your profile page, save it once, and try again.');
         return;
       }
 
-      // Decide amount (only when fixed)
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        senderId: user.id,
-        receiverId: profile.id,
+        senderId: viewerProfileId, // profiles.id of viewer
+        receiverId: profile.id,    // profiles.id of viewed profile
         message: dealMessage.trim(),
-        amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
+        amount: chosenAmount ?? undefined,
         currency,
+        pricingMode,
       });
 
       if (error) {
@@ -181,7 +194,7 @@ export default function PublicProfile() {
       setConfirmOpen(false);
     }
   };
-  
+
   return (
     <section className="p-4 sm:p-6 md:p-12">
       {/* Hide number input spinners only (no layout changes) */}
@@ -200,10 +213,8 @@ export default function PublicProfile() {
             height={140}
             className="object-cover w-full h-full"
             onError={(ev) => {
-              
-              (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
+              (ev.currentTarget as HTMLImageElement).src = '/profile-default.png';
             }}
-            
           />
         </div>
 
@@ -369,7 +380,7 @@ export default function PublicProfile() {
               <textarea
                 value={dealMessage}
                 onChange={(e) => setDealMessage(e.target.value)}
-                placeholder="Example: Promote my product on your YouTube video for 1minute. We can negotiate the price."
+                placeholder="Example: Promote my product on your YouTube video for 1 minute. We can negotiate the price."
                 className="w-full bg-black/20 text-white p-2 rounded border border-white/10 focus:outline-none"
                 rows={3}
               />
@@ -404,7 +415,10 @@ export default function PublicProfile() {
       {/* Pretty confirmation modal (small, centered, theme-matched) */}
       {confirmOpen && (
         <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !submitting && setConfirmOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => !submitting && setConfirmOpen(false)}
+          />
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[45%] w-[92%] max-w-md">
             <div className="bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl p-5 text-white">
               <h3 className="text-lg font-semibold mb-2">Send this offer?</h3>

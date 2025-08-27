@@ -145,7 +145,7 @@ export default function PublicProfile() {
     setConfirmOpen(true);
   };
 
-  // ✅ KEY FIX: resolve sender as profiles.id (via user_id) before inserting the deal
+  // ✅ Robustly resolve profiles.id for the sender before sending the deal
   const actuallySendDeal = async () => {
     setSubmitting(true);
     try {
@@ -156,20 +156,37 @@ export default function PublicProfile() {
         return;
       }
 
-      // Map auth user -> profiles.id (sender)
-      const { data: senderProfile } = await supabase
+      // Try the normal schema first (profiles.user_id -> profiles.id)
+      let senderId: string | null = null;
+
+      const { data: byUserId } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', authUserId)
         .maybeSingle();
 
-      const senderId = senderProfile?.id;
+      if (byUserId?.id) {
+        senderId = byUserId.id;
+      } else {
+        // Fallback for legacy rows that might have id == auth uid
+        const { data: byLegacyId } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', authUserId)
+          .maybeSingle();
+
+        if (byLegacyId?.id) {
+          senderId = byLegacyId.id;
+        }
+      }
+
       if (!senderId) {
-        alert('Could not resolve your profile. Please create/save your profile first.');
+        // Keep your same behavior but clearer message
+        alert('Could not resolve your profile. Please open your profile page, save it once, and try again.');
         return;
       }
 
-      // Receiver is the viewed profile record (already profiles.id)
+      // Receiver is the viewed profile’s profiles.id
       const receiverId = profile.id;
 
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
@@ -308,7 +325,7 @@ export default function PublicProfile() {
           </div>
 
           {reporting && (
-            <div className="mt-6 bg-black/40 p-4 rounded-xl border border-red-500 text-white">
+            <div className="mt-6 bg:black/40 p-4 rounded-xl border border-red-500 text-white">
               <div className="text-red-500 font-semibold mb-2">Report this user</div>
               <textarea
                 value={reportMessage}
@@ -324,7 +341,7 @@ export default function PublicProfile() {
           )}
 
           {showDealModal && (
-            <div className="mt-6 bg-black/40 p-4 rounded-2xl border border-yellow-500 text-white">
+            <div className="mt-6 bg-black/40 p-4 rounded-2xl border border-yellow-500 text:white">
               <div className="text-yellow-400 font-semibold mb-2">Describe your sponsorship offer</div>
 
               {/* Short guidance */}

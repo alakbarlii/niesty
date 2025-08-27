@@ -8,7 +8,8 @@ import { MoreVertical, Flag } from 'lucide-react';
 import { sendDealRequest } from '@/lib/supabase/deals';
 
 interface Profile {
-  id: string;                // <-- profiles.id (UUID)
+  id: string;                       // profiles.id (PK)
+  user_id?: string | null;          // <-- added: needed to detect "self"
   username: string;
   full_name: string;
   role: 'creator' | 'business' | string;
@@ -20,8 +21,8 @@ interface Profile {
 
 export default function PublicProfile() {
   const { username } = useParams();
-  const [profile, setProfile] = useState<Profile | null>(null); // viewed user's profile
-  const [viewerId, setViewerId] = useState<string | null>(null); // auth.uid (not profiles.id)
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [viewerId, setViewerId] = useState<string | null>(null); // auth UID
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
 
   const [copied, setCopied] = useState(false);
@@ -45,7 +46,7 @@ export default function PublicProfile() {
 
   useEffect(() => {
     const fetchProfileAndDeals = async () => {
-      // 1) Load the viewed profile (by username)
+      // load viewed profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -54,7 +55,7 @@ export default function PublicProfile() {
 
       if (profileError || !profileData) return;
 
-      // 2) Count *completed* deals for the viewed profile (guard against null ids)
+      // deals completed (guard against null id to avoid 400 HEAD errors)
       let dealsCompleted = 0;
       if (profileData.id) {
         const { count, error: dealError } = await supabase
@@ -62,7 +63,10 @@ export default function PublicProfile() {
           .select('*', { count: 'exact', head: true })
           .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
           .eq('deal_stage', 'Payment Released');
-        if (!dealError && typeof count === 'number') dealsCompleted = count;
+
+        if (!dealError && typeof count === 'number') {
+          dealsCompleted = count;
+        }
       }
 
       setProfile({
@@ -70,7 +74,7 @@ export default function PublicProfile() {
         deals_completed: dealsCompleted,
       });
 
-      // 3) Viewer info (auth uid + role by user_id)
+      // viewer info (role + auth uid)
       const { data: me } = await supabase.auth.getUser();
       const uid = me?.user?.id ?? null;
       setViewerId(uid);
@@ -86,7 +90,7 @@ export default function PublicProfile() {
       }
     };
 
-    void fetchProfileAndDeals();
+    fetchProfileAndDeals();
   }, [username]);
 
   const handleCopy = async () => {
@@ -96,8 +100,9 @@ export default function PublicProfile() {
   };
 
   const handleReport = async () => {
+    if (!profile?.id) return;
     await supabase.from('reports').insert({
-      reported_user: profile!.id,
+      reported_user: profile.id,
       message: reportMessage,
     });
     alert(`Reported with message: ${reportMessage || 'No message provided'}`);
@@ -108,7 +113,9 @@ export default function PublicProfile() {
 
   if (!profile) return <div className="text-white p-10">Loading...</div>;
 
-  const isSelf = !!viewerId && viewerId === profile.id; // viewerId is auth.uid, profile.id is profiles.id — not equal for normal rows
+  // IMPORTANT: compare auth UID with profile.user_id (NOT with profile.id)
+  const isSelf = !!viewerId && !!profile.user_id && viewerId === profile.user_id;
+
   const sameRole =
     !!viewerRole &&
     (viewerRole === (profile.role === 'creator' ? 'creator' : profile.role === 'business' ? 'business' : 'x'));
@@ -146,82 +153,53 @@ export default function PublicProfile() {
     setConfirmOpen(true);
   };
 
-  /**
-   * Resolve (or create) the sender's profiles.id (by auth.uid).
-   * This eliminates "missing your profile record".
-   */
-  const resolveOrCreateMyProfileId = async (): Promise<string | null> => {
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !authData?.user?.id) return null;
-    const uid = authData.user.id;
-
-    // Try find by user_id
-    const { data: found, error: findErr } = await supabase
+  // Resolve the sender's profiles.id from auth UID
+  async function resolveMyProfilesId(authUid: string): Promise<string | null> {
+    const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, email, role')
-      .eq('user_id', uid)
+      .select('id')
+      .eq('user_id', authUid)
       .maybeSingle();
 
-    if (!findErr && found?.id) return found.id;
-
-    // Not found → create a minimal profile row (RLS must allow inserting your own row)
-    const email: string | null =
-      (authData.user.email as string | null) ?? (authData.user.user_metadata?.email as string | null) ?? null;
-    const full_name: string | null =
-      (authData.user.user_metadata?.full_name as string | null) ?? null;
-    const suggestedUsername = email ? email.split('@')[0] : `user_${uid.slice(0, 8)}`;
-
-    const { data: created, error: insErr } = await supabase
-      .from('profiles')
-      .insert({
-        user_id: uid,
-        username: suggestedUsername,
-        full_name: full_name ?? suggestedUsername,
-        email: email ?? `${suggestedUsername}@example.com`,
-        // role left null — your app may set it later on the profile page
-      })
-      .select('id')
-      .single();
-
-    if (insErr || !created?.id) return null;
-    return created.id;
-  };
+    if (error) {
+      console.error('profiles lookup failed:', error.message);
+      return null;
+    }
+    return data?.id ?? null;
+  }
 
   const actuallySendDeal = async () => {
     setSubmitting(true);
     try {
-      // 1) Must be logged in
       const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      if (!user) {
+      const authUser = userData?.user;
+      if (!authUser) {
         alert('You must be logged in.');
         return;
       }
 
-      // 2) Resolve sender's profiles.id (create if missing)
-      const senderProfilesId = await resolveOrCreateMyProfileId();
+      // resolve sender profiles.id (NOT auth uid)
+      const senderProfilesId = await resolveMyProfilesId(authUser.id);
       if (!senderProfilesId) {
-        alert('Could not resolve or create your profile. Please open your profile page, save it once, and try again.');
+        alert('Could not resolve your profile. Open your profile page, save it once, and try again.');
         return;
       }
 
-      // 3) Receiver is the viewed profile’s profiles.id
-      const receiverId = profile.id;
-      if (!receiverId) {
-        alert('Viewed user profile is invalid.');
+      // receiver is the viewed user's profiles.id
+      if (!profile.id) {
+        alert('Viewed profile is invalid.');
         return;
       }
 
-      // 4) Decide amount (only when fixed)
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
-      // 5) Send via client helper (will also enforce opposite roles)
       const { error } = await sendDealRequest({
-        senderId: senderProfilesId,  // profiles.id (you)
-        receiverId,                  // profiles.id (viewed user)
+        senderId: senderProfilesId,    // profiles.id
+        receiverId: profile.id,        // profiles.id
         message: dealMessage.trim(),
-        amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
+        amount: chosenAmount ?? undefined,
         currency,
+        pricingMode,                   // explicit, though sendDealRequest can infer
       });
 
       if (error) {
@@ -258,7 +236,7 @@ export default function PublicProfile() {
             height={140}
             className="object-cover w-full h-full"
             onError={(ev) => {
-              (ev.currentTarget as HTMLImageElement).src = '/profile-default.png';
+              (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
             }}
           />
         </div>
@@ -326,24 +304,22 @@ export default function PublicProfile() {
             </div>
             <div className="flex gap-3">
               {!isSelf && (
-                <>
-                  <button
-                    onClick={() => setShowDealModal(true)}
-                    className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500 disabled:opacity-50"
-                    disabled={!canSendDeal}
-                    title={
-                      isSelf
-                        ? 'Cannot send a deal to yourself'
-                        : !viewerRole
-                        ? 'Login required'
-                        : sameRole
-                        ? 'Deals can only be sent to the opposite role'
-                        : undefined
-                    }
-                  >
-                    Request Deal
-                  </button>
-                </>
+                <button
+                  onClick={() => setShowDealModal(true)}
+                  className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500 disabled:opacity-50"
+                  disabled={!canSendDeal}
+                  title={
+                    isSelf
+                      ? 'Cannot send a deal to yourself'
+                      : !viewerRole
+                      ? 'Login required'
+                      : sameRole
+                      ? 'Deals can only be sent to the opposite role'
+                      : undefined
+                  }
+                >
+                  Request Deal
+                </button>
               )}
               <button className="px-4 py-2 rounded-full bg-gray-700 text-white font-semibold hover:bg-gray-600">
                 Send Message

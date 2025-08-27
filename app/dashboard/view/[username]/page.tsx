@@ -181,7 +181,7 @@ export default function PublicProfile() {
       setConfirmOpen(false);
     }
   };
-
+  
   return (
     <section className="p-4 sm:p-6 md:p-12">
       {/* Hide number input spinners only (no layout changes) */}
@@ -194,11 +194,16 @@ export default function PublicProfile() {
       <div className="max-w-4xl mx-auto flex flex-col items-center gap-4">
         <div className="w-[120px] h-[120px] sm:w-[130px] sm:h-[130px] md:w-[140px] md:h-[140px] rounded-full overflow-hidden border-2 border-white/20 bg-white/10">
           <Image
-            src={profile.profile_url || '/default-avatar.png'}
+            src={profile.profile_url || '/profile-default.png'}
             alt="Profile Picture"
             width={140}
             height={140}
             className="object-cover w-full h-full"
+            onError={(ev) => {
+              
+              (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
+            }}
+            
           />
         </div>
 

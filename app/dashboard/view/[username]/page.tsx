@@ -77,7 +77,7 @@ export default function PublicProfile() {
         const { data: myProf } = await supabase
           .from('profiles')
           .select('role')
-          .eq('id', uid)
+          .eq('user_id', uid)
           .maybeSingle();
         const r = myProf?.role;
         setViewerRole(r === 'creator' || r === 'business' ? r : null);

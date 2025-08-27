@@ -135,7 +135,7 @@ export async function middleware(req: NextRequest) {
   return res
 }
 
-// Run on all pages except static assets and Next image routes.
+// Run on all pages except static assets....and Next image routes.
 // This lets us add security headers globally while only auth-gating
 // /dashboard and /admin inside the middleware function.
 export const config = {

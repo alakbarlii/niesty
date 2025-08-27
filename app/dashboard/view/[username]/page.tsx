@@ -8,7 +8,7 @@ import { MoreVertical, Flag } from 'lucide-react';
 import { sendDealRequest } from '@/lib/supabase/deals';
 
 interface Profile {
-  id: string; // profiles.id (UUID)
+  id: string;
   username: string;
   full_name: string;
   role: 'creator' | 'business' | string;
@@ -20,15 +20,14 @@ interface Profile {
 
 export default function PublicProfile() {
   const { username } = useParams() as { username: string };
-
-  // viewed profile (target)
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  // viewer (sender) context
-  const [viewerProfileId, setViewerProfileId] = useState<string | null>(null); // profiles.id of current user
+  // auth + viewer state
+  const [viewerAuthId, setViewerAuthId] = useState<string | null>(null);
+  const [viewerProfileId, setViewerProfileId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
 
-  // UI state
+  // ui state
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -49,54 +48,66 @@ export default function PublicProfile() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const fetchAll = async () => {
-      // --- Load viewed profile by username ---
-      const { data: prof, error: profErr } = await supabase
+    let cancelled = false;
+
+    async function fetchEverything() {
+      // 1) Load the viewed profile by username
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('username', username)
         .single();
 
-      if (profErr || !prof) {
-        // leave null => shows Loading.../or you can render a not-found
+      if (cancelled) return;
+      if (profileError || !profileData) {
+        // keep silent fail → page shows Loading… until username fixed
         return;
       }
 
-      // --- Count completed deals ONLY if we have a valid profiles.id to avoid eq.null 400s ---
+      // 2) Count completed deals for THIS profile.id (guard id to avoid HEAD with null)
       let dealsCompleted = 0;
-      if (prof.id) {
-        const { count, error: countErr } = await supabase
+      if (profileData.id) {
+        const { count, error: dealError } = await supabase
           .from('deals')
-          .select('*', { head: true, count: 'exact' })
-          .or(`sender_id.eq.${prof.id},receiver_id.eq.${prof.id}`)
+          .select('*', { count: 'exact', head: true })
+          .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
           .eq('deal_stage', 'Payment Released');
 
-        if (!countErr && typeof count === 'number') dealsCompleted = count;
+        if (!dealError && typeof count === 'number') {
+          dealsCompleted = count;
+        }
       }
 
-      setProfile({ ...(prof as Profile), deals_completed: dealsCompleted });
+      // set profile (with computed deals)
+      setProfile({ ...(profileData as Profile), deals_completed: dealsCompleted });
 
-      // --- Resolve viewer's profiles.id (senderId) + role ---
+      // 3) Resolve viewer auth + viewer profile (profiles.id) + role
       const { data: me } = await supabase.auth.getUser();
-      const uid = me?.user?.id ?? null;
+      const authId = me?.user?.id ?? null;
+      setViewerAuthId(authId);
 
-      if (uid) {
-        const { data: myProf } = await supabase
+      if (authId) {
+        // get viewer profile.id (sender must be profiles.id)
+        const { data: viewerProfRow } = await supabase
           .from('profiles')
           .select('id, role')
-          .eq('user_id', uid)
+          .eq('user_id', authId)
           .maybeSingle();
 
-        if (myProf?.id) setViewerProfileId(myProf.id);
-        const r = myProf?.role;
+        if (viewerProfRow?.id) setViewerProfileId(viewerProfRow.id);
+
+        const r = viewerProfRow?.role;
         setViewerRole(r === 'creator' || r === 'business' ? r : null);
       } else {
         setViewerProfileId(null);
         setViewerRole(null);
       }
-    };
+    }
 
-    void fetchAll();
+    fetchEverything();
+    return () => {
+      cancelled = true;
+    };
   }, [username]);
 
   const handleCopy = async () => {
@@ -119,23 +130,24 @@ export default function PublicProfile() {
 
   if (!profile) return <div className="text-white p-10">Loading...</div>;
 
+  // NOTE: isSelf compares profiles.id to profiles.id (NOT auth uid)
   const isSelf = !!viewerProfileId && viewerProfileId === profile.id;
+
   const sameRole =
     !!viewerRole &&
     (viewerRole === (profile.role === 'creator' ? 'creator' : profile.role === 'business' ? 'business' : 'x'));
 
   const canSendDeal =
-    !isSelf && !!viewerRole && !!viewerProfileId && (sameRole ? false : viewerRole === 'creator' || viewerRole === 'business');
+    !isSelf && !!viewerRole && (sameRole ? false : viewerRole === 'creator' || viewerRole === 'business');
 
   // ---- Confirm + Send helpers ----
   const validateAndOpenConfirm = async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data?.user) {
+    if (!viewerAuthId) {
       alert('You must be logged in.');
       return;
     }
     if (!viewerProfileId) {
-      alert('We could not resolve your profile (sender). Please open your profile page, save it once, and try again.');
+      alert('Your profile record is missing. Open your profile page, save it once, then try again.');
       return;
     }
     if (isSelf) {
@@ -163,20 +175,24 @@ export default function PublicProfile() {
   const actuallySendDeal = async () => {
     setSubmitting(true);
     try {
+      // strong guards (no network if we’re missing ids)
       if (!viewerProfileId) {
-        alert('We could not resolve your profile (sender). Please open your profile page, save it once, and try again.');
+        alert('Your profile record is missing. Open your profile page, save it once, then try again.');
+        return;
+      }
+      if (!profile?.id) {
+        alert('Target profile is not loaded.');
         return;
       }
 
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        senderId: viewerProfileId, // profiles.id of viewer
-        receiverId: profile.id,    // profiles.id of viewed profile
+        senderId: viewerProfileId,         // MUST be profiles.id
+        receiverId: profile.id,            // profiles.id of the viewed user
         message: dealMessage.trim(),
-        amount: chosenAmount ?? undefined,
+        amount: chosenAmount ?? undefined,  // amount > 0 => fixed; else negotiable
         currency,
-        pricingMode,
       });
 
       if (error) {
@@ -380,7 +396,7 @@ export default function PublicProfile() {
               <textarea
                 value={dealMessage}
                 onChange={(e) => setDealMessage(e.target.value)}
-                placeholder="Example: Promote my product on your YouTube video for 1 minute. We can negotiate the price."
+                placeholder="Example: Promote my product on your YouTube video for 1minute. We can negotiate the price."
                 className="w-full bg-black/20 text-white p-2 rounded border border-white/10 focus:outline-none"
                 rows={3}
               />

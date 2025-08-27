@@ -45,6 +45,8 @@ export default function PublicProfile() {
 
   useEffect(() => {
     const fetchProfileAndDeals = async () => {
+      console.log('🔍 Fetching profile for username:', username);
+      
       // First get the profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -52,12 +54,22 @@ export default function PublicProfile() {
         .eq('username', username)
         .single();
 
+      console.log('🔍 Profile fetch result:', { profileData, profileError });
+
       if (profileError || !profileData) {
-        console.error('Profile fetch error:', profileError);
+        console.error('❌ Profile fetch failed:', profileError);
         return;
       }
 
-      // FIX 1: Only count deals if we have a valid profile ID
+      // Ensure profile has an ID
+      if (!profileData.id) {
+        console.error('❌ Profile data missing ID field:', profileData);
+        return;
+      }
+
+      console.log('✅ Profile loaded successfully:', profileData);
+
+      // Count completed deals if we have a valid profile ID
       if (profileData.id) {
         const { count, error: dealError } = await supabase
           .from('deals')
@@ -82,18 +94,21 @@ export default function PublicProfile() {
       }
 
       // Get viewer info (role + id)
-      const { data: me } = await supabase.auth.getUser();
+      const { data: me, error: authError } = await supabase.auth.getUser();
+      console.log('🔍 Auth check result:', { user: me?.user, authError });
+      
       const uid = me?.user?.id ?? null;
       setViewerId(uid);
 
       if (uid) {
-        // FIX 2: Use correct column name for user lookup
         const { data: myProf, error: profileError } = await supabase
           .from('profiles')
           .select('role')
-          .eq('user_id', uid) // Using user_id as confirmed
+          .eq('user_id', uid)
           .maybeSingle();
           
+        console.log('🔍 Viewer profile result:', { myProf, profileError });
+        
         if (profileError) {
           console.error('Viewer profile error:', profileError);
         }
@@ -137,6 +152,10 @@ export default function PublicProfile() {
   };
 
   if (!profile) return <div className="text-white p-10">Loading...</div>;
+
+  if (!profile.id) {
+    return <div className="text-white p-10">Profile data incomplete - missing ID</div>;
+  }
 
   const isSelf = !!viewerId && viewerId === profile.id;
   const sameRole =
@@ -182,21 +201,44 @@ export default function PublicProfile() {
     try {
       const { data: userData } = await supabase.auth.getUser();
       const user = userData?.user;
+      
+      // 🔍 COMPREHENSIVE DEBUG: Log all the values
+      console.log('🔍 COMPREHENSIVE DEBUG - Sending deal with:', {
+        user: user,
+        userId: user?.id,
+        userEmail: user?.email,
+        profileId: profile?.id,
+        profileUsername: profile?.username,
+        profileEmail: profile?.email,
+        profileData: profile,
+        dealMessage: dealMessage.trim(),
+        pricingMode,
+        budget,
+        currency
+      });
+      
       if (!user) {
+        console.error('❌ User not authenticated');
         alert('You must be logged in.');
         return;
       }
 
-      // FIX 3: Ensure we have valid IDs
-      if (!user.id || !profile.id) {
-        alert('Missing user or profile information');
+      if (!user.id) {
+        console.error('❌ User ID is missing');
+        alert('User authentication error - missing user ID');
+        return;
+      }
+
+      if (!profile.id) {
+        console.error('❌ Profile ID is missing');
+        alert('Profile error - missing profile ID');
         return;
       }
 
       // Decide amount (only when fixed)
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
-      console.log('Sending deal with:', {
+      console.log('🔍 About to call sendDealRequest with:', {
         senderId: user.id,
         receiverId: profile.id,
         message: dealMessage.trim(),
@@ -204,18 +246,21 @@ export default function PublicProfile() {
         currency
       });
 
-      const { error } = await sendDealRequest({
+      const { data, error } = await sendDealRequest({
         senderId: user.id,
         receiverId: profile.id,
         message: dealMessage.trim(),
-        amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
+        amount: chosenAmount ?? undefined,
         currency,
       });
 
+      console.log('🔍 sendDealRequest result:', { data, error });
+
       if (error) {
-        console.error('Send deal error:', error);
+        console.error('❌ Send deal error:', error);
         alert('Failed to send deal: ' + error.message);
       } else {
+        console.log('✅ Deal sent successfully');
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
         setShowDealModal(false);
@@ -224,7 +269,7 @@ export default function PublicProfile() {
         setPricingMode('negotiable');
       }
     } catch (err) {
-      console.error('Deal send exception:', err);
+      console.error('❌ Deal send exception:', err);
       alert('An error occurred while sending the deal');
     } finally {
       setSubmitting(false);

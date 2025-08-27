@@ -8,7 +8,7 @@ import { MoreVertical, Flag } from 'lucide-react';
 import { sendDealRequest } from '@/lib/supabase/deals';
 
 interface Profile {
-  id: string;
+  id: string;               // profiles.id
   username: string;
   full_name: string;
   role: 'creator' | 'business' | string;
@@ -21,7 +21,9 @@ interface Profile {
 export default function PublicProfile() {
   const { username } = useParams();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [viewerId, setViewerId] = useState<string | null>(null);
+
+  // viewer identity (from profiles table)
+  const [viewerId, setViewerId] = useState<string | null>(null); // profiles.id of the viewer
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
 
   const [copied, setCopied] = useState(false);
@@ -43,8 +45,77 @@ export default function PublicProfile() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  /**
+   * Ensure we can map the signed-in user -> profiles.id.
+   * - Read profiles by user_id
+   * - If missing, try legacy lookup by id == auth.uid() (just in case)
+   * - If still missing, create a minimal row via upsert (RLS self-insert)
+   * - Finally, set viewerId and viewerRole
+   */
+  const ensureViewerProfile = async () => {
+    const { data: me } = await supabase.auth.getUser();
+    const uid = me?.user?.id ?? null;
+    const email = me?.user?.email ?? null;
+
+    if (!uid) {
+      setViewerId(null);
+      setViewerRole(null);
+      return;
+    }
+
+    // 1) Try normal schema: profiles.user_id = auth.uid()
+    const { data: rowByUserId } = await supabase
+      .from('profiles')
+      .select('id, role')
+      .eq('user_id', uid)
+      .maybeSingle();
+
+    let row = rowByUserId;
+
+    // 2) Try legacy schema (if any): profiles.id = auth.uid()
+    if (!row) {
+      const { data: legacyRow } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('id', uid)
+        .maybeSingle();
+      row = legacyRow ?? null;
+    }
+
+    // 3) Still missing? Create a minimal row (satisfy NOT NULLs)
+    if (!row) {
+      const usernameGuess =
+        (email?.split('@')[0] || 'user') + '-' + uid.slice(0, 6);
+
+      await supabase
+        .from('profiles')
+        .upsert(
+          {
+            user_id: uid,
+            email: email,
+            username: usernameGuess,
+            role: 'creator', // safe default; user can change later
+          },
+          { onConflict: 'user_id' }
+        );
+
+      const { data: rowAfterUpsert } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('user_id', uid)
+        .maybeSingle();
+
+      row = rowAfterUpsert ?? null;
+    }
+
+    if (row?.id) setViewerId(row.id);
+    const r = row?.role;
+    setViewerRole(r === 'creator' || r === 'business' ? r : null);
+  };
+
   useEffect(() => {
     const fetchProfileAndDeals = async () => {
+      // Public profile by username
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -53,35 +124,27 @@ export default function PublicProfile() {
 
       if (profileError || !profileData) return;
 
-      const { count, error: dealError } = await supabase
-        .from('deals')
-        .select('*', { count: 'exact', head: true })
-        .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
-        .eq('deal_stage', 'Payment Released');
+      // Deals completed (best-effort; ignore schema/RLS errors)
+      let dealsCompleted = 0;
+      try {
+        const { count, error: dealError } = await supabase
+          .from('deals')
+          .select('*', { count: 'exact', head: true })
+          .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
+          .eq('deal_stage', 'Payment Released');
 
-      if (!dealError) {
-        setProfile({
-          ...profileData,
-          deals_completed: count ?? 0,
-        });
-      } else {
-        setProfile(profileData);
+        if (!dealError && typeof count === 'number') dealsCompleted = count;
+      } catch {
+        // ignore; keep 0
       }
 
-      // viewer info (role + id)
-      const { data: me } = await supabase.auth.getUser();
-      const uid = me?.user?.id ?? null;
-      setViewerId(uid);
+      setProfile({
+        ...profileData,
+        deals_completed: dealsCompleted,
+      });
 
-      if (uid) {
-        const { data: myProf } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('user_id', uid)
-          .maybeSingle();
-        const r = myProf?.role;
-        setViewerRole(r === 'creator' || r === 'business' ? r : null);
-      }
+      // Ensure the viewer has a profiles row & capture id/role
+      await ensureViewerProfile();
     };
 
     fetchProfileAndDeals();
@@ -94,8 +157,9 @@ export default function PublicProfile() {
   };
 
   const handleReport = async () => {
+    if (!profile) return;
     await supabase.from('reports').insert({
-      reported_user: profile!.id,
+      reported_user: profile.id,
       message: reportMessage,
     });
     alert(`Reported with message: ${reportMessage || 'No message provided'}`);
@@ -122,6 +186,16 @@ export default function PublicProfile() {
       alert('You must be logged in.');
       return;
     }
+
+    // Try to resolve viewer profile id if missing
+    if (!viewerId) {
+      await ensureViewerProfile();
+      if (!viewerId) {
+        alert('Could not resolve your profile. Try reloading.');
+        return;
+      }
+    }
+
     if (isSelf) {
       alert('You cannot send a deal to yourself.');
       return;
@@ -141,7 +215,6 @@ export default function PublicProfile() {
         return;
       }
     }
-    // Open the pretty confirmation modal
     setConfirmOpen(true);
   };
 
@@ -155,14 +228,22 @@ export default function PublicProfile() {
         return;
       }
 
-      // Decide amount (only when fixed)
+      // Hard-resolve before sending, in case state changed
+      if (!viewerId) {
+        await ensureViewerProfile();
+      }
+      if (!viewerId) {
+        alert('Could not resolve your profile. Try reloading.');
+        return;
+      }
+
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        senderId: user.id,
-        receiverId: profile.id,
+        senderId: viewerId,       // profiles.id (viewer)
+        receiverId: profile.id,   // profiles.id (viewed)
         message: dealMessage.trim(),
-        amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
+        amount: chosenAmount ?? undefined,
         currency,
       });
 
@@ -181,7 +262,7 @@ export default function PublicProfile() {
       setConfirmOpen(false);
     }
   };
-  
+
   return (
     <section className="p-4 sm:p-6 md:p-12">
       {/* Hide number input spinners only (no layout changes) */}
@@ -200,10 +281,8 @@ export default function PublicProfile() {
             height={140}
             className="object-cover w-full h-full"
             onError={(ev) => {
-              
-              (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
+              (ev.currentTarget as HTMLImageElement).src = '/profile-default.png';
             }}
-            
           />
         </div>
 

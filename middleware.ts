@@ -67,6 +67,8 @@ export async function middleware(req: NextRequest) {
     "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
     "font-src 'self' https: data:",
     "media-src 'self' https: blob:",
+    "style-src 'self' 'unsafe-inline' https:",
+"style-src-elem 'self' 'unsafe-inline' https:",
   ].join('; ')
 
   res.headers.set('Content-Security-Policy', isProd ? cspProd : cspDev)

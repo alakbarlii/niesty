@@ -19,7 +19,10 @@ interface Profile {
 }
 
 export default function PublicProfile() {
-  const { username } = useParams();
+  // ✅ Make sure `username` is always a string (guards against string[])
+  const params = useParams() as Record<string, string | string[]>;
+  const username = Array.isArray(params.username) ? params.username[0] : (params.username as string);
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
@@ -53,19 +56,39 @@ export default function PublicProfile() {
 
       if (profileError || !profileData) return;
 
-      const { count, error: dealError } = await supabase
-        .from('deals')
-        .select('*', { count: 'exact', head: true })
-        .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
-        .eq('deal_stage', 'Payment Released');
-
-      if (!dealError) {
-        setProfile({
-          ...profileData,
-          deals_completed: count ?? 0,
-        });
+      // ✅ Robust deals count that never sends ...eq.null
+      if (!profileData?.id) {
+        setProfile(profileData as Profile);
       } else {
-        setProfile(profileData);
+        const viewedId = profileData.id as string;
+        let completed = 0;
+
+        // Try schema v2 (sender/receiver)
+        const try1 = await supabase
+          .from('deals')
+          .select('*', { count: 'exact', head: true })
+          .or(`sender.eq.${viewedId},receiver.eq.${viewedId}`)
+          .eq('deal_stage', 'Payment Released');
+
+        if (!try1.error && typeof try1.count === 'number') {
+          completed = try1.count;
+        } else {
+          // Fallback schema v1 (sender_id/receiver_id)
+          const try2 = await supabase
+            .from('deals')
+            .select('*', { count: 'exact', head: true })
+            .or(`sender_id.eq.${viewedId},receiver_id.eq.${viewedId}`)
+            .eq('deal_stage', 'Payment Released');
+
+          if (!try2.error && typeof try2.count === 'number') {
+            completed = try2.count;
+          }
+        }
+
+        setProfile({
+          ...(profileData as Profile),
+          deals_completed: completed,
+        });
       }
 
       // viewer info (role + id)
@@ -145,22 +168,37 @@ export default function PublicProfile() {
     setConfirmOpen(true);
   };
 
+  // ✅ Resolve PROFILES.ID for the sender, then call your helper with profiles.id values
   const actuallySendDeal = async () => {
     setSubmitting(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      if (!user) {
+      const authUser = userData?.user;
+      if (!authUser) {
         alert('You must be logged in.');
         return;
       }
 
-      // Decide amount (only when fixed)
+      // Look up sender's profiles.id by auth uid
+      const { data: senderProfile, error: senderLookupErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', authUser.id)
+        .maybeSingle();
+
+      if (senderLookupErr || !senderProfile?.id) {
+        alert('Missing your profile record. Open your profile page and save it once, then try again.');
+        return;
+      }
+
+      const senderId = senderProfile.id; // profiles.id
+      const receiverId = profile.id;     // profiles.id
+
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        senderId: user.id,
-        receiverId: profile.id,
+        senderId,
+        receiverId,
         message: dealMessage.trim(),
         amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
         currency,
@@ -181,7 +219,7 @@ export default function PublicProfile() {
       setConfirmOpen(false);
     }
   };
-  
+
   return (
     <section className="p-4 sm:p-6 md:p-12">
       {/* Hide number input spinners only (no layout changes) */}
@@ -200,10 +238,8 @@ export default function PublicProfile() {
             height={140}
             className="object-cover w-full h-full"
             onError={(ev) => {
-              
               (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
             }}
-            
           />
         </div>
 

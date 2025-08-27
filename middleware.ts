@@ -41,7 +41,7 @@ export async function middleware(req: NextRequest) {
     "frame-src 'self' https://challenges.cloudflare.com",
     // ADD nonce but keep unsafe-* in dev to avoid breakage
     `script-src 'self' 'unsafe-eval' 'unsafe-inline' 'nonce-${nonce}' https: https://challenges.cloudflare.com`,
-    "style-src 'self' 'unsafe-inline' https:",
+    "style-src 'self' 'unsafe-inline' 'unsafe-hashes' https:",
     "img-src 'self' data: blob: https:",
     "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
     "font-src 'self' https: data:",
@@ -58,7 +58,7 @@ export async function middleware(req: NextRequest) {
     // ADD nonce; keep external https + Turnstile
     `script-src 'self' 'nonce-${nonce}' https: https://challenges.cloudflare.com`,
     // If you ever add inline <style>, you can nonce it too:
-    `style-src 'self' 'nonce-${nonce}' https:`,
+    `style-src 'self' 'nonce-${nonce}' 'unsafe-hashes' https:`,
     "img-src 'self' data: blob: https:",
     "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
     "font-src 'self' https: data:",

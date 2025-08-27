@@ -172,7 +172,7 @@ export default function DealDetailPage() {
         const { data: users } = await supabase
           .from('profiles')
           .select('id, full_name, username, role, profile_url')
-          .in('id', [data.sender_id, data.receiver_id]);
+          .in('user_id', [data.sender_id, data.receiver_id]);
 
         const sender = (users || []).find((u) => u.id === data.sender_id) as ProfileLite | undefined;
         const receiver = (users || []).find((u) => u.id === data.receiver_id) as ProfileLite | undefined;

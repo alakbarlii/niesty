@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   const { error: dbErr } = await supabase
     .from('profiles')
     .update({ avatar_path: path })
-    .eq('id', userId)
+    .eq('user_id', userId)
 
   if (dbErr) {
     return jsonNoStore({ error: userSafe(dbErr.message) }, { status: 400 })

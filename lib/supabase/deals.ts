@@ -58,7 +58,7 @@ export async function getMyRole(): Promise<Role | null> {
   const { data: me } = await supabase.auth.getUser();
   const uid = me?.user?.id;
   if (!uid) return null;
-  const { data: prof } = await supabase.from('profiles').select('role').eq('id', uid).maybeSingle();
+  const { data: prof } = await supabase.from('profiles').select('role').eq('user_id', uid).maybeSingle();
   return (prof?.role as Role) ?? null;
 }
 
@@ -186,7 +186,7 @@ export async function confirmAgreementAndMaybeAdvance(dealId: string) {
   const { data: prof, error: roleErr } = await supabase
     .from('profiles')
     .select('role')
-    .eq('id', uid)
+    .eq('user_id', uid)
     .maybeSingle();
   if (roleErr || !prof?.role) return { data: null, error: roleErr || new Error('Role missing') };
 

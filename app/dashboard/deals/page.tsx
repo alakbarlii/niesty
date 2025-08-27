@@ -51,7 +51,7 @@ export default function DealsPage() {
     const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, username')
-      .in('id', ids);
+      .in('user_id', ids);
 
     if (error || !data) return new Map<string, { full_name: string; username: string }>();
     return new Map(data.map((user) => [user.id, user]));

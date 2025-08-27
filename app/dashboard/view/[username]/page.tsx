@@ -21,7 +21,7 @@ interface Profile {
 export default function PublicProfile() {
   const { username } = useParams();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [viewerId, setViewerId] = useState<string | null>(null); // profiles.id of the viewer
+  const [viewerId, setViewerId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
 
   const [copied, setCopied] = useState(false);
@@ -68,23 +68,19 @@ export default function PublicProfile() {
         setProfile(profileData);
       }
 
-      // viewer info (role + profile row id)
+      // viewer info (role + id)
       const { data: me } = await supabase.auth.getUser();
       const uid = me?.user?.id ?? null;
+      setViewerId(uid);
 
       if (uid) {
         const { data: myProf } = await supabase
           .from('profiles')
-          .select('id, role')
+          .select('role')
           .eq('user_id', uid)
           .maybeSingle();
-
-        if (myProf?.id) setViewerId(myProf.id);
         const r = myProf?.role;
         setViewerRole(r === 'creator' || r === 'business' ? r : null);
-      } else {
-        setViewerId(null);
-        setViewerRole(null);
       }
     };
 
@@ -126,10 +122,6 @@ export default function PublicProfile() {
       alert('You must be logged in.');
       return;
     }
-    if (!viewerId) {
-      alert('Could not resolve your profile. Try reloading.');
-      return;
-    }
     if (isSelf) {
       alert('You cannot send a deal to yourself.');
       return;
@@ -162,17 +154,13 @@ export default function PublicProfile() {
         alert('You must be logged in.');
         return;
       }
-      if (!viewerId) {
-        alert('Could not resolve your profile. Try reloading.');
-        return;
-      }
 
       // Decide amount (only when fixed)
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        senderId: viewerId,              // IMPORTANT: profiles.id (not auth user id)
-        receiverId: profile.id,          // profiles.id of the viewed user
+        senderId: user.id,
+        receiverId: profile.id,
         message: dealMessage.trim(),
         amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
         currency,
@@ -193,7 +181,7 @@ export default function PublicProfile() {
       setConfirmOpen(false);
     }
   };
-
+  
   return (
     <section className="p-4 sm:p-6 md:p-12">
       {/* Hide number input spinners only (no layout changes) */}
@@ -212,8 +200,10 @@ export default function PublicProfile() {
             height={140}
             className="object-cover w-full h-full"
             onError={(ev) => {
+              
               (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
             }}
+            
           />
         </div>
 

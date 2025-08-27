@@ -458,7 +458,7 @@ export default function PublicProfile() {
                   onClick={() => setShowDealModal(false)}
                   className="px-4 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-600"
                 >
-                  Cancel
+                  Cancel.
                 </button>
                 <button
                   onClick={validateAndOpenConfirm}

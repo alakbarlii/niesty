@@ -1,4 +1,3 @@
-// app/dashboard/view/[username]/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
 import { MoreVertical, Flag } from 'lucide-react';
+import { sendDealRequest } from '@/lib/supabase/deals';
 
 interface Profile {
   id: string;
@@ -19,12 +19,7 @@ interface Profile {
 }
 
 export default function PublicProfile() {
-  // robust username extraction for app router
-  const params = useParams();
-  const username = Array.isArray(params?.username)
-    ? params.username[0]
-    : (params?.username as string);
-
+  const { username } = useParams();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
@@ -61,7 +56,7 @@ export default function PublicProfile() {
       const { count, error: dealError } = await supabase
         .from('deals')
         .select('*', { count: 'exact', head: true })
-        .or(`sender.eq.${profileData.id},receiver.eq.${profileData.id}`)
+        .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
         .eq('deal_stage', 'Payment Released');
 
       if (!dealError) {
@@ -70,7 +65,7 @@ export default function PublicProfile() {
           deals_completed: count ?? 0,
         });
       } else {
-        setProfile(profileData as Profile);
+        setProfile(profileData);
       }
 
       // viewer info (role + id)
@@ -89,7 +84,7 @@ export default function PublicProfile() {
       }
     };
 
-    if (username) fetchProfileAndDeals();
+    fetchProfileAndDeals();
   }, [username]);
 
   const handleCopy = async () => {
@@ -146,50 +141,33 @@ export default function PublicProfile() {
         return;
       }
     }
+    // Open the pretty confirmation modal
     setConfirmOpen(true);
   };
 
-  // ✅ Insert using sender/receiver (profiles.id), not auth UID
   const actuallySendDeal = async () => {
     setSubmitting(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
-      const authUserId = userData?.user?.id;
-      if (!authUserId) {
+      const user = userData?.user;
+      if (!user) {
         alert('You must be logged in.');
         return;
       }
 
-      // Resolve sender = profiles.id for current user
-      const { data: myProf } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', authUserId)
-        .maybeSingle();
-
-      const senderProfileId = myProf?.id ?? null;
-      if (!senderProfileId) {
-        alert('Please open your profile page and save it once before sending a deal.');
-        return;
-      }
-
-      const receiverProfileId = profile!.id; // viewed profile
-
+      // Decide amount (only when fixed)
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
-      const { error } = await supabase
-        .from('deals')
-        .insert({
-          sender: senderProfileId,
-          receiver: receiverProfileId,
-          message: dealMessage.trim(),
-          amount: chosenAmount ?? null,
-          currency,
-          pricing_mode: chosenAmount ? 'fixed' : 'negotiable',
-        });
+      const { error } = await sendDealRequest({
+        senderId: user.id,
+        receiverId: profile.id,
+        message: dealMessage.trim(),
+        amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
+        currency,
+      });
 
       if (error) {
-        alert('Failed to send deal: ' + (error.message ?? 'Unknown error'));
+        alert('Failed to send deal: ' + error.message);
       } else {
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
@@ -203,7 +181,7 @@ export default function PublicProfile() {
       setConfirmOpen(false);
     }
   };
-
+  
   return (
     <section className="p-4 sm:p-6 md:p-12">
       {/* Hide number input spinners only (no layout changes) */}
@@ -222,8 +200,10 @@ export default function PublicProfile() {
             height={140}
             className="object-cover w-full h-full"
             onError={(ev) => {
+              
               (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
             }}
+            
           />
         </div>
 

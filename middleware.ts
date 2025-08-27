@@ -10,7 +10,7 @@ export async function middleware(req: NextRequest) {
   // Always create a response we can attach headers to
   const res = NextResponse.next()
 
-  // Per-request nonce
+  // Per-request nonce (kept for scripts; NOT enforced for styles)
   const nonce = crypto.randomUUID()
   res.headers.set('X-CSP-Nonce', nonce)
 
@@ -26,51 +26,28 @@ export async function middleware(req: NextRequest) {
 
   const isProd = process.env.NODE_ENV === 'production'
 
-  // DEV: relaxed to avoid friction
-  const cspDev = [
+  // One CSP only (no style-src-elem/attr; allow inline styles)
+  const csp = [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
     "frame-src 'self' https://challenges.cloudflare.com",
-    // dev scripts
-    `script-src 'self' 'unsafe-eval' 'unsafe-inline' 'nonce-${nonce}' https: https://challenges.cloudflare.com`,
-    // split style controls:
-    // - allow external + self for <style> tags
-    "style-src 'self' https:",
-    // - allow inline style attributes freely in dev
-    "style-src-attr 'unsafe-inline'",
-    // - allow <style> elements; nonce not required in dev
-    "style-src-elem 'self' https:",
+    // Scripts: keep nonce + allow inline for Next boot/Turnstile shims
+    `script-src 'self' 'nonce-${nonce}' ${isProd ? '' : "'unsafe-eval'"} 'unsafe-inline' https://challenges.cloudflare.com`,
+    // Styles: allow inline + external (fixes your violation)
+    "style-src 'self' 'unsafe-inline' https:",
+    // Images/Fonts/Connect
     "img-src 'self' data: blob: https:",
-    "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
     "font-src 'self' https: data:",
+    "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
+    // Optional
     "media-src 'self' https: blob:",
+    "form-action 'self'",
+    "upgrade-insecure-requests",
   ].join('; ')
 
-  // PROD: strict scripts, pragmatic styles WITHOUT mixing nonce + unsafe-inline in the same directive
-  const cspProd = [
-    "default-src 'self'",
-    "base-uri 'self'",
-    "frame-ancestors 'none'",
-    "object-src 'none'",
-    "frame-src 'self' https://challenges.cloudflare.com",
-    // scripts locked with nonce (no unsafe-inline)
-    `script-src 'self' 'nonce-${nonce}' https: https://challenges.cloudflare.com`,
-    // styles split:
-    // - external + self allowed for <style> elements AND require nonce for any inline <style>
-    `style-src 'self' https:`,
-    `style-src-elem 'self' 'nonce-${nonce}' https:`,
-    // - allow inline style="" attributes (this is the key to stop the error)
-    "style-src-attr 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "connect-src 'self' https: wss: https://*.supabase.co https://challenges.cloudflare.com",
-    "font-src 'self' https: data:",
-    "media-src 'self' https: blob:",
-
-  ].join('; ')
-
-  res.headers.set('Content-Security-Policy', isProd ? cspProd : cspDev)
+  res.headers.set('Content-Security-Policy', csp)
 
   // Host allowlist
   const host = (req.headers.get('host') || '').toLowerCase()

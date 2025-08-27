@@ -1,4 +1,3 @@
-// app/dashboard/view/[username]/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -23,8 +22,9 @@ export default function PublicProfile() {
   const { username } = useParams();
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  // 🔑 we keep both viewer auth uid and the *profile row id*
+  // viewer auth uid
   const [viewerId, setViewerId] = useState<string | null>(null);
+  // viewer profiles.id (this is what deals.sender_id/receiver_id must use)
   const [viewerProfileId, setViewerProfileId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
 
@@ -58,49 +58,53 @@ export default function PublicProfile() {
 
       if (profileError || !profileData) return;
 
-      // 2) Count their completed deals (HEAD)
-      const { count, error: dealError } = await supabase
+      // 2) Count completed deals for that profile
+      const { count } = await supabase
         .from('deals')
         .select('*', { count: 'exact', head: true })
         .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
         .eq('deal_stage', 'Payment Released');
 
-      if (!dealError) {
-        setProfile({
-          ...profileData,
-          deals_completed: count ?? 0,
-        });
-      } else {
-        setProfile(profileData);
-      }
+      setProfile({
+        ...profileData,
+        deals_completed: count ?? 0,
+      });
 
-      // 3) Resolve viewer (auth user) and map to viewer's *profile row id*
+      // 3) Viewer info (auth uid)
       const { data: me } = await supabase.auth.getUser();
       const uid = me?.user?.id ?? null;
       setViewerId(uid);
 
+      // 4) Resolve viewer's profiles.id (this is the sender_id you must store in deals)
       if (uid) {
-        // 👇 IMPORTANT: we need *id* and role here; id is what deals.sender_id expects
-        const { data: myProf } = await supabase
+        // Normal schema: profiles.user_id -> profiles.id
+        const { data: byUserId } = await supabase
           .from('profiles')
           .select('id, role')
           .eq('user_id', uid)
           .maybeSingle();
 
-        if (myProf?.id) {
-          setViewerProfileId(myProf.id);
+        if (byUserId?.id) {
+          setViewerProfileId(byUserId.id);
+          const r = byUserId.role;
+          setViewerRole(r === 'creator' || r === 'business' ? r : null);
         } else {
-          // legacy fallback: some older rows used id == auth uid
-          const { data: legacy } = await supabase
+          // Legacy fallback: some rows may have id == auth uid
+          const { data: byLegacy } = await supabase
             .from('profiles')
             .select('id, role')
             .eq('id', uid)
             .maybeSingle();
-          if (legacy?.id) setViewerProfileId(legacy.id);
-        }
 
-        const r = myProf?.role as 'creator' | 'business' | undefined;
-        setViewerRole(r ?? null);
+          if (byLegacy?.id) {
+            setViewerProfileId(byLegacy.id);
+            const r = byLegacy.role;
+            setViewerRole(r === 'creator' || r === 'business' ? r : null);
+          } else {
+            // still logged in but no profile row yet
+            setViewerProfileId(null);
+          }
+        }
       }
     };
 
@@ -161,11 +165,7 @@ export default function PublicProfile() {
         return;
       }
     }
-    // 🔒 make sure we actually have the sender's *profile id*
-    if (!viewerProfileId) {
-      alert('Missing your profile record. Open your profile page, save it once, then try again.');
-      return;
-    }
+    // Open the pretty confirmation modal
     setConfirmOpen(true);
   };
 
@@ -179,39 +179,26 @@ export default function PublicProfile() {
         return;
       }
 
-      // resolve sender profile id if somehow not in state yet
-      let senderId = viewerProfileId;
-      if (!senderId) {
-        const { data: myProf } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        senderId = myProf?.id ?? null;
-      }
-      if (!senderId) {
-        const { data: legacy } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', user.id)
-          .maybeSingle();
-        senderId = legacy?.id ?? null;
-      }
-      if (!senderId) {
-        alert('Missing your profile record. Open your profile page, save it once, then try again.');
+      // 🔑 sender must be profiles.id, not auth uid
+      if (!viewerProfileId) {
+        alert('Missing your profile record. Please create or save your profile once, then try again.');
         return;
       }
 
-      // Receiver is the viewed profile’s profiles.id
+      // receiver is the viewed profile’s profiles.id
       const receiverId = profile.id;
+      if (!receiverId) {
+        alert('Missing receiver profile.');
+        return;
+      }
 
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        senderId,                    // profiles.id (NOT auth uid)
-        receiverId,                  // profiles.id of the viewed user
+        senderId: viewerProfileId,     // profiles.id of the viewer
+        receiverId,                    // profiles.id of the viewed user
         message: dealMessage.trim(),
-        amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
+        amount: chosenAmount ?? undefined,
         currency,
       });
 
@@ -230,7 +217,7 @@ export default function PublicProfile() {
       setConfirmOpen(false);
     }
   };
-
+  
   return (
     <section className="p-4 sm:p-6 md:p-12">
       {/* Hide number input spinners only (no layout changes) */}

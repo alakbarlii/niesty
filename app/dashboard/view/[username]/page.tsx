@@ -8,7 +8,7 @@ import { MoreVertical, Flag } from 'lucide-react';
 import { sendDealRequest } from '@/lib/supabase/deals';
 
 interface Profile {
-  id: string;               // profiles.id
+  id: string;
   username: string;
   full_name: string;
   role: 'creator' | 'business' | string;
@@ -21,9 +21,7 @@ interface Profile {
 export default function PublicProfile() {
   const { username } = useParams();
   const [profile, setProfile] = useState<Profile | null>(null);
-
-  // viewer identity (from profiles table)
-  const [viewerId, setViewerId] = useState<string | null>(null); // profiles.id of the viewer
+  const [viewerId, setViewerId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
 
   const [copied, setCopied] = useState(false);
@@ -45,49 +43,8 @@ export default function PublicProfile() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Ensure the signed-in user has a profiles row; return {id, role}
-  const ensureViewerProfile = async () => {
-    const { data: me } = await supabase.auth.getUser();
-    const uid = me?.user?.id ?? null;
-    const email = me?.user?.email ?? null;
-    if (!uid) {
-      setViewerId(null);
-      setViewerRole(null);
-      return;
-    }
-
-    // Try read first
-    const { data: row0 } = await supabase
-      .from('profiles')
-      .select('id, role')
-      .eq('user_id', uid)
-      .maybeSingle();
-
-    let row = row0;
-
-    // If missing, create minimal row (safe: onConflict user_id)
-    if (!row) {
-      await supabase
-        .from('profiles')
-        .upsert({ user_id: uid, email }, { onConflict: 'user_id' });
-
-      // Read again
-      const { data: row2 } = await supabase
-        .from('profiles')
-        .select('id, role')
-        .eq('user_id', uid)
-        .maybeSingle();
-      row = row2 ?? null;
-    }
-
-    if (row?.id) setViewerId(row.id);
-    const r = row?.role;
-    setViewerRole(r === 'creator' || r === 'business' ? r : null);
-  };
-
   useEffect(() => {
     const fetchProfileAndDeals = async () => {
-      // Public profile by username
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -96,27 +53,35 @@ export default function PublicProfile() {
 
       if (profileError || !profileData) return;
 
-      // Deals completed (best-effort; don't block UI if schema differs)
-      let dealsCompleted = 0;
-      try {
-        const { count, error: dealError } = await supabase
-          .from('deals')
-          .select('*', { count: 'exact', head: true })
-          .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
-          .eq('deal_stage', 'Payment Released');
+      const { count, error: dealError } = await supabase
+        .from('deals')
+        .select('*', { count: 'exact', head: true })
+        .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
+        .eq('deal_stage', 'Payment Released');
 
-        if (!dealError && typeof count === 'number') dealsCompleted = count;
-      } catch {
-        // ignore; keep 0
+      if (!dealError) {
+        setProfile({
+          ...profileData,
+          deals_completed: count ?? 0,
+        });
+      } else {
+        setProfile(profileData);
       }
 
-      setProfile({
-        ...profileData,
-        deals_completed: dealsCompleted,
-      });
+      // viewer info (role + id)
+      const { data: me } = await supabase.auth.getUser();
+      const uid = me?.user?.id ?? null;
+      setViewerId(uid);
 
-      // Ensure the viewer has a profiles row & capture id/role
-      await ensureViewerProfile();
+      if (uid) {
+        const { data: myProf } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('user_id', uid)
+          .maybeSingle();
+        const r = myProf?.role;
+        setViewerRole(r === 'creator' || r === 'business' ? r : null);
+      }
     };
 
     fetchProfileAndDeals();
@@ -129,9 +94,8 @@ export default function PublicProfile() {
   };
 
   const handleReport = async () => {
-    if (!profile) return;
     await supabase.from('reports').insert({
-      reported_user: profile.id,
+      reported_user: profile!.id,
       message: reportMessage,
     });
     alert(`Reported with message: ${reportMessage || 'No message provided'}`);
@@ -158,11 +122,6 @@ export default function PublicProfile() {
       alert('You must be logged in.');
       return;
     }
-    if (!viewerId) {
-      alert('Could not resolve your profile. Try reloading.');
-      await ensureViewerProfile(); // try once more
-      return;
-    }
     if (isSelf) {
       alert('You cannot send a deal to yourself.');
       return;
@@ -182,6 +141,7 @@ export default function PublicProfile() {
         return;
       }
     }
+    // Open the pretty confirmation modal
     setConfirmOpen(true);
   };
 
@@ -194,18 +154,15 @@ export default function PublicProfile() {
         alert('You must be logged in.');
         return;
       }
-      if (!viewerId) {
-        alert('Could not resolve your profile. Try reloading.');
-        return;
-      }
 
+      // Decide amount (only when fixed)
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        senderId: viewerId,       // profiles.id (viewer)
-        receiverId: profile.id,   // profiles.id (viewed)
+        senderId: user.id,
+        receiverId: profile.id,
         message: dealMessage.trim(),
-        amount: chosenAmount ?? undefined,
+        amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
         currency,
       });
 
@@ -224,7 +181,7 @@ export default function PublicProfile() {
       setConfirmOpen(false);
     }
   };
-
+  
   return (
     <section className="p-4 sm:p-6 md:p-12">
       {/* Hide number input spinners only (no layout changes) */}
@@ -243,8 +200,10 @@ export default function PublicProfile() {
             height={140}
             className="object-cover w-full h-full"
             onError={(ev) => {
+              
               (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
             }}
+            
           />
         </div>
 

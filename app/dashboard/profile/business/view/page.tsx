@@ -95,11 +95,12 @@ export default function BusinessProfileView() {
       <div className="flex flex-col md:flex-row gap-6 md:items-start items-center text-center md:text-left">
         <div className="w-[120px] sm:w-[130px] md:w-[140px] h-[120px] sm:h-[130px] md:h-[140px] rounded-full overflow-hidden border border-white/20">
           <Image
-            src={profileUrl || '/default-profile.png'}
+            src={profileUrl || '/profile-default.png'}
             alt="Profile Picture"
             width={140}
             height={140}
             className="rounded-full object-cover w-full h-full"
+            onError={()=>setProfileUrl(null)}
           />
         </div>
 

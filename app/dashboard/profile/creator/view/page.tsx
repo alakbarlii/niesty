@@ -98,11 +98,11 @@ export default function CreatorProfileView() {
       <div className="flex flex-col md:flex-row gap-6 md:items-start items-center text-center md:text-left">
         <div className="w-[120px] h-[120px] sm:w-[130px] sm:h-[130px] md:w-[140px] md:h-[140px] rounded-full overflow-hidden border border-white/20">
           <img
-            src={profileUrl || '/default-profile.png'}
+            src={profileUrl || '/profile-default.png'}
             alt="Profile Picture"
             className="w-full h-full object-cover rounded-full"
             onError={(e) => {
-              e.currentTarget.src = '/default-profile.png';
+              e.currentTarget.src = '/profile-default.png';
             }}
           />
         </div>

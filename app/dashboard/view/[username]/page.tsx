@@ -21,11 +21,7 @@ interface Profile {
 export default function PublicProfile() {
   const { username } = useParams();
   const [profile, setProfile] = useState<Profile | null>(null);
-
-  // viewer auth uid
   const [viewerId, setViewerId] = useState<string | null>(null);
-  // viewer profiles.id (this is what deals.sender_id/receiver_id must use)
-  const [viewerProfileId, setViewerProfileId] = useState<string | null>(null);
   const [viewerRole, setViewerRole] = useState<'creator' | 'business' | null>(null);
 
   const [copied, setCopied] = useState(false);
@@ -49,7 +45,6 @@ export default function PublicProfile() {
 
   useEffect(() => {
     const fetchProfileAndDeals = async () => {
-      // 1) Load viewed profile by username
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -58,53 +53,34 @@ export default function PublicProfile() {
 
       if (profileError || !profileData) return;
 
-      // 2) Count completed deals for that profile
-      const { count } = await supabase
+      const { count, error: dealError } = await supabase
         .from('deals')
         .select('*', { count: 'exact', head: true })
         .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
         .eq('deal_stage', 'Payment Released');
 
-      setProfile({
-        ...profileData,
-        deals_completed: count ?? 0,
-      });
+      if (!dealError) {
+        setProfile({
+          ...profileData,
+          deals_completed: count ?? 0,
+        });
+      } else {
+        setProfile(profileData);
+      }
 
-      // 3) Viewer info (auth uid)
+      // viewer info (role + id)
       const { data: me } = await supabase.auth.getUser();
       const uid = me?.user?.id ?? null;
       setViewerId(uid);
 
-      // 4) Resolve viewer's profiles.id (this is the sender_id you must store in deals)
       if (uid) {
-        // Normal schema: profiles.user_id -> profiles.id
-        const { data: byUserId } = await supabase
+        const { data: myProf } = await supabase
           .from('profiles')
-          .select('id, role')
+          .select('role')
           .eq('user_id', uid)
           .maybeSingle();
-
-        if (byUserId?.id) {
-          setViewerProfileId(byUserId.id);
-          const r = byUserId.role;
-          setViewerRole(r === 'creator' || r === 'business' ? r : null);
-        } else {
-          // Legacy fallback: some rows may have id == auth uid
-          const { data: byLegacy } = await supabase
-            .from('profiles')
-            .select('id, role')
-            .eq('id', uid)
-            .maybeSingle();
-
-          if (byLegacy?.id) {
-            setViewerProfileId(byLegacy.id);
-            const r = byLegacy.role;
-            setViewerRole(r === 'creator' || r === 'business' ? r : null);
-          } else {
-            // still logged in but no profile row yet
-            setViewerProfileId(null);
-          }
-        }
+        const r = myProf?.role;
+        setViewerRole(r === 'creator' || r === 'business' ? r : null);
       }
     };
 
@@ -179,26 +155,14 @@ export default function PublicProfile() {
         return;
       }
 
-      // 🔑 sender must be profiles.id, not auth uid
-      if (!viewerProfileId) {
-        alert('Missing your profile record. Please create or save your profile once, then try again.');
-        return;
-      }
-
-      // receiver is the viewed profile’s profiles.id
-      const receiverId = profile.id;
-      if (!receiverId) {
-        alert('Missing receiver profile.');
-        return;
-      }
-
+      // Decide amount (only when fixed)
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        senderId: viewerProfileId,     // profiles.id of the viewer
-        receiverId,                    // profiles.id of the viewed user
+        senderId: user.id,
+        receiverId: profile.id,
         message: dealMessage.trim(),
-        amount: chosenAmount ?? undefined,
+        amount: chosenAmount ?? undefined, // backend: amount>0 => fixed; else negotiable
         currency,
       });
 
@@ -236,8 +200,10 @@ export default function PublicProfile() {
             height={140}
             className="object-cover w-full h-full"
             onError={(ev) => {
+              
               (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
             }}
+            
           />
         </div>
 

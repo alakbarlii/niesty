@@ -45,40 +45,59 @@ export default function PublicProfile() {
 
   useEffect(() => {
     const fetchProfileAndDeals = async () => {
+      // First get the profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('username', username)
         .single();
 
-      if (profileError || !profileData) return;
+      if (profileError || !profileData) {
+        console.error('Profile fetch error:', profileError);
+        return;
+      }
 
-      const { count, error: dealError } = await supabase
-        .from('deals')
-        .select('*', { count: 'exact', head: true })
-        .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
-        .eq('deal_stage', 'Payment Released');
+      // FIX 1: Only count deals if we have a valid profile ID
+      if (profileData.id) {
+        const { count, error: dealError } = await supabase
+          .from('deals')
+          .select('*', { count: 'exact', head: true })
+          .or(`sender_id.eq.${profileData.id},receiver_id.eq.${profileData.id}`)
+          .eq('deal_stage', 'Payment Released');
 
-      if (!dealError) {
-        setProfile({
-          ...profileData,
-          deals_completed: count ?? 0,
-        });
+        if (!dealError) {
+          setProfile({
+            ...profileData,
+            deals_completed: count ?? 0,
+          });
+        } else {
+          console.error('Deal count error:', dealError);
+          setProfile({
+            ...profileData,
+            deals_completed: 0,
+          });
+        }
       } else {
         setProfile(profileData);
       }
 
-      // viewer info (role + id)
+      // Get viewer info (role + id)
       const { data: me } = await supabase.auth.getUser();
       const uid = me?.user?.id ?? null;
       setViewerId(uid);
 
       if (uid) {
-        const { data: myProf } = await supabase
+        // FIX 2: Use correct column name for user lookup
+        const { data: myProf, error: profileError } = await supabase
           .from('profiles')
           .select('role')
-          .eq('user_id', uid)
+          .eq('user_id', uid) // Using user_id as confirmed
           .maybeSingle();
+          
+        if (profileError) {
+          console.error('Viewer profile error:', profileError);
+        }
+        
         const r = myProf?.role;
         setViewerRole(r === 'creator' || r === 'business' ? r : null);
       }
@@ -94,11 +113,24 @@ export default function PublicProfile() {
   };
 
   const handleReport = async () => {
-    await supabase.from('reports').insert({
-      reported_user: profile!.id,
+    if (!profile?.id || !viewerId) {
+      alert('Unable to submit report');
+      return;
+    }
+    
+    const { error } = await supabase.from('reports').insert({
+      reported_user: profile.id,
+      reporter_id: viewerId, // Add reporter ID if your schema requires it
       message: reportMessage,
     });
-    alert(`Reported with message: ${reportMessage || 'No message provided'}`);
+    
+    if (error) {
+      console.error('Report error:', error);
+      alert('Failed to submit report');
+    } else {
+      alert(`Reported with message: ${reportMessage || 'No message provided'}`);
+    }
+    
     setReporting(false);
     setReportMessage('');
     setShowMenu(false);
@@ -155,8 +187,22 @@ export default function PublicProfile() {
         return;
       }
 
+      // FIX 3: Ensure we have valid IDs
+      if (!user.id || !profile.id) {
+        alert('Missing user or profile information');
+        return;
+      }
+
       // Decide amount (only when fixed)
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
+
+      console.log('Sending deal with:', {
+        senderId: user.id,
+        receiverId: profile.id,
+        message: dealMessage.trim(),
+        amount: chosenAmount,
+        currency
+      });
 
       const { error } = await sendDealRequest({
         senderId: user.id,
@@ -167,6 +213,7 @@ export default function PublicProfile() {
       });
 
       if (error) {
+        console.error('Send deal error:', error);
         alert('Failed to send deal: ' + error.message);
       } else {
         setShowToast(true);
@@ -176,6 +223,9 @@ export default function PublicProfile() {
         setBudget('');
         setPricingMode('negotiable');
       }
+    } catch (err) {
+      console.error('Deal send exception:', err);
+      alert('An error occurred while sending the deal');
     } finally {
       setSubmitting(false);
       setConfirmOpen(false);
@@ -200,10 +250,8 @@ export default function PublicProfile() {
             height={140}
             className="object-cover w-full h-full"
             onError={(ev) => {
-              
               (ev.currentTarget as HTMLImageElement).src = '/profile-default.png'
             }}
-            
           />
         </div>
 

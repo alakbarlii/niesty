@@ -14,14 +14,10 @@ export type DealStage =
   | 'Payment Released';
 
 type Role = 'creator' | 'business';
-type RoleRow = { id: string; role: Role | null };
-
-type Ok = { ok: true };
-type Err = { ok: false; error: Error };
 
 type SendDealParams = {
-  senderId: string;
-  receiverId: string;
+  senderId: string;    // auth.user.id (will be resolved to profiles.id)
+  receiverId: string;  // profiles.id
   message: string;
   pricingMode?: PricingMode;
   amount?: number | null;    // if fixed
@@ -34,26 +30,6 @@ export type JsonAgreement = {
 };
 
 /* ================= role helpers ================= */
-async function assertOppositeRoles(senderId: string, receiverId: string): Promise<Ok | Err> {
-  const { data: rows, error } = await supabase
-    .from('profiles')
-    .select('id, role')
-    .in('id', [senderId, receiverId]);
-  if (error) return { ok: false, error: new Error(error.message) };
-  if (!rows || rows.length < 2) return { ok: false, error: new Error('Could not load both user roles') };
-
-  const typed = rows as RoleRow[];
-  const map = new Map<string, RoleRow['role']>(typed.map((r) => [r.id, r.role]));
-  const sRole = map.get(senderId);
-  const rRole = map.get(receiverId);
-  if (!sRole || !rRole) return { ok: false, error: new Error('Missing role for one of the users') };
-  if ((sRole !== 'creator' && sRole !== 'business') || (rRole !== 'creator' && rRole !== 'business')) {
-    return { ok: false, error: new Error('Unsupported role(s)') };
-  }
-  if (sRole === rRole) return { ok: false, error: new Error('Deals can only be sent to the opposite role') };
-  return { ok: true };
-}
-
 export async function getMyRole(): Promise<Role | null> {
   const { data: me } = await supabase.auth.getUser();
   const uid = me?.user?.id;
@@ -65,20 +41,22 @@ export async function getMyRole(): Promise<Role | null> {
 /* ================= sending offers ================= */
 export async function sendDealRequest(params: SendDealParams) {
   const {
-    senderId,
-    receiverId,
+    senderId,        // This is auth.user.id 
+    receiverId,      // This is profiles.id (from PublicProfile)
     message: rawMessage,
     pricingMode,
     amount,
     currency: rawCurrency = 'USD',
   } = params;
 
-  if (!senderId || !receiverId) return { data: null, error: new Error('Missing sender/receiver') };
-  if (senderId === receiverId) return { data: null, error: new Error('Cannot send a deal to yourself') };
+  console.log('sendDealRequest called with:', { senderId, receiverId, message: rawMessage });
 
-  const rolesCheck = await assertOppositeRoles(senderId, receiverId);
-  if (!rolesCheck.ok) return { data: null, error: rolesCheck.error };
-
+  if (!senderId || !receiverId) {
+    console.error('Missing sender or receiver ID');
+    return { data: null, error: new Error('Missing sender/receiver') };
+  }
+  
+  // Basic validation
   const message = (rawMessage ?? '').trim();
   if (!message) return { data: null, error: new Error('Message is required') };
 
@@ -87,44 +65,124 @@ export async function sendDealRequest(params: SendDealParams) {
     return { data: null, error: new Error('Currency must be a 3-letter ISO code') };
   }
 
-  const inferredMode: PricingMode = amount != null && amount > 0 ? 'fixed' : 'negotiable';
-  const effectiveMode: PricingMode = pricingMode ?? inferredMode;
-
-  if (effectiveMode === 'fixed') {
-    if (amount == null || amount <= 0) {
-      return { data: null, error: new Error('Enter a valid amount for fixed offers') };
+  try {
+    // ✅ FIX 1: Resolve sender's profile.id from auth user_id
+    console.log('Looking up sender profile for user_id:', senderId);
+    const { data: senderProfile, error: senderError } = await supabase
+      .from('profiles')
+      .select('id, role, user_id')
+      .eq('user_id', senderId) // senderId is auth user ID
+      .maybeSingle();
+      
+    if (senderError) {
+      console.error('Sender profile lookup error:', senderError);
+      return { data: null, error: new Error('Failed to find sender profile: ' + senderError.message) };
     }
-  } else if (amount != null && amount > 0) {
-    return { data: null, error: new Error('Negotiable offers must not include an amount') };
+    
+    if (!senderProfile) {
+      console.error('No sender profile found for user_id:', senderId);
+      return { data: null, error: new Error('Sender profile not found. Please complete your profile setup.') };
+    }
+
+    console.log('Found sender profile:', senderProfile);
+
+    // ✅ FIX 2: Verify receiver profile exists (receiverId should be profiles.id)  
+    console.log('Looking up receiver profile for id:', receiverId);
+    const { data: receiverProfile, error: receiverError } = await supabase
+      .from('profiles')
+      .select('id, role, user_id')
+      .eq('id', receiverId) // receiverId is already profiles.id
+      .maybeSingle();
+      
+    if (receiverError) {
+      console.error('Receiver profile lookup error:', receiverError);
+      return { data: null, error: new Error('Failed to find receiver profile: ' + receiverError.message) };
+    }
+    
+    if (!receiverProfile) {
+      console.error('No receiver profile found for id:', receiverId);
+      return { data: null, error: new Error('Receiver profile not found') };
+    }
+
+    console.log('Found receiver profile:', receiverProfile);
+
+    // ✅ FIX 3: Check that we're not sending to ourselves
+    if (senderProfile.user_id === receiverProfile.user_id) {
+      return { data: null, error: new Error('Cannot send a deal to yourself') };
+    }
+
+    // ✅ FIX 4: Validate opposite roles
+    if (!senderProfile.role || !receiverProfile.role) {
+      return { data: null, error: new Error('Both users must have assigned roles') };
+    }
+    
+    const validRoles = ['creator', 'business'];
+    if (!validRoles.includes(senderProfile.role) || !validRoles.includes(receiverProfile.role)) {
+      return { data: null, error: new Error('Invalid role assignments') };
+    }
+    
+    if (senderProfile.role === receiverProfile.role) {
+      return { data: null, error: new Error('Deals can only be sent to the opposite role') };
+    }
+
+    // ✅ FIX 5: Pricing validation
+    const inferredMode: PricingMode = amount != null && amount > 0 ? 'fixed' : 'negotiable';
+    const effectiveMode: PricingMode = pricingMode ?? inferredMode;
+
+    if (effectiveMode === 'fixed') {
+      if (amount == null || amount <= 0) {
+        return { data: null, error: new Error('Enter a valid amount for fixed offers') };
+      }
+    } else if (amount != null && amount > 0) {
+      return { data: null, error: new Error('Negotiable offers must not include an amount') };
+    }
+
+    // ✅ FIX 6: Prepare insert with correct profile IDs
+    type DealInsert = {
+      sender_id: number;    // profiles.id (auto-increment)
+      receiver_id: number;  // profiles.id (auto-increment) 
+      message: string;
+      deal_stage: DealStage;
+      offer_pricing_mode: PricingMode;
+      offer_currency: string;
+      deal_value?: number;
+    };
+
+    const insertPayload: DealInsert = {
+      sender_id: senderProfile.id,   // ✅ Use profiles.id (not user_id)
+      receiver_id: receiverProfile.id, // ✅ Use profiles.id
+      message,
+      deal_stage: 'Waiting for Response',
+      offer_pricing_mode: effectiveMode,
+      offer_currency: currency,
+    };
+    
+    if (effectiveMode === 'fixed') {
+      insertPayload.deal_value = amount!;
+    }
+
+    console.log('Inserting deal with payload:', insertPayload);
+
+    // ✅ FIX 7: Insert deal
+    const { data, error } = await supabase
+      .from('deals')
+      .insert([insertPayload])
+      .select('id')
+      .maybeSingle();
+
+    if (error) {
+      console.error('Deal insert error:', error);
+      return { data: null, error: new Error('Failed to create deal: ' + error.message) };
+    }
+
+    console.log('Deal created successfully:', data);
+    return { data, error: null };
+
+  } catch (err) {
+    console.error('Unexpected error in sendDealRequest:', err);
+    const message = err instanceof Error ? err.message : 'Unknown error occurred';
+    return { data: null, error: new Error('Request failed: ' + message) };
   }
-
-  type DealInsert = {
-    sender_id: string;
-    receiver_id: string;
-    message: string;
-    deal_stage: DealStage;
-    offer_pricing_mode: PricingMode;
-    offer_currency: string;
-    deal_value?: number;
-  };
-
-  const insertPayload: DealInsert = {
-    sender_id: senderId,
-    receiver_id: receiverId,
-    message,
-    deal_stage: 'Waiting for Response',
-    offer_pricing_mode: effectiveMode,
-    offer_currency: currency,
-  };
-  if (effectiveMode === 'fixed') insertPayload.deal_value = amount!;
-
-  const { data, error } = await supabase
-    .from('deals')
-    .insert([insertPayload])
-    .select('id')
-    .maybeSingle();
-
-  return { data, error };
 }
 
 /* ================= stage helpers ================= */

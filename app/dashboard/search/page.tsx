@@ -174,11 +174,15 @@ export default function Page() {
                     <div className="flex flex-col items-center w-full sm:w-[94px]">
                       <div className="w-[96px] h-[96px] rounded-full overflow-hidden border border-white/20">
                         <Image
-                          src={profile.profile_url || '/default-avatar.png'}
+                          src={profile.profile_url || '/profile-default.png'}
                           alt={`${profile.username}'s avatar`}
                           width={96}
                           height={96}
                           className="object-cover w-full h-full"
+                          onError={({currentTarget  })=> { 
+                            currentTarget.onerror = null; 
+                            (currentTarget as HTMLImageElement).src = '/profile-default.png'
+                          }}
                         />
                       </div>
                       <div className="text-xs text-gray-400 mt-1 truncate sm:hidden">@{profile.username}</div>

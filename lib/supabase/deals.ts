@@ -15,174 +15,103 @@ export type DealStage =
 
 type Role = 'creator' | 'business';
 
-type SendDealParams = {
-  senderId: string;    // auth.user.id (will be resolved to profiles.id)
-  receiverId: string;  // profiles.id
-  message: string;
-  pricingMode?: PricingMode;
-  amount?: number | null;    // if fixed
-  currency?: string;         // ISO-3, default USD
-};
-
-export type JsonAgreement = {
-  deadline?: string; // yyyy-mm-dd preferred
-  scope?: string;    // human text for deliverables/notes
-};
-
 /* ================= role helpers ================= */
 export async function getMyRole(): Promise<Role | null> {
   const { data: me } = await supabase.auth.getUser();
   const uid = me?.user?.id;
   if (!uid) return null;
   const { data: prof } = await supabase.from('profiles').select('role').eq('user_id', uid).maybeSingle();
-  return (prof?.role as Role) ?? null;
+  const r = prof?.role;
+  return r === 'creator' || r === 'business' ? r : null;
 }
 
-/* ================= sending offers ================= */
-export async function sendDealRequest(params: SendDealParams) {
+/* ================= sending offers (API-based) ================= */
+
+type SendDealRequestInput = {
+  receiverId: string;                 // profiles.id (UUID) of target
+  message: string;
+  pricingMode?: PricingMode;
+  amount?: number | null;             // if fixed
+  currency?: string | null;           // ISO-3, default 'USD'
+  turnstileToken?: string | null;     // required in production
+};
+
+type SendDealSuccess = { id: string };
+type SendDealResult = { data: SendDealSuccess | null; error: Error | null };
+
+export async function sendDealRequest(input: SendDealRequestInput): Promise<SendDealResult> {
   const {
-    senderId,        // This is auth.user.id 
-    receiverId,      // This is profiles.id (from PublicProfile)
+    receiverId,
     message: rawMessage,
     pricingMode,
     amount,
-    currency: rawCurrency = 'USD',
-  } = params;
+    currency,
+    turnstileToken,
+  } = input;
 
-  console.log('sendDealRequest called with:', { senderId, receiverId, message: rawMessage });
+  if (!receiverId) return { data: null, error: new Error('Receiver is required') };
+  const msg = (rawMessage ?? '').trim();
+  if (!msg) return { data: null, error: new Error('Message is required') };
 
-  if (!senderId || !receiverId) {
-    console.error('Missing sender or receiver ID');
-    return { data: null, error: new Error('Missing sender/receiver') };
+  const inferredMode: PricingMode = amount != null && amount > 0 ? 'fixed' : 'negotiable';
+  const mode: PricingMode = pricingMode ?? inferredMode;
+
+  if (mode === 'fixed') {
+    if (amount == null || !Number.isFinite(amount) || amount <= 0) {
+      return { data: null, error: new Error('Enter a valid amount for fixed offers') };
+    }
+  } else {
+    // negotiable must not include an amount
+    if (amount != null && amount > 0) {
+      return { data: null, error: new Error('Negotiable offers must not include an amount') };
+    }
   }
-  
-  // Basic validation
-  const message = (rawMessage ?? '').trim();
-  if (!message) return { data: null, error: new Error('Message is required') };
 
-  const currency = (rawCurrency ?? 'USD').toUpperCase();
-  if (!/^[A-Z]{3}$/.test(currency)) {
+  const curr = (currency ?? 'USD').toUpperCase();
+  if (!/^[A-Z]{3}$/.test(curr)) {
     return { data: null, error: new Error('Currency must be a 3-letter ISO code') };
   }
 
-  try {
-    // ✅ FIX 1: Resolve sender's profile.id from auth user_id
-    console.log('Looking up sender profile for user_id:', senderId);
-    const { data: senderProfile, error: senderError } = await supabase
-      .from('profiles')
-      .select('id, role, user_id')
-      .eq('user_id', senderId) // senderId is auth user ID
-      .maybeSingle();
-      
-    if (senderError) {
-      console.error('Sender profile lookup error:', senderError);
-      return { data: null, error: new Error('Failed to find sender profile: ' + senderError.message) };
-    }
-    
-    if (!senderProfile) {
-      console.error('No sender profile found for user_id:', senderId);
-      return { data: null, error: new Error('Sender profile not found. Please complete your profile setup.') };
-    }
+  const inProduction = process.env.NODE_ENV === 'production';
+  const payloadTurnstile =
+    turnstileToken && turnstileToken.length > 0
+      ? turnstileToken
+      : inProduction
+        ? undefined
+        : 'dev-ok'; // dev bypass matches API route behavior
 
-    console.log('Found sender profile:', senderProfile);
-
-    // ✅ FIX 2: Verify receiver profile exists (receiverId should be profiles.id)  
-    console.log('Looking up receiver profile for id:', receiverId);
-    const { data: receiverProfile, error: receiverError } = await supabase
-      .from('profiles')
-      .select('id, role, user_id')
-      .eq('id', receiverId) // receiverId is already profiles.id
-      .maybeSingle();
-      
-    if (receiverError) {
-      console.error('Receiver profile lookup error:', receiverError);
-      return { data: null, error: new Error('Failed to find receiver profile: ' + receiverError.message) };
-    }
-    
-    if (!receiverProfile) {
-      console.error('No receiver profile found for id:', receiverId);
-      return { data: null, error: new Error('Receiver profile not found') };
-    }
-
-    console.log('Found receiver profile:', receiverProfile);
-
-    // ✅ FIX 3: Check that we're not sending to ourselves
-    if (senderProfile.user_id === receiverProfile.user_id) {
-      return { data: null, error: new Error('Cannot send a deal to yourself') };
-    }
-
-    // ✅ FIX 4: Validate opposite roles
-    if (!senderProfile.role || !receiverProfile.role) {
-      return { data: null, error: new Error('Both users must have assigned roles') };
-    }
-    
-    const validRoles = ['creator', 'business'];
-    if (!validRoles.includes(senderProfile.role) || !validRoles.includes(receiverProfile.role)) {
-      return { data: null, error: new Error('Invalid role assignments') };
-    }
-    
-    if (senderProfile.role === receiverProfile.role) {
-      return { data: null, error: new Error('Deals can only be sent to the opposite role') };
-    }
-
-    // ✅ FIX 5: Pricing validation
-    const inferredMode: PricingMode = amount != null && amount > 0 ? 'fixed' : 'negotiable';
-    const effectiveMode: PricingMode = pricingMode ?? inferredMode;
-
-    if (effectiveMode === 'fixed') {
-      if (amount == null || amount <= 0) {
-        return { data: null, error: new Error('Enter a valid amount for fixed offers') };
-      }
-    } else if (amount != null && amount > 0) {
-      return { data: null, error: new Error('Negotiable offers must not include an amount') };
-    }
-
-    // ✅ FIX 6: Prepare insert with correct profile IDs
-    type DealInsert = {
-      sender_id: number;    // profiles.id (auto-increment)
-      receiver_id: number;  // profiles.id (auto-increment) 
-      message: string;
-      deal_stage: DealStage;
-      offer_pricing_mode: PricingMode;
-      offer_currency: string;
-      deal_value?: number;
-    };
-
-    const insertPayload: DealInsert = {
-      sender_id: senderProfile.id,   // ✅ Use profiles.id (not user_id)
-      receiver_id: receiverProfile.id, // ✅ Use profiles.id
-      message,
-      deal_stage: 'Waiting for Response',
-      offer_pricing_mode: effectiveMode,
-      offer_currency: currency,
-    };
-    
-    if (effectiveMode === 'fixed') {
-      insertPayload.deal_value = amount!;
-    }
-
-    console.log('Inserting deal with payload:', insertPayload);
-
-    // ✅ FIX 7: Insert deal
-    const { data, error } = await supabase
-      .from('deals')
-      .insert([insertPayload])
-      .select('id')
-      .maybeSingle();
-
-    if (error) {
-      console.error('Deal insert error:', error);
-      return { data: null, error: new Error('Failed to create deal: ' + error.message) };
-    }
-
-    console.log('Deal created successfully:', data);
-    return { data, error: null };
-
-  } catch (err) {
-    console.error('Unexpected error in sendDealRequest:', err);
-    const message = err instanceof Error ? err.message : 'Unknown error occurred';
-    return { data: null, error: new Error('Request failed: ' + message) };
+  if (inProduction && !payloadTurnstile) {
+    return { data: null, error: new Error('Verification required') };
   }
+
+  const body = {
+    receiver_id: receiverId,
+    message: msg,
+    deal_value: mode === 'fixed' ? amount : null,
+    offer_currency: curr,
+    offer_pricing_mode: mode,
+    turnstileToken: payloadTurnstile,
+  };
+
+  const res = await fetch('/api/deals', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const json = (await res.json().catch(() => ({}))) as
+    | { deal?: { id: string }; error?: string }
+    | Record<string, unknown>;
+
+  if (!res.ok) {
+    const reason = (json as { error?: string }).error || res.statusText || 'Request failed';
+    return { data: null, error: new Error(reason) };
+  }
+
+  const createdId = (json as { deal?: { id: string } }).deal?.id;
+  if (!createdId) return { data: null, error: new Error('Malformed response') };
+
+  return { data: { id: createdId }, error: null };
 }
 
 /* ================= stage helpers ================= */
@@ -207,6 +136,11 @@ export async function acceptOffer(dealId: string) {
 }
 
 /* ================= agreement (JSON terms) ================= */
+export type JsonAgreement = {
+  deadline?: string; // yyyy-mm-dd preferred
+  scope?: string;    // human text for deliverables/notes
+};
+
 export async function saveAgreementTerms(
   dealId: string,
   params: { amount: number; deadline: string; scope?: string }
@@ -233,7 +167,7 @@ export async function saveAgreementTerms(
 }
 
 /**
- * Stamp current user's agreement timestamp; if both sides agreed→advance to Platform Escrow.
+ * Stamp current user's agreement timestamp; if both sides agreed → advance to Platform Escrow.
  */
 export async function confirmAgreementAndMaybeAdvance(dealId: string) {
   const { data: me, error: authErr } = await supabase.auth.getUser();
@@ -260,9 +194,7 @@ export async function confirmAgreementAndMaybeAdvance(dealId: string) {
     .maybeSingle();
   if (updErr) return { data: null, error: updErr };
 
-  const both =
-    !!updated?.creator_agreed_at &&
-    !!updated?.business_agreed_at;
+  const both = !!updated?.creator_agreed_at && !!updated?.business_agreed_at;
 
   if (both) {
     await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', dealId);

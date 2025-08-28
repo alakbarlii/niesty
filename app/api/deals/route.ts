@@ -11,7 +11,6 @@ import { secLog } from '@/lib/secLog';
 export const dynamic = 'force-dynamic';
 
 type Role = 'creator' | 'business';
-type SenderProfile = { id: string; role: Role | string; username?: string | null; email?: string | null } | null;
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,7 +25,7 @@ export async function POST(req: NextRequest) {
     const parsed = await requireJson(req, DealSchema, { maxKB: 64 });
     if (parsed instanceof Response) return parsed;
     const body = parsed.data as {
-      receiver_id?: string;
+      receiver_user_id?: string; // <— changed
       message?: string;
       deal_value?: number | null;
       offer_currency?: string | null;
@@ -48,20 +47,22 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Bot' }, { status: 400 });
     }
 
-    // 4) Resolve sender/receiver as *profiles.id*
+    // 4) Resolve sender/receiver by user_id
     const supabase = await supabaseServer();
 
-    // Find sender profile (const result), then keep a mutable variable we can set if we auto-create
+    // Sender profile by auth uid
     const { data: foundSender, error: senderErr } = await supabase
       .from('profiles')
-      .select('id, role, username, email')
+      .select('user_id, role, username, email')
       .eq('user_id', g.user.id)
       .maybeSingle();
 
-    let senderProf: SenderProfile = foundSender;
+    let senderUserId: string | null = foundSender?.user_id ?? null;
+    let senderRole: Role | null =
+      foundSender?.role === 'creator' || foundSender?.role === 'business' ? foundSender.role : null;
 
-    // If missing, attempt **self-heal**: create minimal profile for this user
-    if ((!senderProf || !senderProf.id) && !senderErr) {
+    // Self-heal: if sender profile row is missing, auto-create minimal (requires sender_role_hint)
+    if ((!senderUserId || !senderRole) && !senderErr) {
       const role = body.sender_role_hint;
       if (role !== 'creator' && role !== 'business') {
         return jsonNoStore(
@@ -83,10 +84,10 @@ export async function POST(req: NextRequest) {
           role,
           email: fallbackEmail,
         })
-        .select('id, role, username, email')
+        .select('user_id, role')
         .maybeSingle();
 
-      if (createErr || !created?.id) {
+      if (createErr || !created?.user_id) {
         void secLog('/api/deals', 'profile_autocreate_failed', g.user.id);
         return jsonNoStore(
           { error: 'Your profile record is missing and could not be created automatically.' },
@@ -94,10 +95,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      senderProf = created;
+      senderUserId = created.user_id;
+      senderRole = created.role as Role;
     }
 
-    if (!senderProf?.id) {
+    if (!senderUserId || !(senderRole === 'creator' || senderRole === 'business')) {
       void secLog('/api/deals', 'missing_sender_profile', g.user.id);
       return jsonNoStore(
         { error: 'Missing your profile record. Open your profile page, save it once, then try again.' },
@@ -105,28 +107,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // receiver must also be a valid profiles.id
-    const receiverId: string | undefined = body.receiver_id ?? undefined;
-    if (!receiverId) {
-      return jsonNoStore({ error: 'receiver_id is required' }, { status: 400 });
+    // Receiver must be a valid user_id
+    const receiverUserId: string | undefined = body.receiver_user_id ?? undefined;
+    if (!receiverUserId) {
+      return jsonNoStore({ error: 'receiver_user_id is required' }, { status: 400 });
     }
 
     const { data: receiverProf, error: recvErr } = await supabase
       .from('profiles')
-      .select('id, role')
-      .eq('id', receiverId)
+      .select('user_id, role')
+      .eq('user_id', receiverUserId)
       .maybeSingle();
 
-    if (recvErr || !receiverProf?.id) {
+    if (recvErr || !receiverProf?.user_id) {
       return jsonNoStore({ error: 'Receiver not found' }, { status: 400 });
     }
 
-    // Role validation (opposite roles only, both must be set)
-    const sRole = senderProf.role as Role | null;
-    const rRole = receiverProf.role as Role | null;
-    const valid = (val: unknown): val is Role => val === 'creator' || val === 'business';
+    const receiverRole = receiverProf.role as Role | string | null;
 
-    if (!valid(sRole) || !valid(rRole) || sRole === rRole) {
+    // Role validation: opposite roles only, both must be set
+    const valid = (val: unknown): val is Role => val === 'creator' || val === 'business';
+    if (!valid(senderRole) || !valid(receiverRole) || senderRole === receiverRole) {
       return jsonNoStore({ error: 'Deals can only be sent to the opposite role' }, { status: 400 });
     }
 
@@ -154,12 +155,12 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Currency must be a 3-letter ISO code' }, { status: 400 });
     }
 
-    // 6) Insert (columns must match your table exactly)
+    // 6) Insert (sender_id/receiver_id now store auth user ids)
     const { data, error } = await supabase
       .from('deals')
       .insert({
-        sender_id: senderProf.id as string,     // profiles.id (UUID)
-        receiver_id: receiverProf.id as string, // profiles.id (UUID)
+        sender_id: senderUserId as string,      // auth uid
+        receiver_id: receiverUserId as string,  // auth uid
         message: msg,
         deal_value,
         offer_currency: curr,

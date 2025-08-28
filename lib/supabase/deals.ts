@@ -26,13 +26,13 @@ export async function getMyRole(): Promise<Role | null> {
 }
 
 type SendDealRequestInput = {
-  receiverId: string;                 // profiles.id (UUID) of target
+  receiverUserId: string;            // target's auth user id
   message: string;
   pricingMode?: PricingMode;
-  amount?: number | null;             // if fixed
-  currency?: string | null;           // ISO-3, default 'USD'
-  turnstileToken?: string | null;     // required in production
-  senderRoleHint: Role;               // used by API to auto-create missing sender profile
+  amount?: number | null;            // if fixed
+  currency?: string | null;          // ISO-3, default 'USD'
+  turnstileToken?: string | null;    // required in production (widget), dev bypass is 'dev-ok'
+  senderRoleHint: Role;              // used by API to auto-create missing sender profile
 };
 
 type SendDealSuccess = { id: string };
@@ -40,7 +40,7 @@ type SendDealResult = { data: SendDealSuccess | null; error: Error | null };
 
 export async function sendDealRequest(input: SendDealRequestInput): Promise<SendDealResult> {
   const {
-    receiverId,
+    receiverUserId,
     message: rawMessage,
     pricingMode,
     amount,
@@ -49,7 +49,7 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
     senderRoleHint,
   } = input;
 
-  if (!receiverId) return { data: null, error: new Error('Receiver is required') };
+  if (!receiverUserId) return { data: null, error: new Error('Receiver is required') };
   const msg = (rawMessage ?? '').trim();
   if (!msg) return { data: null, error: new Error('Message is required') };
 
@@ -77,7 +77,7 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
     turnstileToken && turnstileToken.length > 0
       ? turnstileToken
       : (!inProduction || !hasSiteKey)
-        ? 'dev-ok' // dev bypass (and also bypass if site key not set yet)
+        ? 'dev-ok' // dev bypass (or if site key not set yet)
         : undefined;
 
   if (inProduction && hasSiteKey && !payloadTurnstile) {
@@ -85,12 +85,12 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
   }
 
   const body = {
-    receiver_id: receiverId,
+    receiver_user_id: receiverUserId,     // <— changed
     message: msg,
     deal_value: mode === 'fixed' ? amount : null,
     offer_currency: curr,
     offer_pricing_mode: mode,
-    sender_role_hint: senderRoleHint,       // <—
+    sender_role_hint: senderRoleHint,
     turnstileToken: payloadTurnstile,
   };
 
@@ -107,7 +107,7 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
   if (!res.ok) {
     const reason = (json as { error?: string }).error || res.statusText || 'Request failed';
     return { data: null, error: new Error(reason) };
-    }
+  }
 
   const createdId = (json as { deal?: { id: string } }).deal?.id;
   if (!createdId) return { data: null, error: new Error('Malformed response') };

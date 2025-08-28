@@ -11,7 +11,6 @@ import { Turnstile } from '@marsidev/react-turnstile';
 type Role = 'creator' | 'business';
 
 interface Profile {
-  id: string;                 // profiles.id (UUID)
   user_id: string;            // auth uid (FK)
   username: string;
   full_name: string;
@@ -33,7 +32,7 @@ export default function PublicProfile() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const [viewerRole, setViewerRole] = useState<Role | null>(null); // current user role
+  const [viewerRole, setViewerRole] = useState<Role | null>(null); // current user role (by user_id)
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -72,7 +71,7 @@ export default function PublicProfile() {
         setProfile({ ...(profileData as Profile), deals_completed: profileData.deals_completed ?? 0 });
       }
 
-      // 2) My role (we do NOT require my profiles.id; API can auto-create if needed)
+      // 2) My role (API can auto-create minimal profile if needed)
       const { data: me } = await supabase.auth.getUser();
       const authUid = me?.user?.id ?? null;
 
@@ -98,8 +97,7 @@ export default function PublicProfile() {
     return null;
   }, [profile]);
 
-  const canSendDeal =
-    !!viewerRole && !!targetRole && viewerRole !== targetRole;
+  const canSendDeal = !!viewerRole && !!targetRole && viewerRole !== targetRole;
 
   // ---------- MISC ----------
   const handleCopy = async () => {
@@ -111,7 +109,7 @@ export default function PublicProfile() {
   const handleReport = async () => {
     if (!profile) return;
     await supabase.from('reports').insert({
-      reported_user: profile.id,
+      reported_user: profile.user_id, // now using user_id
       message: reportMessage,
     });
     alert(`Reported with message: ${reportMessage || 'No message provided'}`);
@@ -122,20 +120,20 @@ export default function PublicProfile() {
 
   if (!profile) return <div className="text-white p-10">Loading...</div>;
 
-  // ---------- DEFENSIVE RECEIVER RESOLVER ----------
-  const resolveReceiverId = async (): Promise<string | null> => {
+  // ---------- DEFENSIVE RECEIVER RESOLVER (by user_id) ----------
+  const resolveReceiverUserId = async (): Promise<string | null> => {
     // fast path
-    if (profile?.id) return profile.id;
+    if (profile?.user_id) return profile.user_id;
 
-    // defensive refetch by username
+    // defensive refetch by username -> select user_id
     const { data, error } = await supabase
       .from('profiles')
-      .select('id')
+      .select('user_id')
       .eq('username', usernameParam)
       .maybeSingle();
 
-    if (error || !data?.id) return null;
-    return data.id as string;
+    if (error || !data?.user_id) return null;
+    return data.user_id as string;
   };
 
   // ---------- SEND ----------
@@ -173,11 +171,11 @@ export default function PublicProfile() {
   };
 
   const actuallySendDeal = async () => {
-    if (!viewerRole) return; // we already validate role upstream
+    if (!viewerRole) return; // validated upstream
     setSubmitting(true);
     try {
-      const idToUse = await resolveReceiverId();
-      if (!idToUse) {
+      const receiverUserId = await resolveReceiverUserId();
+      if (!receiverUserId) {
         alert('This profile is not available right now. Try again in a moment.');
         return;
       }
@@ -185,13 +183,13 @@ export default function PublicProfile() {
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        receiverId: idToUse, // guaranteed by resolver
+        receiverUserId, // ← now explicit user_id
         message: dealMessage.trim(),
         amount: chosenAmount ?? null,
         currency,
         pricingMode,
-        senderRoleHint: viewerRole,          // API auto-creates sender profile if missing
-        turnstileToken: turnstileToken ?? undefined, // dev bypass handled in helper/API
+        senderRoleHint: viewerRole,                 // API can auto-create missing sender profile
+        turnstileToken: turnstileToken ?? undefined // dev bypass handled in helper/API
       });
 
       if (error) {
@@ -223,12 +221,12 @@ export default function PublicProfile() {
         <div className="max-w-4xl mx-auto mb-4 text-xs text-gray-300 bg-black/40 border border-white/10 rounded p-3">
           <div><b>DEBUG</b></div>
           <div>username: {String(usernameParam)}</div>
-          <div>viewed profile.id: {profile?.id || '(null)'}</div>
+          <div>viewed profile.user_id: {profile?.user_id || '(null)'}</div>
           <div>viewerRole: {viewerRole || '(null)'}</div>
           <button
             className="mt-2 px-2 py-1 bg-gray-700 rounded"
             onClick={() => {
-              console.log('[debug]', { usernameParam, viewedProfileId: profile?.id, viewerRole });
+              console.log('[debug]', { usernameParam, viewedUserId: profile?.user_id, viewerRole });
             }}
           >
             Log to console
@@ -294,7 +292,9 @@ export default function PublicProfile() {
 
           <div className="text-white font-bold text-2xl mb-1 text-center">{profile.full_name}</div>
           <div className="text-yellow-400 font-semibold -mt-1 text-center">@{profile.username}</div>
-          <div className="text-gray-400 text-sm mt-1 capitalize text-center">{targetRole ?? profile.role}</div>
+          <div className="text-gray-400 text-sm mt-1 capitalize text-center">
+            {profile.role === 'creator' || profile.role === 'business' ? profile.role : String(profile.role)}
+          </div>
           <div className="text-gray-300 text-sm mt-1 text-center">Contact: {profile.email}</div>
 
           <div className="flex flex-col sm:flex-row justify-between items-center mt-5 gap-4">

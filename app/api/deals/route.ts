@@ -155,12 +155,12 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Currency must be a 3-letter ISO code' }, { status: 400 });
     }
 
-    // 6) Insert (sender_id/receiver_id now store auth user ids)
+    
     const { data, error } = await supabase
       .from('deals')
       .insert({
-        sender_id: senderUserId as string,      // auth uid
-        receiver_id: receiverUserId as string,  // auth uid
+        sender_user_id: senderUserId as string,      // auth uid
+        receiver_user_id: receiverUserId as string,  // auth uid
         message: msg,
         deal_value,
         offer_currency: curr,

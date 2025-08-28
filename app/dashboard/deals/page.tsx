@@ -14,8 +14,8 @@ interface Deal {
   id: string;
   message: string;
   status: 'pending' | 'accepted' | 'rejected';
-  sender_id: string;         // auth UID
-  receiver_id: string;       // auth UID
+  sender_user_id: string;         // auth UID
+  receiver_user_id: string;       // auth UID
   created_at: string;
   deal_stage: string;
   accepted_at?: string | null;
@@ -77,7 +77,7 @@ export default function DealsPage() {
     const { data, error: dealsError } = await supabase
       .from('deals')
       .select('*')
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+      .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`);
 
     if (dealsError || !data) {
       setError('Failed to fetch deals.');
@@ -86,13 +86,13 @@ export default function DealsPage() {
     }
 
     const rawDeals = data as Deal[];
-    const allUserIds = Array.from(new Set(rawDeals.flatMap((d) => [d.sender_id, d.receiver_id])));
+    const allUserIds = Array.from(new Set(rawDeals.flatMap((d) => [d.sender_user_id, d.receiver_user_id])));
     const userMap = await fetchProfiles(allUserIds);
 
     const dealsWithUsers: Deal[] = rawDeals.map((deal) => ({
       ...deal,
-      sender_info: userMap.get(deal.sender_id) ?? null,
-      receiver_info: userMap.get(deal.receiver_id) ?? null,
+      sender_info: userMap.get(deal.sender_user_id) ?? null,
+      receiver_info: userMap.get(deal.receiver_user_id) ?? null,
     }));
 
     setDeals(dealsWithUsers);
@@ -208,7 +208,7 @@ export default function DealsPage() {
       ) : (
         <ul className="space-y-5">
           {filteredSortedDeals.map((deal) => {
-            const isSender = userId === deal.sender_id;
+            const isSender = userId === deal.sender_user_id;
             const otherParty = isSender ? deal.receiver_info : deal.sender_info;
 
             const currentStageIndex = DEAL_STAGES.indexOf(

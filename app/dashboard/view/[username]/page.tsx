@@ -33,7 +33,7 @@ export default function PublicProfile() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const [viewerRole, setViewerRole] = useState<Role | null>(null); // current user role (NOT needed to have profile id)
+  const [viewerRole, setViewerRole] = useState<Role | null>(null); // current user role
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -72,7 +72,7 @@ export default function PublicProfile() {
         setProfile({ ...(profileData as Profile), deals_completed: profileData.deals_completed ?? 0 });
       }
 
-      // 2) My role (we do NOT require my profiles.id anymore; API can auto-create if needed)
+      // 2) My role (we do NOT require my profiles.id; API can auto-create if needed)
       const { data: me } = await supabase.auth.getUser();
       const authUid = me?.user?.id ?? null;
 
@@ -122,6 +122,22 @@ export default function PublicProfile() {
 
   if (!profile) return <div className="text-white p-10">Loading...</div>;
 
+  // ---------- DEFENSIVE RECEIVER RESOLVER ----------
+  const resolveReceiverId = async (): Promise<string | null> => {
+    // fast path
+    if (profile?.id) return profile.id;
+
+    // defensive refetch by username
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', usernameParam)
+      .maybeSingle();
+
+    if (error || !data?.id) return null;
+    return data.id as string;
+  };
+
   // ---------- SEND ----------
   const validateAndOpenConfirm = async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -157,20 +173,25 @@ export default function PublicProfile() {
   };
 
   const actuallySendDeal = async () => {
-    if (!profile || !viewerRole) return;
+    if (!viewerRole) return; // we already validate role upstream
     setSubmitting(true);
     try {
+      const idToUse = await resolveReceiverId();
+      if (!idToUse) {
+        alert('This profile is not available right now. Try again in a moment.');
+        return;
+      }
+
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
 
       const { error } = await sendDealRequest({
-        receiverId: profile.id, // profiles.id (UUID)
+        receiverId: idToUse, // guaranteed by resolver
         message: dealMessage.trim(),
         amount: chosenAmount ?? null,
         currency,
-        pricingMode, // explicit
-        senderRoleHint: viewerRole, // enables API auto-create if sender profile row is missing
-        // If Cloudflare site key not set, helper will send 'dev-ok'
-        turnstileToken: turnstileToken ?? undefined,
+        pricingMode,
+        senderRoleHint: viewerRole,          // API auto-creates sender profile if missing
+        turnstileToken: turnstileToken ?? undefined, // dev bypass handled in helper/API
       });
 
       if (error) {

@@ -85,7 +85,7 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
   }
 
   const body = {
-    receiver_user_id: receiverUserId,     
+    receiver_id: receiverUserId,     
     message: msg,
     deal_value: mode === 'fixed' ? amount : null,
     offer_currency: curr,

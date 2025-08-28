@@ -43,8 +43,8 @@ type DealStage = (typeof DEAL_STAGES)[number];
 
 interface Deal {
   id: string;
-  sender_user_id: string;               // auth UID
-  receiver_user_id: string;             // auth UID
+  sender_id: string;               // auth UID
+  receiver_id: string;             // auth UID
   message: string;
   deal_stage: DealStage | string;
   created_at: string;
@@ -173,12 +173,12 @@ export default function DealDetailPage() {
         const { data: users } = await supabase
           .from('profiles')
           .select('user_id, full_name, username, role, profile_url')
-          .in('user_id', [data.sender_user_id, data.receiver_user_id]);
+          .in('user_id', [data.sender_id, data.receiver_id]);
 
-        const sender: ProfileLite | undefined = (users || []).find((u) => u.user_id === data.sender_user_id) as
+        const sender: ProfileLite | undefined = (users || []).find((u) => u.user_id === data.sender_id) as
           | ProfileLite
           | undefined;
-        const receiver: ProfileLite | undefined = (users || []).find((u) => u.user_id === data.receiver_user_id) as
+        const receiver: ProfileLite | undefined = (users || []).find((u) => u.user_id === data.receiver_id) as
           | ProfileLite
           | undefined;
         // ****************************************************************************************
@@ -208,7 +208,7 @@ export default function DealDetailPage() {
   }, [dealId]);
 
   // ===== Derived =====
-  const isSender = userId === deal?.sender_user_id;
+  const isSender = userId === deal?.id;
   const myProfile: ProfileLite | undefined =
     (isSender ? deal?.sender_info : deal?.receiver_info) || undefined;
   const isCreator = myProfile?.role === 'creator';
@@ -342,7 +342,7 @@ export default function DealDetailPage() {
     let matchedAmount: number | null = null;
     let matchedDeadline: string | null = null;
     try {
-      const pair = await fetchLatestPair(deal.id, deal.sender_user_id, deal.receiver_user_id);
+      const pair = await fetchLatestPair(deal.id, deal.id, deal.id);
       const ok = proposalsMatch(pair.sender, pair.receiver);
       if (!ok) {
         alert('Both sides must propose the SAME amount and delivery date before confirming.');
@@ -675,8 +675,8 @@ export default function DealDetailPage() {
                 <div className="mt-4">
                   <AgreementMatchCard
                     dealId={deal.id}
-                    senderId={deal.sender_user_id}
-                    receiverId={deal.receiver_user_id}
+                    senderId={deal.id}
+                    receiverId={deal.id}
                     myUserId={userId}
                     onMatched={() => void refreshDeal(deal.id)}
                   />

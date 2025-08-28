@@ -41,7 +41,7 @@ export default function BusinessProfileView() {
         const { count } = await supabase
           .from('deals')
           .select('*', { count: 'exact', head: true })
-          .or(`sender_user_id.eq.${userId},receiver_user_id.eq.${userId}`);
+          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
 
         setDealCount(count || 0);
 

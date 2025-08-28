@@ -39,11 +39,11 @@ export async function POST(req: NextRequest) {
     // Defense-in-depth: user must be a participant of the deal
     const { data: dealRow, error: dealErr } = await supabase
       .from('deals')
-      .select('id, sender_user_id, receiver_user_id')
+      .select('id, sender_id, receiver_id')
       .eq('id', body.deal_id)
       .single()
 
-    if (dealErr || !dealRow || (dealRow.sender_user_id !== g.user.id && dealRow.receiver_user_id !== g.user.id)) {
+    if (dealErr || !dealRow || (dealRow.sender_id !== g.user.id && dealRow.receiver_id !== g.user.id)) {
       void secLog('/api/messages', 'not_participant', g.user.id)
       return jsonNoStore({ error: 'Forbidden' }, { status: 403 })
     }
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       .from('deal_messages')
       .insert({
         deal_id: body.deal_id,
-        sender_user_id: g.user.id,
+        sender_id: g.user.id,
         content: body.content,
       })
       .select()

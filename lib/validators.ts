@@ -19,7 +19,7 @@ export const DealSchema = z.object({
   turnstileToken: z.string().nullable().optional(),
 
   // IMPORTANT: your request must send `receiver_id`
-  receiver_id: uuidStrict,
+  receiver_user_id: uuidStrict,
 
   // initial text of the offer
   message: z.string().min(1).max(5000),

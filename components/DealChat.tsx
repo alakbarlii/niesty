@@ -70,7 +70,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
     const channel = subscribeToNewMessages(dealId, (msg) => {
       console.log('[DealChat] New message from realtime:', msg);
       setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
+        if (prev.some((m) => m.user_id === msg.user_id)) return prev;
         const updated = [...prev, msg];
         updated.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         return updated;
@@ -91,7 +91,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
 
     const tempId = `temp-${Date.now()}`;
     const tempMsg: SupabaseMessage = {
-      id: tempId,
+      user_id: tempId,
       deal_id: dealId,
       sender_id: currentUserId,
       content,
@@ -108,7 +108,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
       const { error: uploadErr } = await supabase.storage.from('chat-files').upload(fileName, currentFile);
       if (uploadErr) {
         alert('File upload failed');
-        setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
+        setMessages((prev) => prev.filter((msg) => msg.user_id !== tempId));
         return;
       }
       const { data } = supabase.storage.from('chat-files').getPublicUrl(fileName);
@@ -117,7 +117,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
 
     try {
       const savedMsg = await sendMessage({ dealId, senderId: currentUserId, content: finalContent });
-      setMessages((prev) => prev.map((msg) => (msg.id === tempId ? savedMsg : msg)));
+      setMessages((prev) => prev.map((msg) => (msg.user_id === tempId ? savedMsg : msg)));
     } catch (err) {
       console.error('[DealChat] Error sending message:', err);
     }
@@ -163,7 +163,7 @@ export default function DealChat({ dealId, currentUserId, otherUser }: DealChatP
           <p className="text-gray-500 text-sm">No messages yet.</p>
         ) : (
           messages.map((msg) => (
-            <div key={msg.id}>
+            <div key={msg.user_id}>
               <div
                 className={`max-w-[75%] p-2 rounded-md text-sm whitespace-pre-line break-words ${
                   msg.sender_id === currentUserId

@@ -7,7 +7,7 @@ const uuidStrict = z
   .uuid()
   .refine(
     (v) => !/^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(v),
-    'receiver_id cannot be the all-zero placeholder'
+    'receiver_user_id cannot be the all-zero placeholder'
   );
 
 /** Messages */
@@ -23,7 +23,7 @@ export const MessageSchema = z
 export const DealSchema = z
   .object({
     turnstileToken: z.string().nullable().optional(),
-    receiver_id: uuidStrict, // auth user_id of the other party
+    receiver_user_id: uuidStrict, 
     message: z.string().min(1).max(5000),
     deal_value: z.number().int().positive().optional(),
     offer_currency: z

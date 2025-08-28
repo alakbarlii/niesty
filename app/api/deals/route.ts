@@ -25,12 +25,12 @@ export async function POST(req: NextRequest) {
     const parsed = await requireJson(req, DealSchema, { maxKB: 64 });
     if (parsed instanceof Response) return parsed;
     const body = parsed.data as {
-      receiver_id?: string; 
+      receiver_user_id?: string; 
       message?: string;
       deal_value?: number | null;
       offer_currency?: string | null;
       offer_pricing_mode?: 'fixed' | 'negotiable' | null;
-      sender_role_hint?: Role | null;
+      sender_role_hint?: 'creator' | 'business'| null;
       turnstileToken?: string | null;
     };
 
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Receiver must be a valid user_id
-    const receiverUserId: string | undefined = body.receiver_id ?? undefined;
+    const receiverUserId: string | undefined = body.receiver_user_id ?? undefined;
     if (!receiverUserId) {
       return jsonNoStore({ error: 'receiver_user_id is required' }, { status: 400 });
     }
@@ -155,12 +155,12 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Currency must be a 3-letter ISO code' }, { status: 400 });
     }
 
-    // 6) Insert (sender_id/receiver_id now store auth user ids)
+    // 6) Insert (sender_id/receiver_id now store auth user ids)=
     const { data, error } = await supabase
       .from('deals')
       .insert({
-        sender_id: senderUserId as string,      // auth uid
-        receiver_id: receiverUserId as string,  // auth uid
+        sender_id: senderUserId as string,      
+        receiver_id: receiverUserId as string,  
         message: msg,
         deal_value,
         offer_currency: curr,

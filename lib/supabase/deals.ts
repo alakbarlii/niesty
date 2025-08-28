@@ -25,8 +25,6 @@ export async function getMyRole(): Promise<Role | null> {
   return r === 'creator' || r === 'business' ? r : null;
 }
 
-/* ================= sending offers (API-based) ================= */
-
 type SendDealRequestInput = {
   receiverId: string;                 // profiles.id (UUID) of target
   message: string;
@@ -34,6 +32,7 @@ type SendDealRequestInput = {
   amount?: number | null;             // if fixed
   currency?: string | null;           // ISO-3, default 'USD'
   turnstileToken?: string | null;     // required in production
+  senderRoleHint: Role;               // used by API to auto-create missing sender profile
 };
 
 type SendDealSuccess = { id: string };
@@ -47,6 +46,7 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
     amount,
     currency,
     turnstileToken,
+    senderRoleHint,
   } = input;
 
   if (!receiverId) return { data: null, error: new Error('Receiver is required') };
@@ -61,7 +61,6 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
       return { data: null, error: new Error('Enter a valid amount for fixed offers') };
     }
   } else {
-    // negotiable must not include an amount
     if (amount != null && amount > 0) {
       return { data: null, error: new Error('Negotiable offers must not include an amount') };
     }
@@ -73,14 +72,15 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
   }
 
   const inProduction = process.env.NODE_ENV === 'production';
+  const hasSiteKey = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const payloadTurnstile =
     turnstileToken && turnstileToken.length > 0
       ? turnstileToken
-      : inProduction
-        ? undefined
-        : 'dev-ok'; // dev bypass matches API route behavior
+      : (!inProduction || !hasSiteKey)
+        ? 'dev-ok' // dev bypass (and also bypass if site key not set yet)
+        : undefined;
 
-  if (inProduction && !payloadTurnstile) {
+  if (inProduction && hasSiteKey && !payloadTurnstile) {
     return { data: null, error: new Error('Verification required') };
   }
 
@@ -90,6 +90,7 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
     deal_value: mode === 'fixed' ? amount : null,
     offer_currency: curr,
     offer_pricing_mode: mode,
+    sender_role_hint: senderRoleHint,       // <—
     turnstileToken: payloadTurnstile,
   };
 
@@ -106,7 +107,7 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
   if (!res.ok) {
     const reason = (json as { error?: string }).error || res.statusText || 'Request failed';
     return { data: null, error: new Error(reason) };
-  }
+    }
 
   const createdId = (json as { deal?: { id: string } }).deal?.id;
   if (!createdId) return { data: null, error: new Error('Malformed response') };

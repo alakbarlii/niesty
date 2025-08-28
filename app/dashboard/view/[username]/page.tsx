@@ -33,10 +33,7 @@ export default function PublicProfile() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  // current viewer linkage
-  const [myProfileId, setMyProfileId] = useState<string | null>(null); // profiles.id of current user
-  const [viewerRole, setViewerRole] = useState<Role | null>(null);
-
+  const [viewerRole, setViewerRole] = useState<Role | null>(null); // current user role (NOT needed to have profile id)
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -58,7 +55,7 @@ export default function PublicProfile() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
-  // ---------- LOAD VIEWED PROFILE + MY PROFILE ----------
+  // ---------- LOAD VIEWED PROFILE + MY ROLE ----------
   useEffect(() => {
     (async () => {
       // 1) Viewed profile by username
@@ -75,42 +72,34 @@ export default function PublicProfile() {
         setProfile({ ...(profileData as Profile), deals_completed: profileData.deals_completed ?? 0 });
       }
 
-      // 2) Resolve my profiles.id and role (sender = myProfileId)
+      // 2) My role (we do NOT require my profiles.id anymore; API can auto-create if needed)
       const { data: me } = await supabase.auth.getUser();
       const authUid = me?.user?.id ?? null;
 
       if (authUid) {
-        const { data: myProf, error: myErr } = await supabase
+        const { data: myProf } = await supabase
           .from('profiles')
-          .select('id, role')
+          .select('role')
           .eq('user_id', authUid)
           .maybeSingle();
-
-        if (myErr) console.warn('[view] my profile lookup error:', myErr);
-        setMyProfileId(myProf?.id ?? null);
 
         const r = myProf?.role;
         setViewerRole(r === 'creator' || r === 'business' ? r : null);
       } else {
-        setMyProfileId(null);
         setViewerRole(null);
       }
     })();
   }, [usernameParam]);
 
   // ---------- DERIVED FLAGS ----------
-  const isSelf = !!myProfileId && !!profile && myProfileId === profile.id;
-
   const targetRole: Role | null = useMemo(() => {
     if (!profile?.role) return null;
     if (profile.role === 'creator' || profile.role === 'business') return profile.role;
     return null;
   }, [profile]);
 
-  const sameRole = !!viewerRole && !!targetRole && viewerRole === targetRole;
-
   const canSendDeal =
-    !isSelf && !!viewerRole && !!targetRole && (viewerRole === 'creator' || viewerRole === 'business') && viewerRole !== targetRole;
+    !!viewerRole && !!targetRole && viewerRole !== targetRole;
 
   // ---------- MISC ----------
   const handleCopy = async () => {
@@ -141,14 +130,6 @@ export default function PublicProfile() {
       alert('You must be logged in.');
       return;
     }
-    if (!myProfileId) {
-      alert('Your profile record is missing. Open your profile page, save it once, and try again.');
-      return;
-    }
-    if (isSelf) {
-      alert('You cannot send a deal to yourself.');
-      return;
-    }
     if (!canSendDeal) {
       alert('Deals can only be sent to the opposite role.');
       return;
@@ -176,7 +157,7 @@ export default function PublicProfile() {
   };
 
   const actuallySendDeal = async () => {
-    if (!profile) return;
+    if (!profile || !viewerRole) return;
     setSubmitting(true);
     try {
       const chosenAmount = pricingMode === 'fixed' ? Number(budget) : null;
@@ -187,7 +168,8 @@ export default function PublicProfile() {
         amount: chosenAmount ?? null,
         currency,
         pricingMode, // explicit
-        // In dev, function auto-uses 'dev-ok'; in prod we pass real token
+        senderRoleHint: viewerRole, // enables API auto-create if sender profile row is missing
+        // If Cloudflare site key not set, helper will send 'dev-ok'
         turnstileToken: turnstileToken ?? undefined,
       });
 
@@ -216,19 +198,16 @@ export default function PublicProfile() {
         input[type='number'] { -moz-appearance: textfield; }
       `}</style>
 
-      {/* DEV-ONLY DEBUG (auto-hidden in production) */}
       {process.env.NODE_ENV !== 'production' && (
         <div className="max-w-4xl mx-auto mb-4 text-xs text-gray-300 bg-black/40 border border-white/10 rounded p-3">
           <div><b>DEBUG</b></div>
           <div>username: {String(usernameParam)}</div>
           <div>viewed profile.id: {profile?.id || '(null)'}</div>
-          <div>myProfileId (sender): {myProfileId || '(null)'}</div>
           <div>viewerRole: {viewerRole || '(null)'}</div>
           <button
             className="mt-2 px-2 py-1 bg-gray-700 rounded"
             onClick={() => {
-              // quick sanity log
-              console.log('[debug]', { usernameParam, viewedProfileId: profile?.id, myProfileId, viewerRole });
+              console.log('[debug]', { usernameParam, viewedProfileId: profile?.id, viewerRole });
             }}
           >
             Log to console
@@ -312,24 +291,14 @@ export default function PublicProfile() {
               </div>
             </div>
             <div className="flex gap-3">
-              {!isSelf && (
-                <button
-                  onClick={() => setShowDealModal(true)}
-                  className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500 disabled:opacity-50"
-                  disabled={!canSendDeal}
-                  title={
-                    isSelf
-                      ? 'Cannot send a deal to yourself'
-                      : !viewerRole
-                      ? 'Login required'
-                      : sameRole
-                      ? 'Deals can only be sent to the opposite role'
-                      : undefined
-                  }
-                >
-                  Request Deal
-                </button>
-              )}
+              <button
+                onClick={() => setShowDealModal(true)}
+                className="px-4 py-2 rounded-full bg-yellow-400 text-black font-semibold hover:bg-yellow-500 disabled:opacity-50"
+                disabled={!canSendDeal}
+                title={!canSendDeal ? 'Opposite role only' : undefined}
+              >
+                Request Deal
+              </button>
               <button className="px-4 py-2 rounded-full bg-gray-700 text-white font-semibold hover:bg-gray-600">
                 Send Message
               </button>
@@ -413,7 +382,7 @@ export default function PublicProfile() {
                 rows={3}
               />
 
-              {/* Turnstile (required in production; dev bypass handled in API) */}
+              {/* Turnstile (required in production; dev bypass handled in API via 'dev-ok') */}
               {siteKey ? (
                 <div className="mt-3">
                   <Turnstile

@@ -10,6 +10,9 @@ import { secLog } from '@/lib/secLog';
 
 export const dynamic = 'force-dynamic';
 
+type Role = 'creator' | 'business';
+type SenderProfile = { id: string; role: Role | string; username?: string | null; email?: string | null } | null;
+
 export async function POST(req: NextRequest) {
   try {
     // 1) Auth
@@ -28,16 +31,18 @@ export async function POST(req: NextRequest) {
       deal_value?: number | null;
       offer_currency?: string | null;
       offer_pricing_mode?: 'fixed' | 'negotiable' | null;
+      sender_role_hint?: Role | null;
       turnstileToken?: string | null;
     };
 
-    // 3) Turnstile (dev bypass works with token "dev-ok")
+    // 3) Turnstile (dev bypass "dev-ok")
     const ip =
       req.headers.get('cf-connecting-ip') ||
       req.headers.get('x-forwarded-for') ||
       undefined;
 
-    const v = await verifyTurnstile(body.turnstileToken ?? '', ip);
+    const token = body.turnstileToken ?? '';
+    const v = await verifyTurnstile(token, ip);
     if (!v.ok) {
       void secLog('/api/deals', `turnstile_${v.reason}`, g.user.id);
       return jsonNoStore({ error: 'Bot' }, { status: 400 });
@@ -46,14 +51,53 @@ export async function POST(req: NextRequest) {
     // 4) Resolve sender/receiver as *profiles.id*
     const supabase = await supabaseServer();
 
-    // sender = current viewer's profiles.id (NOT auth uid)
-    const { data: senderProf, error: senderErr } = await supabase
+    // Find sender profile (const result), then keep a mutable variable we can set if we auto-create
+    const { data: foundSender, error: senderErr } = await supabase
       .from('profiles')
-      .select('id, role')
+      .select('id, role, username, email')
       .eq('user_id', g.user.id)
       .maybeSingle();
 
-    if (senderErr || !senderProf?.id) {
+    let senderProf: SenderProfile = foundSender;
+
+    // If missing, attempt **self-heal**: create minimal profile for this user
+    if ((!senderProf || !senderProf.id) && !senderErr) {
+      const role = body.sender_role_hint;
+      if (role !== 'creator' && role !== 'business') {
+        return jsonNoStore(
+          { error: 'Missing your profile record. Open your profile page, save it once, then try again.' },
+          { status: 400 }
+        );
+      }
+
+      const fallbackUsername = `user-${g.user.id.slice(0, 6)}`;
+      const fallbackFullName = g.user.user_metadata?.name || 'New User';
+      const fallbackEmail = g.user.email || null;
+
+      const { data: created, error: createErr } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: g.user.id,
+          username: fallbackUsername,
+          full_name: fallbackFullName,
+          role,
+          email: fallbackEmail,
+        })
+        .select('id, role, username, email')
+        .maybeSingle();
+
+      if (createErr || !created?.id) {
+        void secLog('/api/deals', 'profile_autocreate_failed', g.user.id);
+        return jsonNoStore(
+          { error: 'Your profile record is missing and could not be created automatically.' },
+          { status: 400 }
+        );
+      }
+
+      senderProf = created;
+    }
+
+    if (!senderProf?.id) {
       void secLog('/api/deals', 'missing_sender_profile', g.user.id);
       return jsonNoStore(
         { error: 'Missing your profile record. Open your profile page, save it once, then try again.' },
@@ -78,10 +122,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Role validation (opposite roles only, both must be set)
-    const sRole = senderProf.role;
-    const rRole = receiverProf.role;
-    const valid = (val: unknown): val is 'creator' | 'business' =>
-      val === 'creator' || val === 'business';
+    const sRole = senderProf.role as Role | null;
+    const rRole = receiverProf.role as Role | null;
+    const valid = (val: unknown): val is Role => val === 'creator' || val === 'business';
 
     if (!valid(sRole) || !valid(rRole) || sRole === rRole) {
       return jsonNoStore({ error: 'Deals can only be sent to the opposite role' }, { status: 400 });

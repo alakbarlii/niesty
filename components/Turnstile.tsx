@@ -1,45 +1,57 @@
 // components/Turnstile.tsx
 'use client';
 
-import { useEffect } from 'react';
-import { Turnstile } from '@marsidev/react-turnstile';
+import { useEffect, useRef } from 'react';
+import { Turnstile as CFTurnstile } from '@marsidev/react-turnstile';
 
 type Props = {
+  /** Receive the token (or null on expire/error). */
   onToken: (t: string | null) => void;
   className?: string;
-  /** Optional: pass the action name so you can later check it server-side if you want */
+  /** Optional Turnstile action string, helps with analytics/policies. */
   action?: string;
+  /** If true, widget won't render; a single 'dev-ok' will be sent instead. */
+  disabled?: boolean;
+  /** If true (default), auto-sends 'dev-ok' in dev/no-key mode exactly once. */
+  autoDev?: boolean;
 };
 
-export default function TurnstileWidget({ onToken, className, action }: Props) {
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+export default function TurnstileWidget({
+  onToken,
+  className,
+  action = 'send_deal',
+  disabled = false,
+  autoDev = true,
+}: Props) {
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
+  const sentDevRef = useRef(false);
 
-  // If no site key is configured (dev/preview/local), hand back a dev token so the API can bypass.
+  // In dev/no-key or when disabled, auto-satisfy caller once.
   useEffect(() => {
-    if (!siteKey) {
-      console.warn('[Turnstile] No NEXT_PUBLIC_TURNSTILE_SITE_KEY set; using dev-ok fallback.');
+    const noKey = !siteKey || siteKey.trim().length === 0;
+    if ((disabled || noKey) && autoDev && !sentDevRef.current) {
+      sentDevRef.current = true;
+      // Matches server-side bypass token expectation.
       onToken('dev-ok');
+      // Optional: clear after a tick so future checks treat it as consumed
+      // (keeps UX identical to real widget: success then "idle")
+      setTimeout(() => onToken(null), 0);
     }
-  }, [siteKey, onToken]);
+  }, [autoDev, disabled, onToken, siteKey]);
 
-  if (!siteKey) {
-    // No widget to render; we already provided "dev-ok".
-    return (
-      <div className={className ?? 'w-full my-3'}>
-        <div className="text-xs text-gray-400">
-          Verification disabled (no site key). Using dev bypass.
-        </div>
-      </div>
-    );
+  // If disabled or no site key, show nothing (we already delivered dev-ok).
+  if (disabled || !siteKey) {
+    return null;
   }
 
   return (
     <div className={className ?? 'w-full my-3'}>
-      <Turnstile
+      <CFTurnstile
         siteKey={siteKey}
-        options={{ theme: 'auto', action: action ?? 'send_deal' }}
+        options={{ action, theme: 'auto' }}
         onSuccess={(t) => {
-          console.log('[Turnstile] success, token len=', t?.length || 0);
+          // Token is short-lived; hand it to caller immediately.
+          console.log('[Turnstile] success; token length =', t?.length ?? 0);
           onToken(t || null);
         }}
         onExpire={() => {
@@ -47,7 +59,7 @@ export default function TurnstileWidget({ onToken, className, action }: Props) {
           onToken(null);
         }}
         onError={(e) => {
-          console.log('[Turnstile] error', e);
+          console.warn('[Turnstile] error', e);
           onToken(null);
         }}
       />

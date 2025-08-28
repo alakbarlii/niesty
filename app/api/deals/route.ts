@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const parsed = await requireJson(req, DealSchema, { maxKB: 64 });
     if (parsed instanceof Response) return parsed;
     const body = parsed.data as {
-      receiver_user_id?: string; // <— changed
+      receiver_id?: string; 
       message?: string;
       deal_value?: number | null;
       offer_currency?: string | null;
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Receiver must be a valid user_id
-    const receiverUserId: string | undefined = body.receiver_user_id ?? undefined;
+    const receiverUserId: string | undefined = body.receiver_id ?? undefined;
     if (!receiverUserId) {
       return jsonNoStore({ error: 'receiver_user_id is required' }, { status: 400 });
     }

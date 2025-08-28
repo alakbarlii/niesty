@@ -21,21 +21,21 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2) Parse + schema validate
+    // 2) Parse + size limit + schema (strict)
     const parsed = await requireJson(req, DealSchema, { maxKB: 64 });
     if (parsed instanceof Response) return parsed;
 
     const body = parsed.data as {
-      receiver_user_id: string;
+      receiver_id: string;
       message: string;
-      deal_value?: number | null;
-      offer_currency?: string | null;
-      offer_pricing_mode?: 'fixed' | 'negotiable' | null;
+      deal_value?: number;
+      offer_currency?: string;
+      offer_pricing_mode?: 'fixed' | 'negotiable';
       sender_role_hint?: Role | null;
       turnstileToken?: string | null;
     };
 
-    // 3) Turnstile (dev bypass “dev-ok” happens inside verifyTurnstile)
+    // 3) Turnstile (dev bypass "dev-ok")
     const ip =
       req.headers.get('cf-connecting-ip') ||
       req.headers.get('x-forwarded-for') ||
@@ -48,10 +48,10 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Bot' }, { status: 400 });
     }
 
-    // 4) Sender + Receiver resolution
+    // 4) Resolve sender/receiver by user_id
     const supabase = await supabaseServer();
 
-    // Sender
+    // Sender profile by auth uid
     const { data: foundSender, error: senderErr } = await supabase
       .from('profiles')
       .select('user_id, role, username, email')
@@ -60,9 +60,11 @@ export async function POST(req: NextRequest) {
 
     let senderUserId: string | null = foundSender?.user_id ?? null;
     let senderRole: Role | null =
-      foundSender?.role === 'creator' || foundSender?.role === 'business' ? foundSender.role : null;
+      foundSender?.role === 'creator' || foundSender?.role === 'business'
+        ? (foundSender.role as Role)
+        : null;
 
-    // Auto-create minimal sender profile if missing (requires sender_role_hint)
+    // Self-heal: auto-create minimal sender profile (requires sender_role_hint)
     if ((!senderUserId || !senderRole) && !senderErr) {
       const role = body.sender_role_hint;
       if (role !== 'creator' && role !== 'business') {
@@ -108,8 +110,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Receiver must be a valid auth uid
-    const receiverUserId = body.receiver_user_id;
+    // Receiver must be a valid user_id
+    const receiverUserId: string | undefined = body.receiver_id ?? undefined;
+    if (!receiverUserId) {
+      return jsonNoStore({ error: 'receiver_id is required' }, { status: 400 });
+    }
+
     const { data: receiverProf, error: recvErr } = await supabase
       .from('profiles')
       .select('user_id, role')
@@ -121,16 +127,20 @@ export async function POST(req: NextRequest) {
     }
 
     const receiverRole = receiverProf.role as Role | string | null;
-    const validRole = (val: unknown): val is Role => val === 'creator' || val === 'business';
-    if (!validRole(senderRole) || !validRole(receiverRole) || senderRole === receiverRole) {
+
+    // Opposite roles only, both must be set
+    const valid = (val: unknown): val is Role => val === 'creator' || val === 'business';
+    if (!valid(senderRole) || !valid(receiverRole) || senderRole === receiverRole) {
       return jsonNoStore({ error: 'Deals can only be sent to the opposite role' }, { status: 400 });
     }
 
-    // 5) Normalize pricing
+    // 5) Normalize pricing fields
     const mode: 'fixed' | 'negotiable' =
       body.offer_pricing_mode === 'fixed' || body.offer_pricing_mode === 'negotiable'
         ? body.offer_pricing_mode
-        : (body.deal_value && body.deal_value > 0 ? 'fixed' : 'negotiable');
+        : body.deal_value && body.deal_value > 0
+        ? 'fixed'
+        : 'negotiable';
 
     let deal_value: number | null = null;
     if (mode === 'fixed') {
@@ -138,6 +148,8 @@ export async function POST(req: NextRequest) {
         return jsonNoStore({ error: 'Enter a valid amount for fixed offers' }, { status: 400 });
       }
       deal_value = body.deal_value;
+    } else {
+      deal_value = null; // not stored, but allowed because we won't include null in Zod (validator only saw request)
     }
 
     const msg = (body.message ?? '').trim();
@@ -148,12 +160,12 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: 'Currency must be a 3-letter ISO code' }, { status: 400 });
     }
 
-    // 6) Insert
+    // 6) Insert (sender_id/receiver_id store auth user ids)
     const { data, error } = await supabase
       .from('deals')
       .insert({
-        sender_id: senderUserId,        // auth uid
-        receiver_id: receiverUserId,    // auth uid
+        sender_id: senderUserId as string,
+        receiver_id: receiverUserId as string,
         message: msg,
         deal_value,
         offer_currency: curr,
@@ -175,7 +187,9 @@ export async function POST(req: NextRequest) {
     const msg =
       process.env.NODE_ENV === 'production'
         ? 'Request failed'
-        : (e instanceof Error ? e.message : 'Request failed');
+        : e instanceof Error
+        ? e.message
+        : 'Request failed';
     return jsonNoStore({ error: msg }, { status: 500 });
   }
 }

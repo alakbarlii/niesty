@@ -31,13 +31,13 @@ export async function getMyRole(): Promise<Role | null> {
 }
 
 type SendDealRequestInput = {
-  receiverUserId: string;            // target's auth user id (UUID from profiles.user_id)
+  receiverUserId: string;         // target's auth user id
   message: string;
   pricingMode?: PricingMode;
-  amount?: number | null;            // if fixed
-  currency?: string | null;          // ISO-3, default 'USD'
-  turnstileToken?: string | null;    // required in production (widget), dev bypass is 'dev-ok'
-  senderRoleHint: Role;              // used by API to auto-create missing sender profile
+  amount?: number | null;         // if fixed
+  currency?: string | null;       // ISO-3, default 'USD'
+  turnstileToken?: string | null; // required in prod (widget), dev bypass is 'dev-ok'
+  senderRoleHint: Role;           // API may auto-create minimal sender profile
 };
 
 type SendDealSuccess = { id: string };
@@ -81,34 +81,44 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
   const payloadTurnstile =
     turnstileToken && turnstileToken.length > 0
       ? turnstileToken
-      : (!inProduction || !hasSiteKey)
-        ? 'dev-ok'
-        : undefined;
+      : !inProduction || !hasSiteKey
+      ? 'dev-ok' // dev bypass (or if site key not set yet)
+      : undefined;
 
   if (inProduction && hasSiteKey && !payloadTurnstile) {
     return { data: null, error: new Error('Verification required') };
   }
 
-  const body = {
-    receiver_user_id: receiverUserId,    // *** KEY MUST MATCH DealSchema ***
+  // Build payload aligned with DealSchema (no nulls for deal_value)
+  const payload: {
+    receiver_id: string;
+    message: string;
+    offer_currency: string;
+    offer_pricing_mode: PricingMode;
+    turnstileToken?: string | null;
+    sender_role_hint?: Role;
+    deal_value?: number; // only present when fixed
+  } = {
+    receiver_id: receiverUserId,
     message: msg,
-    deal_value: mode === 'fixed' ? amount : null,
     offer_currency: curr,
     offer_pricing_mode: mode,
     sender_role_hint: senderRoleHint,
     turnstileToken: payloadTurnstile,
   };
 
-  // Helpful client-side diagnostics
-  console.log('[sendDealRequest] payload', body);
+  if (mode === 'fixed') {
+    payload.deal_value = amount as number; // validated above
+  }
 
   const res = await fetch('/api/deals', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 
   const raw = await res.text();
+
   console.log('[sendDealRequest] status', res.status, 'raw:', raw);
 
   let json: { deal?: { id: string }; error?: string } = {};
@@ -127,7 +137,6 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
   if (!createdId) return { data: null, error: new Error('Malformed response') };
 
   return { data: { id: createdId }, error: null };
-
 }
 
 /* ================= stage helpers ================= */
@@ -211,7 +220,6 @@ export async function confirmAgreementAndMaybeAdvance(dealId: string) {
   if (updErr) return { data: null, error: updErr };
 
   const both = !!updated?.creator_agreed_at && !!updated?.business_agreed_at;
-
   if (both) {
     await supabase.from('deals').update({ deal_stage: 'Platform Escrow' }).eq('id', dealId);
   }

@@ -7,7 +7,7 @@ const uuidStrict = z
   .uuid()
   .refine(
     (v) => !/^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(v),
-    'receiver_user_id cannot be the all-zero placeholder'
+    'receiver_id cannot be the all-zero placeholder'
   );
 
 /** Messages */
@@ -24,19 +24,18 @@ export const DealSchema = z
   .object({
     turnstileToken: z.string().nullable().optional(),
 
-    // REQUIRED: auth uid of the other party
-    receiver_user_id: uuidStrict,
+    // IMPORTANT: request body must send `receiver_id` (auth user_id)
+    receiver_id: uuidStrict,
 
-    // initial message
+    // initial text of the offer
     message: z.string().min(1).max(5000),
 
     // optional pricing context
-    deal_value: z.number().int().positive().optional(),
-    offer_currency: z
-      .string()
-      .length(3)
-      .transform((s) => s.toUpperCase())
-      .optional(),
+    deal_value: z.number().int().positive().optional(), // OMIT when negotiable
+    offer_currency: z.string().length(3).transform((s) => s.toUpperCase()).optional(),
     offer_pricing_mode: z.enum(['fixed', 'negotiable']).optional(),
+
+    // allow API to receive the hint without Zod failing strict() mode
+    sender_role_hint: z.enum(['creator', 'business']).optional(),
   })
   .strict();

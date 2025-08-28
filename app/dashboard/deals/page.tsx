@@ -4,23 +4,23 @@ import { CheckCircle, Clock, XCircle, Loader } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 
+interface ProfileLite {
+  user_id: string;           // ← FIXED
+  full_name: string;
+  username: string;
+}
+
 interface Deal {
   id: string;
   message: string;
   status: 'pending' | 'accepted' | 'rejected';
-  sender_id: string;
-  receiver_id: string;
+  sender_id: string;         // auth UID
+  receiver_id: string;       // auth UID
   created_at: string;
   deal_stage: string;
   accepted_at?: string | null;
-  sender_info?: {
-    full_name: string;
-    username: string;
-  };
-  receiver_info?: {
-    full_name: string;
-    username: string;
-  };
+  sender_info?: ProfileLite | null;
+  receiver_info?: ProfileLite | null;
 }
 
 const DEAL_STAGES = [
@@ -47,26 +47,26 @@ export default function DealsPage() {
   const [confirmDeal, setConfirmDeal] = useState<Deal | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // ********** FIX: pull profiles by user_id and key map by user_id **********
   const fetchProfiles = async (ids: string[]) => {
+    if (ids.length === 0) return new Map<string, ProfileLite>();
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, username')
+      .select('user_id, full_name, username')
       .in('user_id', ids);
 
-    if (error || !data) return new Map<string, { full_name: string; username: string }>();
-    return new Map(data.map((user) => [user.id, user]));
+    if (error || !data) return new Map<string, ProfileLite>();
+    return new Map<string, ProfileLite>(data.map((u) => [u.user_id, u as ProfileLite]));
   };
+  // ***************************************************************************
 
   const fetchDeals = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
+    const { data: auth } = await supabase.auth.getUser();
+    const user = auth?.user;
+    if (!user) {
       setError('Failed to fetch user.');
       setLoading(false);
       return;
@@ -89,10 +89,10 @@ export default function DealsPage() {
     const allUserIds = Array.from(new Set(rawDeals.flatMap((d) => [d.sender_id, d.receiver_id])));
     const userMap = await fetchProfiles(allUserIds);
 
-    const dealsWithUsers = rawDeals.map((deal) => ({
+    const dealsWithUsers: Deal[] = rawDeals.map((deal) => ({
       ...deal,
-      sender_info: userMap.get(deal.sender_id),
-      receiver_info: userMap.get(deal.receiver_id),
+      sender_info: userMap.get(deal.sender_id) ?? null,
+      receiver_info: userMap.get(deal.receiver_id) ?? null,
     }));
 
     setDeals(dealsWithUsers);
@@ -113,7 +113,7 @@ export default function DealsPage() {
       return d.status !== 'rejected' && d.deal_stage !== 'Payment Released';
     });
 
-    // Sort by created_at DESC (top = latest, bottom = first ever)
+    // Sort by created_at DESC
     return arr.sort((a, b) => {
       const ta = new Date(a.created_at).getTime();
       const tb = new Date(b.created_at).getTime();
@@ -209,15 +209,11 @@ export default function DealsPage() {
         <ul className="space-y-5">
           {filteredSortedDeals.map((deal) => {
             const isSender = userId === deal.sender_id;
-            const isReceiver = userId === deal.receiver_id;
             const otherParty = isSender ? deal.receiver_info : deal.sender_info;
 
-            // ********** ONLY CHANGE: add a safe cast here **********
             const currentStageIndex = DEAL_STAGES.indexOf(
               deal.deal_stage as (typeof DEAL_STAGES)[number]
             );
-            // ********************************************************
-
             const stageProgress = ((currentStageIndex + 1) / DEAL_STAGES.length) * 100;
 
             const statusIcon =
@@ -230,7 +226,7 @@ export default function DealsPage() {
               );
 
             const canAct =
-              isReceiver && deal.status === 'pending' && deal.deal_stage === 'Waiting for Response';
+              !isSender && deal.status === 'pending' && deal.deal_stage === 'Waiting for Response';
 
             return (
               <li
@@ -286,7 +282,7 @@ export default function DealsPage() {
         </ul>
       )}
 
-      {/* One-time confirmation modal (theme-matched, small, centered) */}
+      {/* One-time confirmation modal */}
       {confirmOpen && confirmDeal && confirmKind && (
         <div className="fixed inset-0 z-50">
           <div

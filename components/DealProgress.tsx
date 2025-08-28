@@ -16,7 +16,6 @@ type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 type StageTimes = Partial<Record<(typeof DEAL_STAGES)[number], string | null | undefined>>;
 
 export interface DealProgressProps {
-  /** Zero-based index of the current stage. Pass -1 to render all stages as not-started (gray). */
   currentStage: number;
   contentLink?: string;
   isEditable?: boolean;
@@ -24,14 +23,12 @@ export interface DealProgressProps {
   rejectionReason?: string | null;
   onApprove?: () => void;
   onReject?: (reason: string) => void;
-  onAgree?: () => void; // not used here
+  onAgree?: () => void;
   onSubmitContent?: (url: string) => void;
   canApprove?: boolean;
   isCreator?: boolean;
   isSender?: boolean;
   submissionStatus?: SubmissionStatus;
-
-  /** NEW: optional per-stage timestamps (ISO strings). Shows compact “At: …” beneath each stage. */
   stageTimes?: StageTimes;
 }
 
@@ -51,7 +48,6 @@ export default function DealProgress({
   submissionStatus = null,
   stageTimes,
 }: DealProgressProps) {
-  // silence unused-args warnings
   void _isEditable; void _onApprove; void _onReject; void _onAgree; void _canApprove; void _isSender;
 
   const [contentUrl, setContentUrl] = useState<string>('');
@@ -74,7 +70,6 @@ export default function DealProgress({
     }
   };
 
-  // allow -1 = “no stage started” (everything gray)
   const noStageStarted = Number.isInteger(currentStage) && currentStage < 0;
 
   const safeStageIndex =
@@ -111,7 +106,6 @@ export default function DealProgress({
           const isCompleted = !noStageStarted && index < safeStageIndex;
           const isCurrent = !noStageStarted && index === safeStageIndex;
 
-          // last-stage pending clock if content approved but payout not confirmed
           const lastStagePending = isCurrent && isLastStage && submissionStatus === 'approved';
 
           let showCheck = false;
@@ -156,7 +150,6 @@ export default function DealProgress({
                   {stageLabel}
                 </p>
 
-                {/* NEW: timestamp under every stage */}
                 <p className="text-xs text-gray-400 mt-0.5">At: {at}</p>
 
                 {stageLabel === 'Content Submitted' && (

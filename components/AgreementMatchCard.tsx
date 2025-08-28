@@ -74,7 +74,6 @@ export default function AgreementMatchCard({
 
   const matched = proposalsMatch(pair.sender, pair.receiver);
 
-  // Load latest proposals and seed inputs with my latest (if any)
   const load = async () => {
     setErr(null);
     setLoading(true);
@@ -120,8 +119,8 @@ export default function AgreementMatchCard({
     setSaving(true);
     try {
       await proposeTerms(dealId, amt, deadline);
-      await load(); // refresh local view
-      if (onMatched) onMatched(); // let parent refresh the deal/timeline
+      await load();
+      if (onMatched) onMatched();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -146,7 +145,6 @@ export default function AgreementMatchCard({
         )}
       </div>
 
-      {/* Inputs */}
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs text-gray-400 mb-1">Amount (USD)</label>
@@ -173,7 +171,6 @@ export default function AgreementMatchCard({
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mt-3">
         <button
           onClick={handleSave}
@@ -192,7 +189,6 @@ export default function AgreementMatchCard({
         {err && <span className="text-xs text-red-400">{err}</span>}
       </div>
 
-      {/* Latest snapshot */}
       <div className="grid sm:grid-cols-2 gap-3 mt-4">
         <div className="bg-white/5 rounded-lg p-3 border border-white/10">
           <p className="text-xs font-semibold mb-1">Your latest</p>

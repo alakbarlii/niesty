@@ -19,14 +19,12 @@ export type ProposalPair = {
   receiver: TermProposal | null;
 };
 
-/** Get the current authenticated user's ID (or null). */
 export async function getMyUserId(): Promise<string | null> {
   const { data, error } = await supabase.auth.getUser();
   if (error) return null;
   return data.user?.id ?? null;
 }
 
-/** Insert a proposal (amount + deadline) for the current user. */
 export async function proposeTerms(
   dealId: string,
   amount: number,
@@ -46,10 +44,6 @@ export async function proposeTerms(
   if (error) throw new Error(error.message);
 }
 
-/**
- * Fetch the latest proposal for both parties (sender vs receiver).
- * Returns each side's most recent row (by created_at desc), or null if none.
- */
 export async function fetchLatestPair(
   dealId: string,
   senderId: string,
@@ -65,12 +59,9 @@ export async function fetchLatestPair(
 
   const rows: TermProposal[] = (data ?? []) as TermProposal[];
 
-  // Keep only the first (latest) proposal per user.
   const latestByUser = new Map<string, TermProposal>();
   for (const row of rows) {
-    if (!latestByUser.has(row.user_id)) {
-      latestByUser.set(row.user_id, row);
-    }
+    if (!latestByUser.has(row.user_id)) latestByUser.set(row.user_id, row);
   }
 
   return {
@@ -79,7 +70,6 @@ export async function fetchLatestPair(
   };
 }
 
-/** True when both sides proposed the same amount and the same YYYY-MM-DD deadline. */
 export function proposalsMatch(
   a: TermProposal | null,
   b: TermProposal | null

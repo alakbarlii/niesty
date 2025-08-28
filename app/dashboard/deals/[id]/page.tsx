@@ -23,7 +23,7 @@ type UserRole = 'creator' | 'business';
 type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 
 interface ProfileLite {
-  id: string;
+  user_id: string;                 // ← FIXED: use auth UID
   full_name: string;
   username: string;
   role?: UserRole;
@@ -43,8 +43,8 @@ type DealStage = (typeof DEAL_STAGES)[number];
 
 interface Deal {
   id: string;
-  sender_id: string;
-  receiver_id: string;
+  sender_id: string;               // auth UID
+  receiver_id: string;             // auth UID
   message: string;
   deal_stage: DealStage | string;
   created_at: string;
@@ -73,14 +73,14 @@ interface Deal {
   payout_status?: 'requested' | 'paid' | null;
   payment_released_at?: string | null;
 
-  // Rejected flags (any one may exist depending on schema)
+  // Rejected flags
   rejected_at?: string | null;
   is_rejected?: boolean | null;
   status?: string | null; // e.g. 'rejected'
 
   // UI helpers
-  sender_info?: ProfileLite;
-  receiver_info?: ProfileLite;
+  sender_info?: ProfileLite | null;
+  receiver_info?: ProfileLite | null;
 }
 
 type AgreementTerms = {
@@ -169,18 +169,24 @@ export default function DealDetailPage() {
           data.deal_stage = 'Negotiating Terms';
         }
 
+        // ********** FIX: fetch counterpart profiles by user_id and compare by user_id **********
         const { data: users } = await supabase
           .from('profiles')
-          .select('id, full_name, username, role, profile_url')
+          .select('user_id, full_name, username, role, profile_url')
           .in('user_id', [data.sender_id, data.receiver_id]);
 
-        const sender = (users || []).find((u) => u.id === data.sender_id) as ProfileLite | undefined;
-        const receiver = (users || []).find((u) => u.id === data.receiver_id) as ProfileLite | undefined;
+        const sender: ProfileLite | undefined = (users || []).find((u) => u.user_id === data.sender_id) as
+          | ProfileLite
+          | undefined;
+        const receiver: ProfileLite | undefined = (users || []).find((u) => u.user_id === data.receiver_id) as
+          | ProfileLite
+          | undefined;
+        // ****************************************************************************************
 
         const normalized: Deal = {
           ...data,
-          sender_info: sender,
-          receiver_info: receiver,
+          sender_info: sender ?? null,
+          receiver_info: receiver ?? null,
         };
         setDeal(normalized);
 
@@ -475,7 +481,7 @@ export default function DealDetailPage() {
       'Waiting for Response': deal.created_at ?? null,
       'Negotiating Terms': deal.accepted_at ?? null,
       'Platform Escrow': bothAgreedAt,
-      'Content Submitted'  : latestSubmittedAt,  
+      'Content Submitted': latestSubmittedAt,
       'Approved': deal.approved_at ?? null,
       'Payment Released': deal.payment_released_at ?? null,
     };
@@ -516,10 +522,9 @@ export default function DealDetailPage() {
   const lockedDeadline =
     agreement.deadline ? new Date(agreement.deadline).toLocaleDateString() : '—';
 
-  // Reusable instructions + responsibilities block — shown in both Negotiating and Locked states
+  // Reusable instructions + responsibilities block
   const AgreementGuidelines = (
     <>
-      {/* Title + instructions */}
       <div className="mb-3">
         <p className="font-semibold text-base sm:text-lg">Deal Agreement</p>
         <p className="text-xs text-white/70 mt-1">
@@ -528,7 +533,6 @@ export default function DealDetailPage() {
         </p>
       </div>
 
-      {/* Role responsibilities (always visible) */}
       <div className="grid sm:grid-cols-2 gap-3 mb-4">
         <div className="bg-white/5 rounded-lg p-3 border border-white/10">
           <p className="text-xs font-semibold mb-1">Business will:</p>
@@ -728,10 +732,9 @@ export default function DealDetailPage() {
                 <p>
                   <span className="text-white/70">Deadline:</span> {lockedDeadline}
                 </p>
-                
               </div>
               <p className="text-xs text-emerald-300 mt-2">
-                 Business deposits funds in <b>Platform Escrow</b>. Only then content submission opens.
+                Business deposits funds in <b>Platform Escrow</b>. Only then content submission opens.
               </p>
             </div>
           </div>

@@ -208,7 +208,7 @@ export default function DealDetailPage() {
   }, [dealId]);
 
   // ===== Derived =====
-  const isSender = userId === deal?.id;
+  const isSender = userId === deal?.sender_id;
   const myProfile: ProfileLite | undefined =
     (isSender ? deal?.sender_info : deal?.receiver_info) || undefined;
   const isCreator = myProfile?.role === 'creator';
@@ -342,7 +342,7 @@ export default function DealDetailPage() {
     let matchedAmount: number | null = null;
     let matchedDeadline: string | null = null;
     try {
-      const pair = await fetchLatestPair(deal.id, deal.id, deal.id);
+      const pair = await fetchLatestPair(deal.id, deal.sender_id, deal.receiver_id);
       const ok = proposalsMatch(pair.sender, pair.receiver);
       if (!ok) {
         alert('Both sides must propose the SAME amount and delivery date before confirming.');
@@ -675,8 +675,8 @@ export default function DealDetailPage() {
                 <div className="mt-4">
                   <AgreementMatchCard
                     dealId={deal.id}
-                    senderId={deal.id}
-                    receiverId={deal.id}
+                    senderId={deal.sender_id}
+                    receiverId={deal.receiver_id}
                     myUserId={userId}
                     onMatched={() => void refreshDeal(deal.id)}
                   />

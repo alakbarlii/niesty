@@ -208,7 +208,7 @@ export default function DealsPage() {
       ) : (
         <ul className="space-y-5">
           {filteredSortedDeals.map((deal) => {
-            const isSender = userId === deal.id;
+            const isSender = userId === deal.sender_id;
             const otherParty = isSender ? deal.receiver_info : deal.sender_info;
 
             const currentStageIndex = DEAL_STAGES.indexOf(

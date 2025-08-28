@@ -23,8 +23,14 @@ export const MessageSchema = z
 export const DealSchema = z
   .object({
     turnstileToken: z.string().nullable().optional(),
-    receiver_user_id: uuidStrict, 
+
+    // REQUIRED: auth uid of the other party
+    receiver_user_id: uuidStrict,
+
+    // initial message
     message: z.string().min(1).max(5000),
+
+    // optional pricing context
     deal_value: z.number().int().positive().optional(),
     offer_currency: z
       .string()

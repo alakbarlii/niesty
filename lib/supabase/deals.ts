@@ -1,3 +1,4 @@
+// lib/supabase/deals.ts
 'use client';
 
 import { supabase } from '@/lib/supabase';
@@ -20,13 +21,17 @@ export async function getMyRole(): Promise<Role | null> {
   const { data: me } = await supabase.auth.getUser();
   const uid = me?.user?.id;
   if (!uid) return null;
-  const { data: prof } = await supabase.from('profiles').select('role').eq('user_id', uid).maybeSingle();
+  const { data: prof } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('user_id', uid)
+    .maybeSingle();
   const r = prof?.role;
   return r === 'creator' || r === 'business' ? r : null;
 }
 
 type SendDealRequestInput = {
-  receiverUserId: string;            // target's auth user id
+  receiverUserId: string;            // target's auth user id (UUID from profiles.user_id)
   message: string;
   pricingMode?: PricingMode;
   amount?: number | null;            // if fixed
@@ -77,7 +82,7 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
     turnstileToken && turnstileToken.length > 0
       ? turnstileToken
       : (!inProduction || !hasSiteKey)
-        ? 'dev-ok' // dev bypass (or if site key not set yet)
+        ? 'dev-ok'
         : undefined;
 
   if (inProduction && hasSiteKey && !payloadTurnstile) {
@@ -85,7 +90,7 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
   }
 
   const body = {
-    receiver_user_id: receiverUserId,     
+    receiver_user_id: receiverUserId,    // *** KEY MUST MATCH DealSchema ***
     message: msg,
     deal_value: mode === 'fixed' ? amount : null,
     offer_currency: curr,
@@ -94,25 +99,35 @@ export async function sendDealRequest(input: SendDealRequestInput): Promise<Send
     turnstileToken: payloadTurnstile,
   };
 
+  // Helpful client-side diagnostics
+  console.log('[sendDealRequest] payload', body);
+
   const res = await fetch('/api/deals', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
 
-  const json = (await res.json().catch(() => ({}))) as
-    | { deal?: { id: string }; error?: string }
-    | Record<string, unknown>;
+  const raw = await res.text();
+  console.log('[sendDealRequest] status', res.status, 'raw:', raw);
+
+  let json: { deal?: { id: string }; error?: string } = {};
+  try {
+    json = JSON.parse(raw) as { deal?: { id: string }; error?: string };
+  } catch {
+    json = {};
+  }
 
   if (!res.ok) {
-    const reason = (json as { error?: string }).error || res.statusText || 'Request failed';
+    const reason = json.error || res.statusText || 'Request failed';
     return { data: null, error: new Error(reason) };
   }
 
-  const createdId = (json as { deal?: { id: string } }).deal?.id;
+  const createdId = json.deal?.id;
   if (!createdId) return { data: null, error: new Error('Malformed response') };
 
   return { data: { id: createdId }, error: null };
+
 }
 
 /* ================= stage helpers ================= */

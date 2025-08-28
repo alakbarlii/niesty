@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
 export interface SupabaseMessage {
-  id: string;            // ← added id
+   id: string;            
   user_id: string;
   deal_id: string;
   sender_id: string;

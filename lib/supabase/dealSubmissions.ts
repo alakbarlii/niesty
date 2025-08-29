@@ -2,19 +2,22 @@
 
 import { supabase } from '@/lib/supabase';
 
+/** Status values used by both DB and UI */
 export type SubmissionStatus = 'pending' | 'rework' | 'approved';
 
+/** Normalized submission shape used by the app */
 export type DealSubmission = {
   id: string;
   deal_id: string;
   submitted_by: string;
-  url: string;
+  url: string; // normalized from `submission_link` or `url`
   status: SubmissionStatus;
   rejection_reason: string | null;
 };
 
 const ORDER_COLUMN = 'id' as const;
 
+/* ===== Types that represent the two possible DB shapes ===== */
 type RowSubmissionLink = {
   id: string;
   deal_id: string;
@@ -33,13 +36,15 @@ type RowUrl = {
   rejection_reason: string | null;
 };
 
+/** PostgREST undefined_column guard (code 42703) */
 function isUndefinedColumn(err: unknown): err is { code: '42703' } {
   return typeof err === 'object' && err !== null && 'code' in err && (err as { code?: unknown }).code === '42703';
 }
 
+/** Normalize a DB row (of either schema) into DealSubmission */
 function normalizeRow(row: RowSubmissionLink | RowUrl | null): DealSubmission | null {
   if (!row) return null;
-  // @ts-expect-error union convenience
+  // @ts-expect-error union convenience: grab whichever column exists
   const urlValue: string | undefined = row.submission_link ?? row.url;
   return {
     id: row.id,
@@ -51,7 +56,11 @@ function normalizeRow(row: RowSubmissionLink | RowUrl | null): DealSubmission | 
   };
 }
 
+/* ======================= READ ======================= */
+
+/** Get the latest submission for a deal (works with either column schema). */
 export async function fetchLatestSubmission(dealId: string): Promise<DealSubmission | null> {
+  // Try schema with `submission_link`
   try {
     const { data, error } = await supabase
       .from('deal_submissions')
@@ -64,6 +73,7 @@ export async function fetchLatestSubmission(dealId: string): Promise<DealSubmiss
     return normalizeRow(data as RowSubmissionLink | null);
   } catch (e) {
     if (!isUndefinedColumn(e)) throw e;
+    // Fallback to schema with `url`
     const { data, error } = await supabase
       .from('deal_submissions')
       .select('id, deal_id, submitted_by, url, status, rejection_reason')
@@ -76,7 +86,14 @@ export async function fetchLatestSubmission(dealId: string): Promise<DealSubmiss
   }
 }
 
+/* ======================= WRITE ======================= */
+
+/**
+ * Insert a new submission (creator). Moves the deal to "Content Submitted".
+ * Supports both `submission_link` and `url` schemas without errors.
+ */
 export async function submitSubmission(dealId: string, url: string, userId: string): Promise<void> {
+  // Try insert with `submission_link`
   try {
     const { error: insErr } = await supabase
       .from('deal_submissions')
@@ -84,12 +101,14 @@ export async function submitSubmission(dealId: string, url: string, userId: stri
     if (insErr) throw insErr;
   } catch (e) {
     if (!isUndefinedColumn(e)) throw e;
+    // Fallback: insert with `url`
     const { error: insErr2 } = await supabase
       .from('deal_submissions')
       .insert([{ deal_id: dealId, submitted_by: userId, url, status: 'pending' }]);
     if (insErr2) throw insErr2;
   }
 
+  // Move deal stage to "Content Submitted"
   const { error: stageErr } = await supabase
     .from('deals')
     .update({ deal_stage: 'Content Submitted' })
@@ -97,6 +116,13 @@ export async function submitSubmission(dealId: string, url: string, userId: stri
   if (stageErr) throw stageErr;
 }
 
+/**
+ * Approve a submission (business).
+ * - Marks submission approved
+ * - Moves deal to "Approved" & stamps `approved_at`
+ * - **Auto-triggers payout**: sets `payout_requested_at` and `payout_status='requested'`
+ *   so both user and admin timelines show Payment Released ⏳.
+ */
 export async function approveSubmission(submissionId: string, dealId: string): Promise<void> {
   const now = new Date().toISOString();
 
@@ -118,6 +144,9 @@ export async function approveSubmission(submissionId: string, dealId: string): P
   if (stageErr) throw stageErr;
 }
 
+/**
+ * Reject a submission (business). Marks submission rework(with reason) and moves deal back to "Platform Escrow".
+ */
 export async function rejectSubmission(submissionId: string, dealId: string, reason: string): Promise<void> {
   const { error: updErr } = await supabase
     .from('deal_submissions')
@@ -132,6 +161,9 @@ export async function rejectSubmission(submissionId: string, dealId: string, rea
   if (stageErr) throw stageErr;
 }
 
+/* =================== OPTIONAL HELPERS =================== */
+
+/** List a user's submissions (latest first) — works on either schema. */
 export async function listSubmissionsByUser(userId: string, limit = 20): Promise<DealSubmission[]> {
   try {
     const { data, error } = await supabase
@@ -157,6 +189,7 @@ export async function listSubmissionsByUser(userId: string, limit = 20): Promise
   }
 }
 
+/** Count a user's submissions. */
 export async function countSubmissionsByUser(userId: string): Promise<number> {
   const { count, error } = await supabase
     .from('deal_submissions')

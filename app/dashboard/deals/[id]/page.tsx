@@ -528,7 +528,7 @@ export default function DealDetailPage() {
       <div className="mb-3">
         <p className="font-semibold text-base sm:text-lg">Deal Agreement</p>
         <p className="text-xs text-white/70 mt-1">
-           Talk in chat. <b>Both sides must confirm the same price and delivery date.</b>{' '}
+           Align in chat. <b>Both sides must confirm the same price and delivery date.</b>{' '}
           Once saved and both parties check the box and confirm, the deal moves to <i>Platform Escrow</i>.
         </p>
       </div>
@@ -854,7 +854,7 @@ export default function DealDetailPage() {
           {/* Payout in progress hint */}
           {payoutInFlight && !deal.payment_released_at && (
             <p className="mt-3 text-xs text-yellow-300">
-              Payment is being released. <span className="opacity-80">Final stage shows a pending clock until funds land.</span>
+              Payment is being released. <span className="opacity-80">Final stage is in pending until funds land.</span>
             </p>
           )}
         </div>

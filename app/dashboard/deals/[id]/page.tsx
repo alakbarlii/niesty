@@ -528,7 +528,7 @@ export default function DealDetailPage() {
       <div className="mb-3">
         <p className="font-semibold text-base sm:text-lg">Deal Agreement</p>
         <p className="text-xs text-white/70 mt-1">
-          <b>Step 1:</b> Align in chat. <b>Both sides must confirm the same price and delivery date.</b>{' '}
+           Talk in chat. <b>Both sides must confirm the same price and delivery date.</b>{' '}
           Once saved and both parties check the box and confirm, the deal moves to <i>Platform Escrow</i>.
         </p>
       </div>

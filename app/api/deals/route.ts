@@ -1,4 +1,3 @@
-// app/api/deals/route.ts
 import type { NextRequest } from 'next/server';
 import { jsonNoStore, requireJson } from '@/lib/http';
 import { userSafe } from '@/lib/errors';
@@ -35,7 +34,7 @@ export async function POST(req: NextRequest) {
       turnstileToken?: string | null;
     };
 
-    // 3) Turnstile (dev bypass "dev-ok")
+    // 3) Turnstile (dev bypass "dev-ok" handled in verifyTurnstile)
     const ip =
       req.headers.get('cf-connecting-ip') ||
       req.headers.get('x-forwarded-for') ||
@@ -149,7 +148,7 @@ export async function POST(req: NextRequest) {
       }
       deal_value = body.deal_value;
     } else {
-      deal_value = null; // not stored, but allowed because we won't include null in Zod (validator only saw request)
+      deal_value = null;
     }
 
     const msg = (body.message ?? '').trim();

@@ -1,4 +1,3 @@
-// middleware.ts
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
@@ -49,7 +48,7 @@ export async function middleware(req: NextRequest) {
 
   res.headers.set('Content-Security-Policy', csp)
 
-  // Host allowlist
+  // Host allowlist (add your custom domain here when you attach one)
   const host = (req.headers.get('host') || '').toLowerCase()
   const allowedHosts = ['localhost:3000', 'niesty.vercel.app']
   if (!allowedHosts.includes(host)) {
@@ -93,7 +92,27 @@ export async function middleware(req: NextRequest) {
     const url = req.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('next', pathname)
-    return NextResponse.redirect(url)
+    // IMPORTANT: keep the headers we already set
+    const redirectRes = NextResponse.redirect(url)
+    res.headers.forEach((value, key) => redirectRes.headers.set(key, value))
+    return redirectRes
+  }
+
+  // Optional: guard /admin (only if you actually store role='admin')
+  if (pathname.startsWith('/admin')) {
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('user_id', session.user.id)
+      .maybeSingle()
+
+    if (prof?.role !== 'admin') {
+      const url = req.nextUrl.clone()
+      url.pathname = '/dashboard'
+      const redirectRes = NextResponse.redirect(url)
+      res.headers.forEach((value, key) => redirectRes.headers.set(key, value))
+      return redirectRes
+    }
   }
 
   return res

@@ -40,7 +40,7 @@ export default function CreatorProfileView() {
         const { count } = await supabase
           .from('deals')
           .select('*', { count: 'exact', head: true })
-          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+          .or(`sender_id.eq.${userId},receiver_user_id.eq.${userId}`);
 
         setDealCount(count || 0);
 
@@ -126,7 +126,7 @@ export default function CreatorProfileView() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 justify-evenly mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 justify-center mb-6">
             <StatBadge label="Deals Completed" value={dealCount} />
             <StatBadge label="Avg. Rating" value="4.9 / 5" />
           </div>

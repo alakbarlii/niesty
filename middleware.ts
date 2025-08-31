@@ -50,7 +50,7 @@ export async function middleware(req: NextRequest) {
 
   // Host allowlist (add your custom domain here when you attach one)
   const host = (req.headers.get('host') || '').toLowerCase()
-  const allowedHosts = ['localhost:3000', 'niesty.vercel.app']
+  const allowedHosts = ['localhost:3000', 'niesty.com', 'niesty.vercel.app']
   if (!allowedHosts.includes(host)) {
     return new NextResponse('Forbidden host', { status: 403 })
   }
@@ -59,7 +59,7 @@ export async function middleware(req: NextRequest) {
   const method = req.method.toUpperCase()
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     const origin = req.headers.get('origin') || ''
-    const allowedOrigins = ['http://localhost:3000', 'https://niesty.vercel.app']
+    const allowedOrigins = ['http://localhost:3000', 'niesty.com', 'https://niesty.vercel.app']
     if (!allowedOrigins.includes(origin)) {
       return new NextResponse('Bad origin', { status: 403 })
     }

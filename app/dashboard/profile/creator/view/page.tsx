@@ -143,8 +143,7 @@ export default function CreatorProfileView() {
                       href={p.url}
                       className="text-yellow-400 hover:underline break-all"
                       target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                      rel="noopener noreferrer">
                       {p.url}
                     </a>
                   </li>

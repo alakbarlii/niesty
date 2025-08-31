@@ -6,61 +6,67 @@ import { supabase } from '@/lib/supabase';
 import StatBadge from '@/components/StatBadge';
 import { useRouter } from 'next/navigation';
 
+type Social = { name: string; url: string };
+
 export default function CreatorProfileView() {
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('');
   const [email, setEmail] = useState('');
   const [description, setDescription] = useState('');
-  const [platforms, setPlatforms] = useState<{ name: string; url: string }[]>([]);
+  const [platforms, setPlatforms] = useState<Social[]>([]);
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
+  const [dealCount, setDealCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editHref, setEditHref] = useState<string | null>(null);
-  const [dealCount, setDealCount] = useState<number>(0);
+
   const router = useRouter();
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
+        // session
+        const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+        if (sessErr) throw sessErr;
         const userId = session?.user?.id;
         const userEmail = (session?.user?.email || '').toLowerCase();
         if (!userId || !userEmail) throw new Error('No user session found');
 
+        // profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('user_id', userId)
           .maybeSingle();
 
-        const { count } = await supabase
+        // ✅ FIX: correct column name; count deals where I'm sender OR receiver
+        const { count, error: dealsErr } = await supabase
           .from('deals')
           .select('*', { count: 'exact', head: true })
-          .or(`sender_id.eq.${userId},receiver_user_id.eq.${userId}`);
+          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
 
+        if (dealsErr) throw dealsErr;
         setDealCount(count || 0);
 
         if (!profile || profileError) {
-          // Fallback full name from waitlist via server
+          // fallback full name from waitlist
           try {
             const res = await fetch(`/api/waitlist?email=${encodeURIComponent(userEmail)}`, { cache: 'no-store' });
             const j = await res.json();
             if (res.ok && j?.ok && j?.full_name) setFullName(j.full_name as string);
           } catch { /* ignore */ }
-
           setUsername('');
+          setRole('');
+          setEmail(userEmail);
+          setDescription('');
           setPlatforms([]);
+          setProfileUrl(null);
         } else {
           setUsername(profile.username || '');
           setFullName(profile.full_name || '');
           setRole(profile.role || '');
-          setEmail(profile.email || '');
+          setEmail(profile.email || userEmail);
           setDescription(profile.description || '');
-          setEditHref('/dashboard/profile/creator/edit');
           setProfileUrl(profile.profile_url || null);
 
           try {
@@ -79,9 +85,8 @@ export default function CreatorProfileView() {
           }
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error occurred';
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
         console.error('Profile load error:', err);
-        setError(message);
       } finally {
         setLoading(false);
       }
@@ -101,9 +106,7 @@ export default function CreatorProfileView() {
             src={profileUrl || '/profile-default.png'}
             alt="Profile Picture"
             className="w-full h-full object-cover rounded-full"
-            onError={(e) => {
-              e.currentTarget.src = '/profile-default.png';
-            }}
+            onError={(e) => { e.currentTarget.src = '/profile-default.png'; }}
           />
         </div>
 
@@ -116,14 +119,12 @@ export default function CreatorProfileView() {
               <p className="text-sm text-white/70 mt-1">Contact: {email}</p>
               {description && <p className="text-white/70 max-w-md mt-2">{description}</p>}
             </div>
-            {editHref && (
-              <button
-                onClick={() => router.push(editHref)}
-                className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300"
-              >
-                Edit Profile
-              </button>
-            )}
+            <button
+              onClick={() => router.push('/dashboard/profile/creator/edit')}
+              className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300"
+            >
+              Edit Profile
+            </button>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-6">

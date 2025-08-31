@@ -14,20 +14,17 @@ export default function BusinessProfileView() {
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
+  const [dealCount, setDealCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editHref, setEditHref] = useState<string | null>(null);
-  const [dealCount, setDealCount] = useState<number>(0);
 
   const router = useRouter();
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
+        const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+        if (sessErr) throw sessErr;
         const userId = session?.user?.id;
         const userEmail = (session?.user?.email || '').toLowerCase();
         if (!userId || !userEmail) throw new Error('No user session found');
@@ -38,11 +35,12 @@ export default function BusinessProfileView() {
           .eq('user_id', userId)
           .maybeSingle();
 
-        const { count } = await supabase
+        // deals where I'm sender OR receiver
+        const { count, error: dealsErr } = await supabase
           .from('deals')
           .select('*', { count: 'exact', head: true })
           .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
-
+        if (dealsErr) throw dealsErr;
         setDealCount(count || 0);
 
         if (!data || error) {
@@ -50,35 +48,27 @@ export default function BusinessProfileView() {
           try {
             const res = await fetch(`/api/waitlist?email=${encodeURIComponent(userEmail)}`, { cache: 'no-store' });
             const j = await res.json();
-            if (res.ok && j?.ok && j?.full_name) {
-              setFullName(j.full_name as string);
-            }
+            if (res.ok && j?.ok && j?.full_name) setFullName(j.full_name as string);
           } catch { /* ignore */ }
 
           setUsername('');
-          setEditHref('/dashboard/profile/business/edit');
+          setRole('');
+          setEmail(userEmail);
+          setDescription('');
+          setWebsite('');
+          setProfileUrl(null);
         } else {
           setFullName(data.full_name || '');
           setUsername(data.username || '');
           setRole(data.role || '');
-          setEmail(data.email || '');
+          setEmail(data.email || userEmail);
           setDescription(data.description || '');
           setWebsite(data.website || '');
           setProfileUrl(data.profile_url || null);
-          setEditHref('/dashboard/profile/business/edit');
-
-          if (!data.full_name) {
-            try {
-              const res = await fetch(`/api/waitlist?email=${encodeURIComponent(userEmail)}`, { cache: 'no-store' });
-              const j = await res.json();
-              if (res.ok && j?.ok && j?.full_name) setFullName(j.full_name as string);
-            } catch { /* ignore */ }
-          }
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error occurred';
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
         console.error('Business profile load error:', err);
-        setError(message);
       } finally {
         setLoading(false);
       }
@@ -100,7 +90,7 @@ export default function BusinessProfileView() {
             width={140}
             height={140}
             className="rounded-full object-cover w-full h-full"
-            onError={()=>setProfileUrl(null)}
+            onError={() => setProfileUrl(null)}
           />
         </div>
 
@@ -115,28 +105,21 @@ export default function BusinessProfileView() {
               {website && (
                 <p className="mt-2">
                   <span className="text-white/60">Website:</span>{' '}
-                  <a
-                    href={website}
-                    className="text-yellow-400 hover:underline break-all"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                  <a href={website} className="text-yellow-400 hover:underline break-all" target="_blank" rel="noopener noreferrer">
                     {website}
                   </a>
                 </p>
               )}
             </div>
-            {editHref && (
-              <button
-                onClick={() => router.push(editHref)}
-                className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300"
-              >
-                Edit Profile
-              </button>
-            )}
+            <button
+              onClick={() => router.push('/dashboard/profile/business/edit')}
+              className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300"
+            >
+              Edit Profile
+            </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-2 mb-6 gap-4  ">
+          <div className="grid grid-cols-2 sm:grid-cols-2 mb-6 gap-4">
             <StatBadge label="Deals Completed" value={dealCount} />
             <StatBadge label="Avg. Rating" value="4.9 / 5" />
           </div>

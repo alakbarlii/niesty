@@ -4,20 +4,20 @@ import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import type { CookieOptions } from '@supabase/ssr'
 
-/** Safe nonce for CSP (works in Edge + TS, no Node crypto import needed) */
 function genNonce(): string {
   if (globalThis.crypto?.getRandomValues) {
-    const arr = new Uint8Array(16)
-    globalThis.crypto.getRandomValues(arr)
-    return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('')
+    const a = new Uint8Array(16)
+    globalThis.crypto.getRandomValues(a)
+    return Array.from(a, b => b.toString(16).padStart(2, '0')).join('')
   }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 }
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+  const method = req.method.toUpperCase()
+  const host = (req.headers.get('host') || '').toLowerCase()
 
-  // Response container for headers/cookies
   const res = NextResponse.next()
 
   // ---------- Security headers ----------
@@ -28,14 +28,11 @@ export async function middleware(req: NextRequest) {
   res.headers.set('Referrer-Policy', 'no-referrer')
   res.headers.set('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=()')
   res.headers.set('Cross-Origin-Resource-Policy', 'same-site')
-  // keep short HSTS until fully confident; bump later to 6-12 months + preload
   res.headers.set('Strict-Transport-Security', 'max-age=604800; includeSubDomains')
   res.headers.set('X-DNS-Prefetch-Control', 'off')
   res.headers.set('Origin-Agent-Cluster', '?1')
 
   const isProd = process.env.NODE_ENV === 'production'
-
-  // Single CSP (allow Turnstile + Supabase endpoints)
   const csp = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -53,46 +50,53 @@ export async function middleware(req: NextRequest) {
   ].join('; ')
   res.headers.set('Content-Security-Policy', csp)
 
-  // ---------- Host allowlist ----------
-  const host = (req.headers.get('host') || '').toLowerCase()
-  const allowedHosts = [
-    'localhost:3000',
-    'niesty.com',
-    'www.niesty.com',
-    'niesty.vercel.app', // allow preview
+  // ---------- Public paths: never block ----------
+  const PUBLIC_PATHS = [
+    '/', '/login', '/auth/callback', '/waitlist',
+    '/favicon.ico'
   ]
-  if (!allowedHosts.includes(host)) {
-    return new NextResponse('Forbidden host', { status: 403 })
+  if (PUBLIC_PATHS.includes(pathname)) {
+    return res
   }
 
-  // ---------- Same-origin protection for mutating methods ----------
-  // Exempt auth/session/bootstrap/internal logger to avoid breaking flows
+  // ---------- Host allowlist (robust for previews/subdomains) ----------
+  const hostnameOk =
+    host === 'localhost:3000' ||
+    host === 'niesty.com' ||
+    host === 'www.niesty.com' ||
+    host.endsWith('.niesty.com') ||          // future subdomains
+    host.endsWith('.vercel.app')             // all Vercel preview hosts
+  if (!hostnameOk) {
+    const r = new NextResponse('Forbidden host', { status: 403 })
+    r.headers.set('X-MW-Why', 'bad-host-allowlist')
+    return r
+  }
+
+  // ---------- Same-origin guard for mutating methods ----------
+  // Exempt auth/session/bootstrap/internal logger and public pages
   const isAuthPath =
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/auth/v1') ||
     pathname.startsWith('/auth/callback') ||
     pathname.startsWith('/api/bootstrap-profile') ||
-    pathname.startsWith('/api/secops/log')
+    pathname.startsWith('/api/secops/log') ||
+    pathname === '/login'
 
-  const method = req.method.toUpperCase()
   if (!isAuthPath && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     const origin = req.headers.get('origin') || ''
     if (origin) {
-      // compare hosts (supports both root + www)
       let originHost = ''
       try { originHost = new URL(origin).host.toLowerCase() } catch {}
       if (originHost !== host) {
-        return new NextResponse('Bad origin', { status: 403 })
+        const r = new NextResponse('Bad origin', { status: 403 })
+        r.headers.set('X-MW-Why', 'bad-origin')
+        return r
       }
     }
-    // if no Origin header (server-to-server), allow
   }
 
   // ---------- Auth guard for protected areas ----------
-  const needsAuth =
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/admin')
-
+  const needsAuth = pathname.startsWith('/dashboard') || pathname.startsWith('/admin')
   if (!needsAuth) return res
 
   const supabase = createServerClient(
@@ -109,13 +113,9 @@ export async function middleware(req: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) {
-    // 🔐 log unauth access attempt (non-blocking)
+    // Non-blocking secops log
     try {
-      const ip =
-        req.headers.get('cf-connecting-ip') ||
-        req.headers.get('x-forwarded-for') ||
-        '' // Edge doesn't expose req.ip
-
+      const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || ''
       fetch(`${req.nextUrl.origin}/api/secops/log`, {
         method: 'POST',
         headers: {
@@ -137,12 +137,11 @@ export async function middleware(req: NextRequest) {
     url.pathname = '/login'
     url.searchParams.set('next', pathname)
     const redirectRes = NextResponse.redirect(url)
-    // Preserve security headers on redirect
     res.headers.forEach((value, key) => redirectRes.headers.set(key, value))
     return redirectRes
   }
 
-  // Optional: lock down /admin to role='admin'
+  // Optional role gate for /admin
   if (pathname.startsWith('/admin')) {
     const { data: prof } = await supabase
       .from('profiles')
@@ -164,7 +163,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on everything except static assets & images
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|webp|svg)).*)',
   ],
 }

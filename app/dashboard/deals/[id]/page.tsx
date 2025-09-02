@@ -23,7 +23,7 @@ type UserRole = 'creator' | 'business';
 type SubmissionStatus = 'pending' | 'rework' | 'approved' | null;
 
 interface ProfileLite {
-  user_id: string;                 // ← FIXED: use auth UID
+  user_id: string;                 
   full_name: string;
   username: string;
   role?: UserRole;
@@ -43,8 +43,8 @@ type DealStage = (typeof DEAL_STAGES)[number];
 
 interface Deal {
   id: string;
-  sender_id: string;               // auth UID
-  receiver_id: string;             // auth UID
+  sender_id: string;               
+  receiver_id: string;            
   message: string;
   deal_stage: DealStage | string;
   created_at: string;

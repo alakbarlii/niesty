@@ -39,7 +39,7 @@ export default function CreatorProfileView() {
           .eq('user_id', userId)
           .maybeSingle();
 
-        // ✅ FIX: correct column name; count deals where I'm sender OR receiver
+        
         const { count, error: dealsErr } = await supabase
           .from('deals')
           .select('*', { count: 'exact', head: true })

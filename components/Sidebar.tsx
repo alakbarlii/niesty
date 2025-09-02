@@ -9,7 +9,6 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 const ProfileNavItem = () => {
-  // ✅ Hook called at top-level (not conditionally)
   const pathname = usePathname();
 
   const [profileHref, setProfileHref] = useState<string | null>(null);
@@ -65,7 +64,7 @@ const ProfileNavItem = () => {
 };
 
 export default function Sidebar() {
-  // ✅ Used for active states below (no unused var warning)
+  
   const pathname = usePathname();
 
   const navItems = [

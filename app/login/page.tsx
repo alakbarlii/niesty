@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { secopsLogViaRpc } from '@/lib/secops';
 import Image from 'next/image';
 import { Turnstile } from '@marsidev/react-turnstile';
 
@@ -38,6 +39,12 @@ export default function LoginPage() {
       // Always require a token because Supabase Attack Protection is enabled
       if (!captchaToken) {
         setErr('Please complete the CAPTCHA.');
+        await secopsLogViaRpc(supabase, {
+          userId: null,
+          route: '/login',
+          reason: 'captcha_missing',
+          severity: 'warning',
+        });
         setLoading(false);
         return;
       }
@@ -47,6 +54,13 @@ export default function LoginPage() {
       const { ok } = await res.json();
       if (!ok) {
         setErr('This email is not registered in the waitlist.');
+        await secopsLogViaRpc(supabase, {
+          userId: null,
+          route: '/login',
+          reason: 'waitlist_reject',
+          severity: 'warning',
+          meta: { email: normalized },
+        });
         setLoading(false);
         setWidgetKey((k) => k + 1);
         setCaptchaToken('');
@@ -65,10 +79,18 @@ export default function LoginPage() {
 
       if (error) {
         console.error('[signInWithOtp]', error);
-        const msg = /captcha/i.test(error.message)
-          ? 'CAPTCHA failed. Try again.'
-          : (error.message || 'Something went wrong. Please try again.');
+        const isCaptcha = /captcha/i.test(error.message);
+        const msg = isCaptcha ? 'CAPTCHA failed. Try again.' : (error.message || 'Something went wrong. Please try again.');
         setErr(msg);
+
+        await secopsLogViaRpc(supabase, {
+          userId: null,
+          route: '/login',
+          reason: isCaptcha ? 'captcha_failed' : 'otp_error',
+          severity: 'warning',
+          meta: { msg: error.message },
+        });
+
         setWidgetKey((k) => k + 1);
         setCaptchaToken('');
       } else {
@@ -80,6 +102,15 @@ export default function LoginPage() {
       const msg = e instanceof Error ? e.message : 'Login failed.';
       console.error('[login]', e);
       setErr(msg);
+
+      await secopsLogViaRpc(supabase, {
+        userId: null,
+        route: '/login',
+        reason: 'login_exception',
+        severity: 'high',
+        meta: { msg },
+      });
+
       setWidgetKey((k) => k + 1);
       setCaptchaToken('');
     } finally {
@@ -120,35 +151,23 @@ export default function LoginPage() {
 
             {/* Turnstile widget: full-width + responsive; force refresh via key */}
             {SITE_KEY ? (
-  <div key={widgetKey} className="w-full">
-    <Turnstile
-      siteKey={SITE_KEY}
-      options={{
-        action: 'login_magic_link',
-        cData: 'lg_login',
-        theme: 'auto',
-        size: 'flexible',
-      }}
-      onSuccess={(token) => {
-        console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
-        setCaptchaToken(token || '');
-      }}
-      onExpire={() => {
-        console.log('[LOGIN] Turnstile expired');
-        setCaptchaToken('');
-      }}
-      onError={() => {
-        setCaptchaToken('');
-      }}
-    />
-  </div>
-) : (
-  <p className="text-red-400 text-sm text-center">
-    CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
-  </p>
-)}
-
-
+              <div key={widgetKey} className="w-full">
+                <Turnstile
+                  siteKey={SITE_KEY}
+                  options={{ action: 'login_magic_link', cData: 'lg_login', theme: 'auto', size: 'flexible' }}
+                  onSuccess={(token) => {
+                    console.log('[LOGIN] Turnstile onSuccess len =', token?.length || 0);
+                    setCaptchaToken(token || '');
+                  }}
+                  onExpire={() => { console.log('[LOGIN] Turnstile expired'); setCaptchaToken(''); }}
+                  onError={() => { setCaptchaToken(''); }}
+                />
+              </div>
+            ) : (
+              <p className="text-red-400 text-sm text-center">
+                CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
+              </p>
+            )}
 
             <button
               type="submit"

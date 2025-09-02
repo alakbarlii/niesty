@@ -1,8 +1,11 @@
+// components/WaitlistForm.jsx
 'use client';
 
 import { useState } from 'react';
 import Image from 'next/image';
 import { Turnstile } from '@marsidev/react-turnstile';
+import { supabase } from '@/lib/supabase';
+import { secopsLogViaRpc } from '@/lib/secops';
 
 export default function WaitlistForm() {
   const [email, setEmail] = useState('');
@@ -32,6 +35,13 @@ export default function WaitlistForm() {
     // If we expect a captcha (SITE_KEY present), require a token
     if (SITE_KEY && !captchaToken) {
       setError('Please complete the CAPTCHA.');
+      // log (warning)
+      await secopsLogViaRpc(supabase, {
+        userId: null,
+        route: '/waitlist',
+        reason: 'captcha_missing',
+        severity: 'warning',
+      });
       return;
     }
 
@@ -48,7 +58,15 @@ export default function WaitlistForm() {
 
       if (chk.ok && chkJson?.ok) {
         setError('This email is already registered.');
-        setWidgetKey((k) => k + 1); // refresh widget for next attempt
+        // log (warning)
+        await secopsLogViaRpc(supabase, {
+          userId: null,
+          route: '/waitlist',
+          reason: 'waitlist_reject',
+          severity: 'warning',
+          meta: { email: normalized },
+        });
+        setWidgetKey((k) => k + 1);
         setCaptchaToken('');
         return;
       }
@@ -78,6 +96,14 @@ export default function WaitlistForm() {
       try { j = await res.json(); } catch (e2) { console.warn('[WL] json parse failed', e2); }
 
       if (!res.ok || !j?.ok) {
+        // log (high)
+        await secopsLogViaRpc(supabase, {
+          userId: null,
+          route: '/waitlist',
+          reason: 'waitlist_submit_failed',
+          severity: 'high',
+          meta: { status: res.status },
+        });
         throw new Error(j?.error || `Submit failed (${res.status})`);
       }
 
@@ -88,19 +114,27 @@ export default function WaitlistForm() {
         body: JSON.stringify({ fullName, email: normalized }),
       }).catch(() => {});
 
+      // log success (info; no Discord ping)
+      await secopsLogViaRpc(supabase, {
+        userId: null,
+        route: '/waitlist',
+        reason: 'waitlist_submit_ok',
+        severity: 'info',
+      });
+
       setEmail('');
       setFullName('');
       setRole(null);
       setShowSuccess(true);
       setStatus('You’re on the waitlist!');
 
-      setWidgetKey((k) => k + 1); // refresh widget after success
+      setWidgetKey((k) => k + 1);
       setCaptchaToken('');
       console.log('[WL] success');
     } catch (err) {
       console.error('[WL] error', err);
       setError(err?.message || 'Something went wrong. Please try again.');
-      setWidgetKey((k) => k + 1); // refresh widget after error
+      setWidgetKey((k) => k + 1);
       setCaptchaToken('');
     }
   };
@@ -164,33 +198,28 @@ export default function WaitlistForm() {
             <p className="text-sm text-center opacity-70">
               Choose the role that describes you best. We'll tailor Niesty to fit your needs.
             </p>
-          </div> {/* Turnstile widget — production (no debug copy/stash) */}
-{SITE_KEY ? (
-  <div key={widgetKey}>
-    <Turnstile
-      siteKey={SITE_KEY}
-      options={{ action: 'waitlist_submit', cData: 'wl_waitlist', theme: 'auto', size: 'flexible' }}
-      onSuccess={(token) => {
-        console.log('[WL] Turnstile onSuccess len=', token?.length || 0);
-        setCaptchaToken(token || '');
-      }}
-      onExpire={() => {
-        console.log('[WL] Turnstile expired');
-        setCaptchaToken('');
-      }}
-      onError={(e) => {
-        console.log('[WL] Turnstile error', e);
-        setCaptchaToken('');
-      }}
-      className="w-full"
-    />
-  </div>
-) : (
-  <p className="text-red-400 text-sm text-center">
-    CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
-  </p>
-)}
+          </div>
 
+          {/* Turnstile widget — production */}
+          {SITE_KEY ? (
+            <div key={widgetKey}>
+              <Turnstile
+                siteKey={SITE_KEY}
+                options={{ action: 'waitlist_submit', cData: 'wl_waitlist', theme: 'auto', size: 'flexible' }}
+                onSuccess={(token) => {
+                  console.log('[WL] Turnstile onSuccess len=', token?.length || 0);
+                  setCaptchaToken(token || '');
+                }}
+                onExpire={() => { console.log('[WL] Turnstile expired'); setCaptchaToken(''); }}
+                onError={(e) => { console.log('[WL] Turnstile error', e); setCaptchaToken(''); }}
+                className="w-full"
+              />
+            </div>
+          ) : (
+            <p className="text-red-400 text-sm text-center">
+              CAPTCHA misconfigured: set <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> in Vercel and redeploy.
+            </p>
+          )}
 
           <button
             type="submit"

@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { secopsLogViaRpc } from '@/lib/secops';
 
 type WaitlistCheck = { ok: boolean; role?: string | null; fullName?: string | null };
 
@@ -66,7 +67,7 @@ export default function AuthCallbackPage() {
         const roleFromWaitlist = body.role ?? null;
 
         // 5) Server-side profile bootstrap (uses service role on server)
-        await fetch('/api/bootstrap-profile', {
+        const bp = await fetch('/api/bootstrap-profile', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -77,12 +78,29 @@ export default function AuthCallbackPage() {
             full_name: user.user_metadata?.name ?? null,
             role: roleFromWaitlist,
           }),
-        }).catch(() => { /* non-blocking */ });
+        });
+
+        if (!bp.ok) {
+          await secopsLogViaRpc(supabase, {
+            userId: session.user.id,
+            route: '/auth/callback',
+            reason: 'bootstrap_profile_failed',
+            severity: 'high',
+            meta: { status: bp.status },
+          });
+        }
 
         // 6) Go in (now middleware sees cookies and lets you through)
         const next = new URLSearchParams(window.location.search).get('next') || '/dashboard';
         router.replace(next);
       } catch (err) {
+        // hard failure → log
+        await secopsLogViaRpc(supabase, {
+          userId: null,
+          route: '/auth/callback',
+          reason: 'no_session_after_callback',
+          severity: 'high',
+        });
         console.error('[Auth callback error]', err);
         router.replace('/login');
       }

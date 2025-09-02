@@ -4,14 +4,24 @@ import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import type { CookieOptions } from '@supabase/ssr'
 
+/** Safe nonce for CSP (works in Edge + TS, no Node crypto import needed) */
+function genNonce(): string {
+  if (globalThis.crypto?.getRandomValues) {
+    const arr = new Uint8Array(16)
+    globalThis.crypto.getRandomValues(arr)
+    return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('')
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Always create a response we can attach headers/cookies to
+  // Response container for headers/cookies
   const res = NextResponse.next()
 
   // ---------- Security headers ----------
-  const nonce = crypto.randomUUID()
+  const nonce = genNonce()
   res.headers.set('X-CSP-Nonce', nonce)
   res.headers.set('X-Frame-Options', 'DENY')
   res.headers.set('X-Content-Type-Options', 'nosniff')
@@ -49,28 +59,33 @@ export async function middleware(req: NextRequest) {
     'localhost:3000',
     'niesty.com',
     'www.niesty.com',
-    // Uncomment if you want to allow preview domain
-    // 'niesty.vercel.app',
+    'niesty.vercel.app', // allow preview
   ]
   if (!allowedHosts.includes(host)) {
     return new NextResponse('Forbidden host', { status: 403 })
   }
 
   // ---------- Same-origin protection for mutating methods ----------
-  // Exempt auth/session/bootstrap endpoints to avoid breaking login flow
+  // Exempt auth/session/bootstrap/internal logger to avoid breaking flows
   const isAuthPath =
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/auth/v1') ||
     pathname.startsWith('/auth/callback') ||
-    pathname.startsWith('/api/bootstrap-profile')
+    pathname.startsWith('/api/bootstrap-profile') ||
+    pathname.startsWith('/api/secops/log')
 
   const method = req.method.toUpperCase()
   if (!isAuthPath && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    const origin = req.headers.get('origin')
-    // Allow if there is no Origin (server-to-server) OR exact same origin
-    if (origin && origin !== req.nextUrl.origin) {
-      return new NextResponse('Bad origin', { status: 403 })
+    const origin = req.headers.get('origin') || ''
+    if (origin) {
+      // compare hosts (supports both root + www)
+      let originHost = ''
+      try { originHost = new URL(origin).host.toLowerCase() } catch {}
+      if (originHost !== host) {
+        return new NextResponse('Bad origin', { status: 403 })
+      }
     }
+    // if no Origin header (server-to-server), allow
   }
 
   // ---------- Auth guard for protected areas ----------
@@ -85,21 +100,39 @@ export async function middleware(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          res.cookies.set(name, value, options)
-        },
-        remove(name: string, options: CookieOptions) {
-          res.cookies.set(name, '', { ...options, maxAge: -1 })
-        },
+        get(name: string) { return req.cookies.get(name)?.value },
+        set(name: string, value: string, options: CookieOptions) { res.cookies.set(name, value, options) },
+        remove(name: string, options: CookieOptions) { res.cookies.set(name, '', { ...options, maxAge: -1 }) },
       },
     }
   )
 
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) {
+    // 🔐 log unauth access attempt (non-blocking)
+    try {
+      const ip =
+        req.headers.get('cf-connecting-ip') ||
+        req.headers.get('x-forwarded-for') ||
+        '' // Edge doesn't expose req.ip
+
+      fetch(`${req.nextUrl.origin}/api/secops/log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-secops-key': process.env.SECOPS_INTERNAL_KEY || '',
+        },
+        body: JSON.stringify({
+          userId: null,
+          route: pathname,
+          reason: 'unauth_access_protected',
+          ip,
+          severity: 'high',
+          meta: { ua: req.headers.get('user-agent') || '' },
+        }),
+      }).catch(() => {})
+    } catch {}
+
     const url = req.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('next', pathname)

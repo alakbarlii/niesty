@@ -1,39 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Access Restricted | Niesty</title>
+  <meta charset="UTF-8" />
+  <title>Access Blocked | Niesty</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body {
-      font-family: Inter, Arial, sans-serif;
-      background: #0d0d0d;
-      color: #f5f5f5;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      text-align: center;
-    }
-    h1 { font-size: 2.5rem; margin-bottom: 1rem; color: #ffcc00; }
-    p { max-width: 500px; margin-bottom: 1.5rem; color: #ccc; }
-    a {
-      display: inline-block;
-      padding: 0.7rem 1.5rem;
-      background: #ffcc00;
-      color: #000;
-      border-radius: 6px;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    a:hover { background: #e6b800; }
+    body{font-family:Inter,Arial,sans-serif;background:#0d0d0d;color:#f5f5f5;margin:0;height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 16px}
+    h1{font-size:2.25rem;margin:0 0 12px;color:#ffd24d}
+    p{max-width:560px;margin:0 auto 18px;color:#d7d7d7;line-height:1.5}
+    a.btn{display:inline-block;padding:.7rem 1.4rem;background:#ffd24d;color:#111;text-decoration:none;border-radius:8px;font-weight:700}
+    a.btn:hover{background:#e6bd45}
+    small{display:block;margin-top:10px;color:#9a9a9a}
   </style>
 </head>
 <body>
-  <h1>Access Restricted</h1>
-  <p>For your security, this request was blocked by Niesty’s protection system.  
-  If you believe this is a mistake, please try again later or contact support.</p>
-  <a href="/">Return to Home</a>
+  <main>
+    <h1>Access Blocked</h1>
+    <p>
+      For your protection, this request was denied by our security systems.
+    </p>
+    <a class="btn" href="/">Return to Home</a>
+    <small>If you believe this was a mistake, please contact support.</small>
+  </main>
 </body>
 </html>

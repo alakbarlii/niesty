@@ -1,39 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Oops! Something went wrong | Niesty</title>
+  <meta charset="UTF-8" />
+  <title>Something Went Wrong | Niesty</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body {
-      font-family: Inter, Arial, sans-serif;
-      background: #101010;
-      color: #f5f5f5;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      text-align: center;
-    }
-    h1 { font-size: 2.5rem; margin-bottom: 1rem; color: #ff4444; }
-    p { max-width: 500px; margin-bottom: 1.5rem; color: #ccc; }
-    a {
-      display: inline-block;
-      padding: 0.7rem 1.5rem;
-      background: #ff4444;
-      color: #fff;
-      border-radius: 6px;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    a:hover { background: #e63b3b; }
+    body{font-family:Inter,Arial,sans-serif;background:#101010;color:#f5f5f5;margin:0;height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 16px}
+    h1{font-size:2.25rem;margin:0 0 12px;color:#ff6464}
+    p{max-width:560px;margin:0 auto 18px;color:#d7d7d7;line-height:1.5}
+    a.btn{display:inline-block;padding:.7rem 1.4rem;background:#ff6464;color:#111;text-decoration:none;border-radius:8px;font-weight:700}
+    a.btn:hover{background:#e05a5a}
+    small{display:block;margin-top:10px;color:#9a9a9a}
   </style>
 </head>
 <body>
-  <h1> Something Went Wrong</h1>
-  <p>Our team has been notified and is working on it. Please try again shortly.  
-  Thanks for your patience.</p>
-  <a href="/">Back to Safety</a>
+  <main>
+    <h1>Something Went Wrong</h1>
+    <p>
+      That’s on us. The server hit an error while processing your request.
+      Please try again in a moment.
+    </p>
+    <a class="btn" href="/">Return to Home</a>
+    <small>If this keeps happening, please contact support</small>
+  </main>
 </body>
 </html>

@@ -192,3 +192,9 @@ export async function POST(req: NextRequest) {
     return jsonNoStore({ error: msg }, { status: 500 });
   }
 }
+export async function GET() {
+  return new Response(JSON.stringify({ ok: true, note: 'Use POST for deals' }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}
